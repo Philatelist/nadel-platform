@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { RequisitesPanel } from '../components/RequisitesPanel';
 import { DeliverySettingsPanel } from '../components/settings/DeliverySettingsPanel';
+import { ExpenseCategoriesPanel } from '../components/settings/ExpenseCategoriesPanel';
 import { CommonConsumersSection } from '../components/settings/CommonConsumersSection';
 import { WaterSourcesSection } from '../components/water/WaterSourcesSection';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -31,11 +32,13 @@ export function SettingsPage() {
   const canSettings = useCan('SETTINGS_MANAGE');
   const canTree = useCanManageMeters();
   const canViewPlots = useCan('PLOTS_VIEW');
+  const canApproveCash = useCan('CASHBOOK_APPROVE');
   return (
     <div className="flex flex-col gap-4 text-[15px]">
       <PageHeader title={t.settings.title} />
       {canSettings && <CooperativeSettings />}
       {canViewPlots && <WaterSourcesSection />}
+      {canApproveCash && <ExpenseCategoriesPanel />}
       {canTree && (
         <Panel>
           <Link to="/settings/meter-tree" className="text-[17px] font-semibold text-accent underline">

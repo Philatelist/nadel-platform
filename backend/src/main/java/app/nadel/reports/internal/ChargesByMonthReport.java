@@ -41,8 +41,9 @@ import org.springframework.stereotype.Component;
  * Sheet {@code byBillingMonth}: one row per billing month and charge type that has charges, with the month's status,
  * the charge types in their configured order; a subtotal row after each month and the totals of the range. Its
  * effective total per month is the billing months screen's total cent for cent ({@link MonthGrouping#BILLING_MONTH}
- * uses the screen's predicate). Sheet {@code byServicePeriod}: the same charges grouped by the month of their first
- * service day, without status, so an adjustment booked in March for January shows under January; the header note
+ * uses the screen's predicate). Sheet {@code byServicePeriod}: exactly the same charges (booked in the billing months
+ * asked) grouped by the month of their first service day, without status, so an adjustment booked in March for January
+ * shows under January and the totals equal the first sheet's in every column, paid included; the header note
  * {@code SERVICE_PERIOD_SHEET} explains the difference. Plots are counted per month and type (a subtotal and the totals
  * leave the plot count empty: a plot can have several types). Every amount is a {@code Money} sum of the rows listed.
  */

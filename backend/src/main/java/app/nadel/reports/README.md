@@ -1,33 +1,37 @@
 # reports
 
 Built-in reports over what the app has booked: charges by month, plot balances, debtors, electricity by the meter tree,
-water, missing readings, land tax and corrections. Each is shown as an on-screen preview and downloaded as an Excel
+water, missing readings, land tax, corrections, payments and the four cash book reports of feature 018 (cash book,
+bank movements, income and expense, expenses). Each is shown as an on-screen preview and downloaded as an Excel
 file. Report templates are stored, versioned and archived here, with the field catalog, the values a template is
 filled with and the filler (ADR 0015). Requirements:
 `docs/features/013-reports.md`; specs: `context/spec/013-reports/`.
 
 The module adds no money rule. It reads only through the public read facades that the owning modules publish
-(ledger, meters, plots, members, tariffs, settings, tenancy) and never reads their tables (ADR 0001).
+(ledger, meters, plots, members, tariffs, settings, tenancy, treasury) and never reads their tables (ADR 0001).
 
 ## Endpoints
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `GET /reports` | `listReports` | `REPORTS_VIEW`; the reports the caller may run with their filter definitions (`debtors` only with `MEMBERS_VIEW` too, `payments` only with `PAYMENTS_VIEW` too) |
-| `GET /reports/{code}` | `getReport` | `REPORTS_VIEW` (`debtors` also `MEMBERS_VIEW`, `payments` also `PAYMENTS_VIEW`); the preview: per sheet the columns, the first 200 rows, the totals and the row count |
+| `GET /reports` | `listReports` | `REPORTS_VIEW` or `CASHBOOK_VIEW`; the reports the caller may run with their filter definitions (`debtors` only with `MEMBERS_VIEW` too, `payments` only with `PAYMENTS_VIEW` too, the four cash book reports only with `CASHBOOK_VIEW`) |
+| `GET /reports/{code}` | `getReport` | `REPORTS_VIEW` or `CASHBOOK_VIEW`, then the report's own permissions (every report but the cash book ones `REPORTS_VIEW`; `debtors` also `MEMBERS_VIEW`, `payments` also `PAYMENTS_VIEW`; `cash-book`, `bank-movements`, `income-expense`, `expenses` `CASHBOOK_VIEW`); the preview: per sheet the columns, the first 200 rows, the totals and the row count |
 | `GET /reports/{code}.xlsx` | `downloadReport` | as `getReport`; the workbook with every row, texts in `lang` (`uk`/`en`), else `Accept-Language`, else `uk` |
 
-Every endpoint is guarded with `@PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")`, so a member, the electrician and
-the platform operator get 403 for every code, defined or not, before anything else is checked. `{code}` is a
+Every endpoint is guarded with `@PreAuthorize("hasAnyAuthority('PERM_REPORTS_VIEW', 'PERM_CASHBOOK_VIEW')")`, so a
+member, the electrician and the platform operator get 403 for every code, defined or not, before anything else is
+checked; which reports a caller may run is the catalog's per-definition rule (`ReportDefinition.requiredPermissions`,
+all of them needed): a role with `CASHBOOK_VIEW` alone (an audit committee, feature 018 §2.12) sees exactly the four
+cash book reports, a role with `REPORTS_VIEW` alone none of them (`TreasuryReportsAccessTests`). `{code}` is a
 `ReportCode` (`charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`, `water`, `missing-readings`,
-`land-tax`, `corrections`, `payments`); `ReportCodeConverter` reads the kebab-case value, and an unknown code is 400
+`land-tax`, `corrections`, `payments`, `cash-book`, `bank-movements`, `income-expense`, `expenses`); `ReportCodeConverter` reads the kebab-case value, and an unknown code is 400
 `MALFORMED_REQUEST` (as every unknown enum value). A code without a definition yet is 404 `NOT_FOUND`; a defined report
 that needs a permission the caller lacks is 403 `PERMISSION_DENIED` (`ReportCatalog.require`) and is not listed.
 `/reports/{code}.xlsx` wins over `/reports/{code}`: its pattern is the more specific one
 (`ChargesByMonthReportTests.theXlsxPathWinsOverTheCodePath`).
 
 Every code of `ReportCode` has its definition: `charges-by-month`, `plot-balances`, `debtors`, `electricity-tree`,
-`water`, `missing-readings`, `land-tax`, `corrections` and `payments` (feature 015). `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
+`water`, `missing-readings`, `land-tax`, `corrections`, `payments` (feature 015) and the cash book reports (feature 018). `GET /reports` runs in a read-only transaction: the debtors' defaults are settings of
 the cooperative.
 
 ### Report templates (tag `report-templates`, generated `ReportTemplatesApi`)
@@ -41,7 +45,7 @@ the cooperative.
 | `POST /report-templates/{id}/archive` | `archiveReportTemplate` | `REPORT_TEMPLATES_MANAGE`; 200, idempotent (archiving again changes nothing and writes no audit entry) |
 | `GET /report-templates/{id}/versions/{versionId}/file` | `downloadReportTemplateVersion` | `REPORT_TEMPLATES_MANAGE`; the stored `.xlsx`, also of an archived template |
 | `GET /report-templates/catalog` | `getReportTemplateCatalog` | `REPORTS_VIEW` or `REPORT_TEMPLATES_MANAGE`; the field catalog (below) |
-| `POST /report-templates/{id}/generate` | `generateReportTemplate` | `REPORTS_VIEW`; body `{from, to, lang}`; the filled `.xlsx` of the latest version with `X-Report-Warnings` and `X-Report-Warnings-Detail` (section "Template filler") |
+| `POST /report-templates/{id}/generate` | `generateReportTemplate` | `REPORTS_VIEW` (a template with cash book fields also `CASHBOOK_VIEW`); body `{from, to, lang}`; the filled `.xlsx` of the latest version with `X-Report-Warnings` and `X-Report-Warnings-Detail` (section "Template filler") |
 
 Upload refusals (nothing stored): 400 `VALIDATION_FAILED` (form fields), 422 `TEMPLATE_TOO_LARGE` (over 2 MB, checked
 before the file is read; 422 like `REPORT_TOO_LARGE`, while a request over the 10 MB multipart limit stays 413
@@ -163,7 +167,8 @@ zips; `SampleTemplates` builds the sample "land tax statement" (also written to 
 `rowSet` (absent for a single value), a language-neutral `example` (absent for text that depends on the language or on
 what the cooperative entered) and the `permission` it needs besides `REPORTS_VIEW` (`TemplateField.permission`:
 `REPORTS_VIEW` itself, or `PAYMENTS_VIEW` for the payment fields `totals.paid.<type>`, `totals.prepayment` and the row
-set `payments`, feature 015 §6). The server returns codes only: the description is `reportTemplates.fields.<field>` in
+set `payments`, feature 015 §6, or `CASHBOOK_VIEW` for the cash book fields `totals.cashbook.*` and the row set
+`incomeExpense`, feature 018 §2.12). The server returns codes only: the description is `reportTemplates.fields.<field>` in
 the web catalogs, a nested path. `field` is the key itself for a fixed placeholder; the three families that depend on
 the charge types, `totals.charged.<type>`, `totals.paid.<type>` and `rows.plots.debt.<type>`, have the description
 codes `totals.charged.byChargeType`, `totals.paid.byChargeType` and `rows.plots.debt.byChargeType`
@@ -178,11 +183,13 @@ catalog, a type the cooperative lacks) resolves to nothing: the filler leaves it
 | Cooperative | `cooperative.name`, `cooperative.officialName`, `cooperative.edrpou`, `cooperative.address` (legal address), `cooperative.bankName`, `cooperative.iban` |
 | Period and file | `period.from`, `period.to`, `period.year`, `generatedAt`, `generatedBy` |
 | Totals | `totals.landTax.expected`, `totals.landTax.charged`, `totals.charged.<type>`, `totals.paid.<type>` (`PAYMENTS_VIEW`), `totals.prepayment` (`PAYMENTS_VIEW`), `totals.debt`, `totals.plots.count`, `totals.plots.areaSotka` |
+| Cash book (`CASHBOOK_VIEW`) | `totals.cashbook.cashStart`, `.cashEnd`, `.bankStart`, `.bankEnd`, `.income`, `.expenses`, `.differences`, `.result` |
 | `plots` | `rows.plots.number`, `.street`, `.area` (m²), `.areaSotka`, `.ownersCount`, `.debt.total`, `.debt.<type>`, `.status`, `.oldestUnpaid`, `.daysOverdue`, `.landTax.rate`, `.landTax.expected`, `.landTax.charged` |
 | `months` | `rows.months.month`, `.status`, `.regular`, `.opening`, `.reversals`, `.adjustments`, `.effective` |
 | `meters` | `rows.meters.level`, `.name`, `.serial`, `.kind`, `.startValue`, `.endValue`, `.consumption`, `.childrenConsumption`, `.lossesKwh`, `.lossesPercent`, `.plotsFed` |
 | `water` | `rows.water.number`, `.street`, `.source`, `.connectedDays`, `.serial`, `.cubicMetres`, `.total` |
 | `payments` (`PAYMENTS_VIEW`) | `rows.payments.receivedOn`, `.billingMonth`, `.source`, `.document`, `.number`, `.street`, `.amount`, `.allocated`, `.prepayment`, `.reversed` |
+| `incomeExpense` (`CASHBOOK_VIEW`) | `rows.incomeExpense.section`, `.name`, `.amount` |
 
 No name, phone or e-mail of a person is a placeholder (spec 4.2): the plots carry the number of owners, never who they
 are, and the payments row set has neither the payer nor the payer note. `generatedBy` is the person making the file, as in the header block of every report file.
@@ -227,11 +234,20 @@ Kyiv days), means:
   the money received that is on no charge, summed over every plot.
 - `payments`: `PaymentsReport.sheet` for the days received from `from` to `to`, every source and street, without the
   payer and the payer note; `source` in the file's language, `reversed` as `reports.yes` / `reports.no`.
+- `totals.cashbook.*` and `incomeExpense` (feature 018): the income and expense report of `from` to `to`
+  (`treasury.TreasuryReadModel.incomeExpense`, read once per fill): the cash and bank balances at the start of `from`
+  and the end of `to`, `income`, `expenses`, `differences`, `result`; the rows are `IncomeExpenseReport.lines` with the
+  section (`reports.income-expense.sections.*`) and the name (the charge type's name as in the files, the category's
+  stored name or `expenseCategories.system.<CODE>`, the kind of difference `cashbook.kind.*`, for the advances and the
+  payment reversals the section's text) in the file's language. Without both opening balances the fill is 409
+  `OPENING_BALANCE_MISSING`, a period starting before an opening date 400 `BEFORE_OPENING_BALANCE`.
 
 **Permissions.** The resolver gets the caller's permissions (`TemplateGenerator` passes `AccessProfile.permissions`):
 `single(key)` of a field, and `rows(set)` of a set, whose `TemplateField.permission` the caller lacks throws
 `AccessDeniedException` (403 `PERMISSION_DENIED`) before anything of it is read, so the generation leaves no audit
-entry; a template without payment fields is filled for a caller with `REPORTS_VIEW` alone.
+entry; a template without payment fields is filled for a caller with `REPORTS_VIEW` alone. The cash book fields work
+the same way with `CASHBOOK_VIEW` (`CashBookTemplateValuesTests`): generating stays a `REPORTS_VIEW` operation, so a
+role with `CASHBOOK_VIEW` alone cannot fill templates.
 
 A row set of more than the reports' row cap (20 000) is 422 `REPORT_TOO_LARGE`. Texts of codes (statuses, meter
 kinds, water sources, month statuses) come from the report bundles in the file's language. The bundles also hold the
@@ -347,11 +363,14 @@ permission), `TemplateUploadChecksTests` (`ARRAY_ACROSS_ROW`).
 
 | Type | Role |
 |---|---|
-| `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
+| `ReportDefinition` | One bean per report: `code`, `requiredPermissions` (default `REPORTS_VIEW`; debtors adds `MEMBERS_VIEW`, payments `PAYMENTS_VIEW`; the cash book reports need `CASHBOOK_VIEW` instead), `personalData`, `filters` (the period first), `load(filters, context)` returning a `ReportResult`, `filenameRange(filters, context)` (default: the period of the filters; a report for one day gives that day twice) |
 | `ReportCatalog` | The definitions in the order of `ReportCode`; `available`/`infos` filter by the caller's permissions, `require` is 404 or 403 |
-| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `DateRangeFilter` (`period`, `DATE_RANGE`, `from`/`to`, default the first and last day of the previous month in Kyiv), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`), `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both), `WaterSourceFilter` (`waterSource`, `WATER_SOURCE`, default every source), `ResourceFilter` (`resource`, `RESOURCE`, default both) and `MeterKindsFilter` (`meterKinds`, `METER_KIND`, several, default `PLOT`, listed as the filter's defaults). In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
+| `ReportFilterDefinition` | One filter: key, type, query parameters, required, basis, defaults on a day, `apply` (read the parameters into `ReportFilters`, adding field errors) and `describe` (the header block's text). Implemented: `MonthRangeFilter` (`period`, `fromMonth`/`toMonth`, default the previous month), `DateRangeFilter` (`period`, `DATE_RANGE`, `from`/`to`, default the first and last day of the previous month in Kyiv), `ChargeTypesFilter` (`chargeTypes`, default all), `StreetFilter` (`street`, default all), `AsOfFilter` (`asOf`, `DATE`, required, default today; a day after today is `INVALID`), `StatusesFilter` (`statuses`, `STATUS`, default all), `MinDebtFilter` (`minDebt`, `MONEY`) and `OlderThanDaysFilter` (`olderThanDays`, `INT`), both required with a default the definition gives (the debtors: the cooperative's red amount and red days, read when the list or the report is made), `YearFilter` (`year`, `YEAR`, required, default the current year in Kyiv; a year after it is `INVALID`), `CorrectionKindsFilter` (`correctionKinds`, `CORRECTION_KIND`, default both), `WaterSourceFilter` (`waterSource`, `WATER_SOURCE`, default every source), `ResourceFilter` (`resource`, `RESOURCE`, default both) and `MeterKindsFilter` (`meterKinds`, `METER_KIND`, several, default `PLOT`, listed as the filter's defaults),
+`AccountFilter` (`account`, `ACCOUNT`, `CASH`/`BANK`, default both) and `ExpenseCategoriesFilter`
+(`expenseCategories`, `EXPENSE_CATEGORIES`, param `expenseCategoryIds`, several, default all; the ids are checked by the
+expenses report, which reads the categories, `NOT_FOUND` on `expenseCategoryIds[i]`). In the file a filter is named by `reports.filters.<key>` (period, charge types, street) or `reports.filters.params.<param>`, the web form's labels |
 | `ReportFilters` | The typed filter values of one run and the values as the query string carries them (echoed in the preview, written to the audit entry); `parse` throws 400 `REPORT_FILTER_INVALID` with every field error: `REQUIRED` (a required filter without a default), `INVALID` (`toMonth` before `fromMonth`, `to` before `from` or a range of days of more than one year, `asOf` after today, `year` after the current year), `NOT_FOUND` (`chargeTypeIds[i]` not a charge type of the cooperative). Malformed values never get here: the contract answers 400 `VALIDATION_FAILED` |
-| `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level, `Total`s) and header `Note`s (code + params). A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
+| `ReportResult` | Sheets (`key`, typed `Column`s, `Row`s of kind `DETAIL`/`SUBTOTAL` with a tree level and, in the expenses report, the row's `expenseId`, `Total`s), header `Note`s (code + params) and the `categories` (`treasury.CategoryRef`) an `EXPENSE_CATEGORY` cell or the filter names. A `Cell` holds a typed value (`Money`, `BigDecimal`, `LocalDate`, `YearMonth`, `UUID` of a charge type, codes and text) or nothing, or a reason when the value is not known (never 0) |
 | `ReportRunner` | `preview` and `file`, each one plain `@Transactional` (not read-only: the outbox inserts the audit publication). Order: caller and permission, filters, `load`, the row cap, the preview or the workbook, the audit event **last**, so a refused run or a failure while writing leaves no entry |
 | `ReportLimits` | The row cap, 20 000 per sheet (property `nadel.reports.row-cap`), and the 200 preview rows |
 | `XlsxReportWriter` | fastexcel workbook, one worksheet per sheet |
@@ -363,7 +382,9 @@ permission), `TemplateUploadChecksTests` (`ARRAY_ACROSS_ROW`).
 
 `ReportPreview`: `code`, `generatedAt` (Europe/Kyiv offset), `filters` (the values used, defaults filled in),
 `headerNotes`, `chargeTypes` (every type a cell, a column or the filter names, in configured order, as
-`ChargeTypeRef`) and per sheet the columns, the first 200 rows, the totals over **all** rows, `rowCount` and
+`ChargeTypeRef`), `expenseCategories` (the result's categories as `ExpenseCategory`: a seeded one with its
+`systemCode`, a renamed or added one with its `name`; empty for the other reports), each row's `expenseId` (the
+expenses report only, never in the file) and per sheet the columns, the first 200 rows, the totals over **all** rows, `rowCount` and
 `truncated`. Cells are strings formatted by column type: money with two decimals (`Money.toString`), quantities and
 percentages and `DECIMAL` (rates and areas, never rounded) as given (`toPlainString`), ISO days, `YYYY-MM` months, codes and charge type ids. Totals are sums of the
 rows as listed (`Money.plus`, no re-rounding); a column without a total is empty.
@@ -377,7 +398,8 @@ caller's display name. Then one line per header note, an empty line, the column 
 and the totals. Money is a numeric cell with `#,##0.00`, quantities `#,##0.000`, percentages `0.00`, integers
 `#,##0`, `DECIMAL` `#,##0.00##` (a rate 35.0000 shows 35.00, 1.4532 all four decimals), days dates `dd.mm.yyyy`, months the date of their first day as `mm.yyyy`. A `CODE` column writes
 `<codes>.<VALUE>` from the bundle (the column names its catalog, for example `billing.status`); a charge type is its
-stored name when customised, otherwise `chargeTypes.defaultNames.<CODE>`. A subtotal and a totals line are bold and
+stored name when customised, otherwise `chargeTypes.defaultNames.<CODE>`; an `EXPENSE_CATEGORY` cell is the category's
+stored name, otherwise `expenseCategories.system.<CODE>` (`ReportRunner.categoryNames`). A subtotal and a totals line are bold and
 write their label (`reports.rows.SUBTOTAL`, `reports.totals.<key>`) into their first empty text column; a tree row is
 indented by its level; an unknown value is an empty cell with `reports.reasons.<REASON>` as a comment. File name
 `<code>_<from>_<to>.xlsx` (ASCII, `Content-Disposition`), from `filenameRange`: a month range gives the first day of
@@ -405,7 +427,12 @@ family `charged`, `paid` or `debt`, `chargeTypeId` set) has no key of its own: i
 file `chargeTypes.defaultNames.<CODE>` for a seeded type that was not renamed and the stored name otherwise (the
 runner's `chargeTypeNames`), on the web `chargeTypeName`. The payments report adds `reports.filters.params.source`,
 `reports.filters.options.source.*` (its `source` column and filter), `reports.filters.period.PAYMENT_DATES`,
-`reports.totals.CASH`/`BANK` and, for its booleans in a template, `reports.yes`/`reports.no`. `ReportTextsTests` checks that both bundles have the same keys and every key a
+`reports.totals.CASH`/`BANK` and, for its booleans in a template, `reports.yes`/`reports.no`. The cash book reports add
+`reports.filters.period.MOVEMENT_DATES`, `reports.filters.params.account`, `reports.filters.options.account.*` (also
+the `account` columns), `reports.filters.expenseCategories`, `reports.accountBook.lines.*`,
+`reports.income-expense.sections.*`, `reports.totals.income`/`expenses`/`differences`/`result`, and the shared
+`cashbook.kind.*` (the `kind` and `difference` columns), `cashbook.bank.status.*` (the `reconciliation` column) and
+`expenseCategories.system.*` (the seeded categories' names). `ReportTextsTests` checks that both bundles have the same keys and every key a
 definition asks for; the web side checks the texts against its catalogs.
 
 ### Row cap
@@ -454,14 +481,16 @@ gives no rows). Reads `ledger.LedgerReadModel.monthTotals` twice, as of today (K
   equals the billing months screen); a `SUBTOTAL` row after each month (no type, no plot count: a plot can have several
   types) and the totals `all`. The effective total of a month equals the billing months screen cent for cent (same
   predicate).
-- Sheet `byServicePeriod` ("За період послуг" / "By service period"): the same columns without `status`, grouped by the
-  month of `service_from` over the same months, so an adjustment booked in March for January is under January; the
-  header note `SERVICE_PERIOD_SHEET` says so. A charge whose service starts before the range (an electricity interval
-  from the previous month) is outside this sheet.
+- Sheet `byServicePeriod` ("За період послуг" / "By service period"): the same columns without `status`, and exactly
+  the charges of `byBillingMonth` (every row booked in the billing months asked, with the allocations to them) grouped
+  by the month of `service_from`, so an adjustment booked in March for January is under January and an electricity
+  interval that started in an earlier month is under that month, even before the first month asked; the header note
+  `SERVICE_PERIOD_SHEET` says so. Its totals equal those of `byBillingMonth` in every column, `paid` included.
 
 Tests: `ChargesByMonthReportTests` (worked ledger in a cooperative of its own, `ReportsTestSupport`: reconciliation with
 `GET /billing-months` for every month, also with payments and their paid column, reversal, later-month adjustment on
-both sheets, street and charge type filters, defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
+both sheets, the service sheet regrouping exactly the charges of the months asked with the same totals, street and
+charge type filters, defaults, the list, the workbook in both languages, route precedence, filter errors, the cap, the audit entries),
 `ReportsAccessTests` (401/403 matrix on the demo cooperative), unit tests `ReportFiltersTests`, `ReportCatalogTests`,
 `ReportRunnerTests` (preview of 200 of 250 rows, file with all, no audit on a write failure, the cap or bad filters),
 `XlsxReportWriterTests`, `ReportLanguageTests`, `ReportTextsTests`.
@@ -728,6 +757,83 @@ number for number, defaults, the cap over the ledger rows, audit, 403 for a memb
 default kinds and the named meters, resource and street, the note count, the file, the cap, audit, 403),
 `ReportTextsTests`; on the web `ReportPage.test.tsx` (code texts and the queue link).
 
+## The cash book reports (feature 018 §2.12, technical considerations 2.7)
+
+Four reports over `treasury.TreasuryReadModel` (`MANDATORY`, `@PreAuthorize` `CASHBOOK_VIEW` on every method; reports
+depends on treasury, never the other way). Each definition needs `CASHBOOK_VIEW` and only that (`requiredPermissions`;
+`load` carries the same `@PreAuthorize` as defence in depth). The period is a `DateRangeFilter` with basis
+`MOVEMENT_DATES` (the dates of the journal lines and entries; default the previous month; a range over a year is
+`INVALID`). No rounding: every figure is a `Money` from the facade or a sum of listed rows (money rules §12).
+
+**Opening balances.** `cash-book` needs the cash opening balance, `bank-movements` the bank's, `income-expense` both:
+409 `OPENING_BALANCE_MISSING` without one, then 400 `BEFORE_OPENING_BALANCE` (`errors[{field: from}]`) when `from` is
+before an opening date (a balance is known only from the opening date on, so the treasury refuses rather than shows a
+book that does not add up). `expenses` lists entries and needs no opening balance.
+
+### `cash-book` and `bank-movements` (`AccountBookSheet`)
+
+Sheet `main`, all rows `DETAIL` (the `line` column, `CODE` catalog `reports.accountBook.lines`, names the balance rows,
+so the writer adds no "Subtotal" label to them): `OPENING` (the first day, `opening` = the balance at its start), per day
+that **has lines** each journal line oldest first (date, time entered, id) and then a `DAY` row (the day's `opening`, its
+`receipt` and `spending` sums and its `closing`), and `CLOSING` (the last day, `closing` = the balance at its end). A day
+without lines is not listed: its balance is the previous day's closing. Columns: `date`, `line`, `time` (`HH:mm`, the
+moment the line was entered, Europe/Kyiv), `kind` (`CODE`, `cashbook.kind`), `reversal` (`BOOLEAN`), `document` (the
+receipt number of a cash member payment, the bank reference of a bank one, a handover's deposit slip, an expense's
+document number; for a reversal, its original's), `plot` (the plot number of a member payment), `counterparty` (an
+expense's, for a reversal its original's: opened from the sealed column, personal data, so both reports have
+`personalData = true`), `category` (`EXPENSE_CATEGORY`), `opening`, `receipt`, `spending` (both positive), `closing`.
+Totals `all`: `receipt` and `spending` summed over the journal lines (the `DAY` rows repeat them and are not counted).
+The balances are `AccountBalances` over the account's day totals from the opening date, so every `DAY` closing equals
+the balance «Каса і банк» shows for that day (`CashBookReportTests`, `BankMovementsReportTests`). The facade reads at
+most `rowLimit` lines; a longer period is 422 `REPORT_TOO_LARGE`. The runner's cap (20 000 rows a sheet) counts the
+rows of the sheet, so the `OPENING`, `DAY` and `CLOSING` rows count against it too: a long period can be refused as
+too large although it has fewer than 20 000 journal lines (one `DAY` row per day with lines, plus two).
+
+`bank-movements` adds sheet `months`: every calendar month from the month of `from` to the month of `to`, oldest first,
+`month` (`MONTH`) and `reconciliation` (`CODE`, `cashbook.bank.status`; a month without a reconciliation row is
+`NOT_RECONCILED`).
+
+### `income-expense` (`IncomeExpenseReport`, `treasury.internal.IncomeExpenseCalculator`)
+
+No personal data. The identity of FS 2.17 #12 as restated (TC 2.7): **member income** = the payments whose journal line
+is dated in the period and that have no reversal line dated in it, split by `ledger.LedgerReadModel.paymentSplits` as of
+the end of `to` (Europe/Kyiv; allocation rows created up to `max(that moment, the payment's created_at)`) into charge
+types, with the part on no charge as «Аванси», plus the reversal lines dated in the period of payments whose line is
+dated before it (a negative line); a payment received and reversed in the period counts in neither, one received in it
+and reversed later counts in full. Dates are the **treasury's** (a reversal on the day it was made), the ledger is used
+only for the split. **Other income** per income category and **expenses** per expense category (positive) net of their
+reversals dated in the period; **differences**: booked count and bank differences, signed; handovers cancel. result =
+income − expenses + differences = the change of cash plus bank over the period (`IncomeExpenseCalculatorTests`,
+`IncomeExpenseReportTests` through the real payment and reversal paths).
+
+Sheet `main`, one row per line in this order: `section` (`CODE`, `reports.income-expense.sections`) `MEMBER_BY_TYPE` per
+charge type (configured order; `chargeType`), `ADVANCES`, `PAYMENT_REVERSALS`, `OTHER_INCOME` per income category and
+`EXPENSE` per expense category (category order; `category`), `DIFFERENCES` for `COUNT_DIFFERENCE` and `BANK_DIFFERENCE`
+(`difference`, `CODE`, `cashbook.kind`), and `amount`. A type or category that nets to 0.00 is left out; the advances,
+the payment reversals and both differences are always listed. Totals `income` (the income sections' rows), `expenses`,
+`differences` and `result` (income − expenses + differences: the one total that is not a plain sum of rows, since the
+expense rows are positive). Sheet `balances`: per account (`account`, `reports.filters.options.account`) `start`, `end`
+and `change`; totals `all` sum them, so its `change` is the result. The member rows equal the payments report's
+allocations of the same payments (`allocated` and `prepayment` of its `all` total for the days received) when nothing
+was allocated after the period.
+
+### `expenses` (`ExpensesReport`)
+
+Filters: period, `account` (default both), expense categories (default all). Sheet `main`, one row per original expense
+(a reversed one listed once and marked) oldest first: `date`, `account`, `category`, `counterparty` (personal data:
+`personalData = true`), `document`, `documentDate`, `amount`, `reversed`, `attachments` (the number of receipt files);
+each row carries its `expenseId` in the preview, so the screen links `GET /expenses/{id}/attachments/{n}`. Totals `all`:
+the amounts of the expenses that are not reversed. A reversed expense is left out of the total whenever it was
+reversed, so the total can differ from the expenses of `income-expense` for the same period when an expense and its
+reversal fall in different periods (`income-expense` counts the expense in its period and the reversal in the period
+of the reversal).
+
+Tests: `IncomeExpenseCalculatorTests` (unit: the identity on a worked October with a payment received and reversed in
+the month, a reversal of a September payment before the opening date, a payment reversed in November, an expense and its
+reversal, a handover, both differences, bank interest; zero-netting, empty, refusals), `CashBookReportTests`,
+`BankMovementsReportTests`, `ExpensesReportTests`, `IncomeExpenseReportTests`, `TreasuryReportsAccessTests` (all in
+`app.nadel.treasury`, through the API), `CashBookTemplateValuesTests`, `ReportTextsTests`.
+
 ## Measured (performance, functional spec 2.2)
 
 `ReportsPerformanceTests` reports a throw-away cooperative of the size the spec names: 300 plots (60 with two owners),
@@ -756,7 +862,7 @@ uses `charge_adjusts_idx`, V19, 690 index probes), debts as of a day 19 ms; all 
 
 ## Depends on
 
-`ledger` (`LedgerReadModel`), `meters` (`MeterReports`, `Quantity`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
+`ledger` (`LedgerReadModel`), `treasury` (`TreasuryReadModel`: the cash book reports, `CASHBOOK_VIEW`), `meters` (`MeterReports`, `Quantity`), `plots` (`PlotCatalog`, `PlotOwners`, `PlotStatuses`), `members` (`MemberDirectory`:
 debtors' contacts, names of who booked a correction), `settings` (`CooperativeSettings`: red amount and days, losses mode and percent, requisites),
 `tariffs` (`ChargeTypeCatalog`, `ExpectedAmounts`, `ChargeCalculator.sotkas`), `tenancy` (`TenantDirectory`), `identity` (`CurrentUser`,
 `AccessProfile`, `Permission`), `audit`, `money` and `problem`. No module depends on `reports`.

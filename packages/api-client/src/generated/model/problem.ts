@@ -34,4 +34,15 @@ export interface Problem {
      * @nullable
      */
   limit?: number | null;
+  /**
+     * For `CASH_INSUFFICIENT`: the lowest cash balance from the entry's date on, before the entry (two decimals); absent on every other problem
+     * @nullable
+     * @pattern ^-?\d+\.\d{2}$
+     */
+  balance?: string | null;
+  /**
+     * For `CASH_INSUFFICIENT`: the earliest day that lowest cash balance is reached; absent on every other problem
+     * @nullable
+     */
+  date?: string | null;
 }

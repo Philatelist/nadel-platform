@@ -1327,6 +1327,83 @@ END $$;</pre>
         </tbody>
       </table>
 
+      <h3>Cash and bank</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Cash and bank (menu)</td>
+            <td>
+              Two cards (cash, bank account) with today's balances, warnings about a negative balance, the
+              last count and the "Unresolved difference", the reconciliation months with their status; the
+              account journal for a period
+            </td>
+            <td>View cash and bank</td>
+          </tr>
+          <tr>
+            <td>Account card → "Enter the opening balance"</td>
+            <td>
+              An amount and a date, once; it cannot be changed (a mistake is corrected by a cash count or a
+              bank difference)
+            </td>
+            <td>Approve cash book operations</td>
+          </tr>
+          <tr>
+            <td>"Expense", "Hand over to the bank", "Other income", "Cash count"</td>
+            <td>
+              Entry forms. An expense takes up to 5 files (JPEG/PNG photos or PDF, up to 5 MB), with a "Take a
+              photo" button on a phone. The cash cannot become negative on the date of the entry or later
+            </td>
+            <td>Enter cash book entries</td>
+          </tr>
+          <tr>
+            <td>Journal → "Reverse"; expense → "Reverse and record again"; count → "Book the difference"</td>
+            <td>A reason is required; a reversal is a line of the opposite amount, the entry itself stays</td>
+            <td>Approve cash book operations</td>
+          </tr>
+          <tr>
+            <td>Expenses ("All expenses" button), an expense card</td>
+            <td>
+              A list with the filters "From", "To", "Account", "Category"; a card with files to download
+            </td>
+            <td>View cash and bank</td>
+          </tr>
+          <tr>
+            <td>Cash count → "Cash count act"</td>
+            <td>
+              A PDF in Ukrainian: book balance, counted balance, difference, signatures of the treasurer and
+              the chairman
+            </td>
+            <td>View cash and bank</td>
+          </tr>
+          <tr>
+            <td>A month on the bank card → the "Bank reconciliation" screen</td>
+            <td>
+              The four statement figures, the comparison with the books, the bank lines of the month; "Save
+              the statement", "Reconciled" (only when the closing balance difference is 0.00), "Bank
+              difference"
+            </td>
+            <td>Enter cash book entries ("Bank difference" - Approve cash book operations)</td>
+          </tr>
+          <tr>
+            <td>Settings → "Expense and income categories"</td>
+            <td>Add, rename, reorder, archive and restore categories (two separate lists)</td>
+            <td>Approve cash book operations</td>
+          </tr>
+          <tr>
+            <td>Plot card → "Reconciliation act" tab; My account → "Reconciliation act"</td>
+            <td>A PDF reconciliation act for a period; a member only for their own plots</td>
+            <td>View charges (a member - their own plot)</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>Invoices, certificates and receipts</h3>
       <table>
         <thead>
@@ -1544,6 +1621,11 @@ END $$;</pre>
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td>Reports → "Cash book", "Bank movements", "Income and expense", "Expenses"</td>
+            <td>The four cash book reports; "View cash and bank" is enough, "View reports" is not needed</td>
+            <td>View cash and bank</td>
+          </tr>
           <tr>
             <td>Reports (menu) → a report card</td>
             <td>Opens one of the nine reports; "Debtors" is there only with "View members"</td>
@@ -1836,6 +1918,27 @@ END $$;</pre>
             <td>-</td>
             <td>-</td>
           </tr>
+          <tr>
+            <td>View cash and bank</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Enter cash book entries</td>
+            <td>yes</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Approve cash book operations</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
         </tbody>
       </table>
       <ul>
@@ -1877,6 +1980,16 @@ END $$;</pre>
           "Announcements" and sends them. A member chooses the way to receive invoices and connects Telegram
           in "Notifications" themselves, with no separate permission.
         </li>
+        <li>
+          Cash and bank: "View cash and bank" (chairman, treasurer) opens "Cash and bank", the journals,
+          expenses with files, counts, reconciliations and the four cash book reports (these need no "View
+          reports", so an audit committee as a custom role can have only this permission); "Enter cash book
+          entries" (treasurer, chairman) records expenses, handovers to the bank, other income, cash counts,
+          statement figures and "Reconciled"; "Approve cash book operations" (the chairman only) enters
+          opening balances, books differences, reverses cash book entries and manages expense and income
+          categories. The reconciliation act is built with "View charges", and by a member for their own
+          plots. A member does not see "Cash and bank".
+        </li>
       </ul>
     </section>
 
@@ -1901,6 +2014,21 @@ END $$;</pre>
         <dd>
           Only from environment variables; the repository holds only local development passwords. CI scans for
           leaked secrets (gitleaks).
+        </dd>
+        <dt>Expense attachments</dt>
+        <dd>
+          Photos and PDFs of receipts are stored <strong>in the database</strong> (an attachment table with
+          <code>tenant_id</code>, RLS and isolation between cooperatives; files are only added, never
+          changed), not on disk. At most 5 files of 5 MB per expense; the type is checked by content (JPEG,
+          PNG, PDF), not by name; location (GPS) and camera data are removed from photos. A file can be
+          downloaded only by someone who has "View cash and bank" in their own cooperative. HEIC files from an
+          iPhone are converted to JPEG only by the phone or browser (the server does not convert HEIC); if the
+          browser cannot open HEIC the user sees "This browser cannot open HEIC photos from an iPhone. Add the
+          photo in Safari, or on the iPhone turn on Settings → Camera → Formats → "Most Compatible" (photos
+          will be JPEG)." Thumbnails on the form and the expense card are made in the browser from the stored
+          file (no extra images on the server). The counterparty and the purpose of an expense are personal
+          data: stored protected, visible in the audit log only with "View members". Attachments make the
+          database and its backups grow: plan the space (see chapter 10).
         </dd>
         <dt>Report templates are data</dt>
         <dd>
@@ -2107,6 +2235,22 @@ END $$;</pre>
         </li>
         <li>
           Demo data (<code>db/demo</code>) loads only in the development profile; the server never has it.
+        </li>
+        <li>
+          Cash and bank (feature 018): the migration <code>V32__treasury.sql</code> creates the cash and bank
+          tables (accounts, journal, expenses with attachments, counts, reconciliations, categories) with RLS,
+          three permissions, and <strong>carries over the existing payments</strong>: every payment already
+          entered and every reversal of a payment gets its journal line exactly once (a second run duplicates
+          nothing). This is the one place where a migration reads the payments table, because it runs as
+          <code>nadel_owner</code>; no old instance runs during the deploy, so no new payments appear at that
+          moment (ADR 0010: deploys with downtime). <code>V33</code> adds the reason for booking a cash count
+          difference, <code>V34</code> the table of bank differences of a month. Attachment files make the
+          database grow, so watch its size and the backups (chapter 9).
+        </li>
+        <li>
+          Uploads: one request with an expense takes up to 27 MB (5 files of 5 MB plus the JSON part), an
+          Excel import up to 10 MB. If a proxy stands in front of the server, let it pass a request body of at
+          least 27 MB.
         </li>
       </ul>
     </section>
@@ -2354,6 +2498,51 @@ END $$;</pre>
               Open <code>http://localhost:8025</code>; letters are in Mailpit's memory and vanish when the
               container restarts. Check that the demo cooperative's "Delivery" points at
               <code>localhost:1025</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>The cash shows a negative balance after a payment was reversed</td>
+            <td>
+              This is the allowed exception: the money is already given out, so reversing a cash payment is
+              not blocked. The cash card says "The cash balance is negative - do a cash count". Count the cash
+              ("Cash count"); the chairman books the difference as a surplus or a shortage.
+            </td>
+          </tr>
+          <tr>
+            <td>A bank month is "Needs a new check" again</td>
+            <td>
+              After "Reconciled", a bank line dated in that month appeared (a payment, an expense, an other
+              income or a difference entered later). The screen says "Reconcile this month again: {kind} of
+              {date} for {amount} was entered on {at}."; the audit log has a "month reopened" entry. Check the
+              statement and press "Reconciled" again. Every later month that was "Reconciled" is reopened the
+              same way (its opening balance changed), with the same line in the notice: check them one by one,
+              starting with the earliest.
+            </td>
+          </tr>
+          <tr>
+            <td>"Reconciled" stays disabled although the mistake was fixed</td>
+            <td>
+              The closing balance difference must be zero; differences in the total in or out only warn. If
+              the closing difference is not zero, enter the missing entry or close the remainder with a "Bank
+              difference" for the month (the chairman). A reversal made today is dated today and does not fall
+              into the old month: it gives only a warning.
+            </td>
+          </tr>
+          <tr>
+            <td>"Invalid period" when building a reconciliation act</td>
+            <td>
+              The period starts before the plot's first charge (a plot without charges has no period) or ends
+              after today. Enter dates between the first charge and today.
+            </td>
+          </tr>
+          <tr>
+            <td>A photo is not attached to an expense</td>
+            <td>
+              The file is over 5 MB, it is the sixth file, or it is not JPEG/PNG/PDF by content. A HEIC photo
+              that the browser cannot open is not attached: the form says "This browser cannot open HEIC
+              photos from an iPhone. Add the photo in Safari, or on the iPhone turn on Settings → Camera →
+              Formats → "Most Compatible" (photos will be JPEG)." A request over 27 MB is rejected by a proxy
+              or the server.
             </td>
           </tr>
           <tr>

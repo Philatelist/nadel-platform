@@ -30,6 +30,8 @@ export const PARAM_CONTROLS: Readonly<Record<ReportFilterParam, ParamControl>> =
   waterSource: { kind: 'select', options: ['COOPERATIVE_SUPPLY', 'METER'] },
   correctionKinds: { kind: 'multi', options: ['REVERSAL', 'ADJUSTMENT'] },
   source: { kind: 'select', options: ['CASH', 'BANK'] },
+  account: { kind: 'select', options: ['CASH', 'BANK'] },
+  expenseCategoryIds: { kind: 'multi', options: [] },
 };
 
 const NUMERIC_PARAMS: ReadonlySet<string> = new Set([

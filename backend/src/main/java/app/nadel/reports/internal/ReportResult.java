@@ -1,6 +1,7 @@
 package app.nadel.reports.internal;
 
 import app.nadel.money.Money;
+import app.nadel.treasury.CategoryRef;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -18,17 +19,25 @@ import org.jspecify.annotations.Nullable;
  * What a report definition loads ({@link ReportDefinition#load}): its sheets with typed cells and the sentences of
  * its header. The preview and the file are both made from one result, so their numbers always agree.
  *
- * @param sheets the sheets in order, at least one
- * @param notes  the sentences of the header, as codes and parameters
+ * @param sheets     the sheets in order, at least one
+ * @param notes      the sentences of the header, as codes and parameters
+ * @param categories the expense and income categories an {@code EXPENSE_CATEGORY} cell or the filter names (the
+ *                   preview's {@code expenseCategories}, the file's category names); empty for other reports
  */
-record ReportResult(List<Sheet> sheets, List<Note> notes) {
+record ReportResult(List<Sheet> sheets, List<Note> notes, List<CategoryRef> categories) {
 
     ReportResult {
         sheets = List.copyOf(sheets);
         notes = List.copyOf(notes);
+        categories = List.copyOf(categories);
         if (sheets.isEmpty()) {
             throw new IllegalArgumentException("A report has at least one sheet");
         }
+    }
+
+    /** A result without categories. */
+    ReportResult(List<Sheet> sheets, List<Note> notes) {
+        this(sheets, notes, List.of());
     }
 
     /**
@@ -78,11 +87,18 @@ record ReportResult(List<Sheet> sheets, List<Note> notes) {
         }
     }
 
-    /** A row of a sheet; {@code level} is the depth in a tree report, 0 elsewhere. */
-    record Row(ReportRowKind kind, int level, List<Cell> cells) {
+    /**
+     * A row of a sheet; {@code level} is the depth in a tree report, 0 elsewhere; {@code expenseId} the expense of a
+     * row of the expenses report (the preview links its files; the file does not show it), null elsewhere.
+     */
+    record Row(ReportRowKind kind, int level, List<Cell> cells, @Nullable UUID expenseId) {
 
         Row {
             cells = List.copyOf(cells);
+        }
+
+        Row(ReportRowKind kind, int level, List<Cell> cells) {
+            this(kind, level, cells, null);
         }
 
         static Row detail(List<Cell> cells) {
@@ -106,8 +122,8 @@ record ReportResult(List<Sheet> sheets, List<Note> notes) {
      * One cell. The value's Java type follows the column type: {@link Money} for {@code MONEY}, {@link BigDecimal} with
      * its scale for {@code QUANTITY}, {@code PERCENT} and {@code DECIMAL}, a {@link Number} for {@code INTEGER},
      * {@link LocalDate},
-     * {@link YearMonth}, {@link Boolean}, {@link UUID} for {@code CHARGE_TYPE} and a {@link String} for {@code TEXT}
-     * and {@code CODE}. An empty cell has no value; a value that is not known has none either, but a reason.
+     * {@link YearMonth}, {@link Boolean}, {@link UUID} for {@code CHARGE_TYPE} and {@code EXPENSE_CATEGORY} and a
+     * {@link String} for {@code TEXT} and {@code CODE}. An empty cell has no value; a value that is not known has none either, but a reason.
      */
     record Cell(@Nullable Object value, @Nullable ReportCellReason reason) {
 
@@ -134,7 +150,8 @@ record ReportResult(List<Sheet> sheets, List<Note> notes) {
             }
             return switch (type) {
                 case QUANTITY, PERCENT, DECIMAL -> ((BigDecimal) value).toPlainString();
-                case MONEY, TEXT, CODE, CHARGE_TYPE, INTEGER, DATE, MONTH, BOOLEAN -> value.toString();
+                case MONEY, TEXT, CODE, CHARGE_TYPE, EXPENSE_CATEGORY, INTEGER, DATE, MONTH, BOOLEAN ->
+                        value.toString();
             };
         }
     }

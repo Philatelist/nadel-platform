@@ -110,7 +110,7 @@ class ReportRunnerTests {
     @Test
     void aFailureWhileWritingTheFileLeavesNoAuditEntry() {
         doThrow(new UncheckedIOException(new IOException("disk full"))).when(writer)
-                .write(any(), any(), any(), any(), any(), any());
+                .write(any(), any(), any(), any(), any(), any(), any());
 
         assertThatThrownBy(() -> runner.file(CODE, RawFilters.NONE, ReportLanguage.UK))
                 .isInstanceOf(UncheckedIOException.class);

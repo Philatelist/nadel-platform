@@ -36,8 +36,9 @@ public interface LedgerReadModel {
      * {@link MonthGrouping#BILLING_MONTH} the months are the billing months from {@code fromMonth} to {@code toMonth}
      * and the effective total of a month and type is exactly the total the billing months screen shows for it (the same
      * predicate: every row booked in the month, of every kind, summed with its sign). With
-     * {@link MonthGrouping#SERVICE_MONTH} the months are those of each row's first service day ({@code service_from}),
-     * from the first day of {@code fromMonth} to the last day of {@code toMonth}.
+     * {@link MonthGrouping#SERVICE_MONTH} the same rows (booked in the billing months from {@code fromMonth} to
+     * {@code toMonth}) are grouped by the month of each row's first service day ({@code service_from}), which may lie
+     * before {@code fromMonth}; both groupings add up to the same totals in every column.
      * <p>
      * {@link MonthTypeTotals#paid} is the net allocations to the charges of the group whose value date is on or before
      * {@code asOf}; {@code effective} does not depend on {@code asOf}.
@@ -89,6 +90,31 @@ public interface LedgerReadModel {
      *                      the order of first appearance
      */
     Map<UUID, PlotDebts> debtsAsOf(LocalDate asOf, Set<UUID> chargeTypeIds, Collection<UUID> plotIds);
+
+    /**
+     * The statement of one plot for a period (the reconciliation act, feature 018 §2.10): the opening balance
+     * {@link #debtsAsOf} on {@code from − 1 day}, the closing balance {@link #debtsAsOf} on {@code to} (every charge
+     * type), and every row of the plot's ledger dated in the period, by the dating {@code debtsAsOf} uses: the charges,
+     * opening balances, adjustments and charge reversals on their debt date ({@code accrued_on}, which a correction
+     * shares with its charge), the payments and payment reversals on {@code received_on} (which a reversal shares with
+     * its payment). So the net balance (debt minus prepayment) at the end is the one at the start plus the charged
+     * minus the paid amounts of the lines. Lines come by date, then charges before payments, then the time booked, then
+     * id; bounded by the rows of one plot in the period, so no limit applies. Two indexed reads
+     * ({@code charge_plot_type_idx}, {@code payment_plot_received_idx}) besides the two {@code debtsAsOf}.
+     *
+     * @param plotId the plot; an unknown id or one of another cooperative (RLS) gives empty balances and no lines
+     * @param from   the first day, inclusive
+     * @param to     the last day, inclusive; not before {@code from}
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    PlotStatement plotStatement(UUID plotId, LocalDate from, LocalDate to);
+
+    /**
+     * The earliest day in the plot's ledger: the earliest debt date of its charges (an opening balance included) or
+     * day received of its payments, whichever comes first (the lower bound of a reconciliation act's period). Empty
+     * for a plot without any charge or payment, an unknown id and one of another cooperative (RLS).
+     */
+    Optional<LocalDate> firstDebtDate(UUID plotId);
 
     /**
      * Every reversal and adjustment booked in the billing months from {@code fromMonth} to {@code toMonth} (the
@@ -192,6 +218,33 @@ public interface LedgerReadModel {
      * @param paymentIds the payments; asked 500 per query
      */
     List<PaymentRow> paymentsByIds(Collection<UUID> paymentIds);
+
+    /**
+     * The payment rows with these ids as the journal lines of the treasury show them (feature 018 §2.2): the payment,
+     * its plot, receipt number or bank reference and, for a payment reversal row, the payment it cancels (with that
+     * payment's receipt number and bank reference) and its reason. Both kinds of row are answered. An unknown id and a
+     * row of another cooperative (RLS) are absent. No personal data.
+     *
+     * @param ledgerRowIds the payment rows (payments or reversals); asked 500 per query
+     * @return the rows found, keyed by row id, in the order of first appearance of the ids
+     */
+    Map<UUID, PaymentRef> paymentRefs(Collection<UUID> ledgerRowIds);
+
+    /**
+     * How these payments were placed on the charges at a moment (feature 018 §2.12, technical considerations 2.3: the
+     * income and expense report splits the member payments of a period by charge type as they stood at the period's
+     * end): per payment the net allocations by charge type of the allocation rows (allocations and releases) created up
+     * to {@code max(recordedBy, the payment's created_at)}, and the unallocated part, the amount minus their sum. The
+     * cut-off keeps the picture of a period fixed when releases or allocations are written later (a reversal of the
+     * payment, a later charge reversal, an automatic allocation of prepayment); the payment's own moment keeps the
+     * allocations written with a payment entered after {@code recordedBy}. An unknown id, a payment of another
+     * cooperative (RLS) and the id of a payment reversal row are absent.
+     *
+     * @param paymentIds the payments; asked 500 per query
+     * @param recordedBy the moment the allocations are taken as of (inclusive)
+     * @return the payments found, keyed by payment id, in the order of first appearance of the ids
+     */
+    Map<UUID, PaymentSplit> paymentSplits(Collection<UUID> paymentIds, Instant recordedBy);
 
     /**
      * The payment group of a payment as a printed cash receipt shows it (feature 016 §2.8): the receipt number, the

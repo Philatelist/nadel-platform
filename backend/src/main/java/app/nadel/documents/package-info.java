@@ -27,8 +27,9 @@
  * ({@code ActorNames}: who accepted the money; {@code AuditEvent}), {@code tariffs} ({@code ChargeTypeCatalog}),
  * {@code settings} ({@code CooperativeSettings}: the requisites), {@code tenancy} ({@code TenantDirectory}: the name and
  * ЄДРПОУ), {@code identity} ({@code CurrentUser}, {@code OwnedPlotsSource}, {@code Permission}), {@code privacy}
- * ({@code PersonalDataCipher}: the sealed names and the content hash), {@code money} and {@code problem}; no module
- * depends on it.
+ * ({@code PersonalDataCipher}: the sealed names and the content hash), {@code treasury} ({@code CashCountActs}: the
+ * act of a cash count, {@code GET /cash-counts/{id}/act.pdf}, drawn by {@code CashCountActDocuments} and
+ * {@code CashCountActLayout}; feature 018), {@code money} and {@code problem}; no module depends on it.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Documents")
 package app.nadel.documents;

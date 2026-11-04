@@ -23,6 +23,8 @@ import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import app.nadel.tariffs.VersionShare;
 import app.nadel.tenancy.TenantDirectory;
 import app.nadel.tenancy.TenantSummary;
+import app.nadel.treasury.CategoryRef;
+import app.nadel.treasury.IncomeExpense;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +44,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import nadel.contract.model.ReportRowKind;
@@ -90,10 +93,15 @@ import org.springframework.stereotype.Component;
  * <li>the row set {@code water}: the main sheet of the water report for the service days, every source and street;</li>
  * <li>the row set {@code payments}: the payments report's rows for the days received, every source and street, without
  * the payer and the payer note ({@link PaymentsReport#sheet}); {@code reversed} is the text "yes" or "no" of the
- * file's language.</li>
+ * file's language;</li>
+ * <li>{@code totals.cashbook.*} and the row set {@code incomeExpense} (feature 018): the income and expense report of
+ * the period ({@link IncomeExpenseReport}, {@code treasury.TreasuryReadModel.incomeExpense}): the cash and bank
+ * balances at the start of {@code from} and the end of {@code to}, income, expenses, differences and the result; its
+ * lines with the section and the name in the file's language. Without both opening balances they are 409
+ * {@code OPENING_BALANCE_MISSING}, a period starting before an opening date 400 {@code BEFORE_OPENING_BALANCE}.</li>
  * </ul>
- * The payment fields ({@link TemplateField#permission()} {@code PAYMENTS_VIEW}) are filled only for a caller who holds
- * that permission: asking for one without it is refused ({@code AccessDeniedException}, 403), before anything of it is
+ * The payment fields ({@link TemplateField#permission()} {@code PAYMENTS_VIEW}) and the cash book fields
+ * ({@code CASHBOOK_VIEW}) are filled only for a caller who holds that permission: asking for one without it is refused ({@code AccessDeniedException}, 403), before anything of it is
  * read.
  * A value the report shows as not known (a meter value without a reading and everything worked out from it) is not
  * known here either, with its reason; an empty report cell is an empty value. A row set over the row cap of the reports
@@ -115,12 +123,13 @@ class TemplateValues {
     private final ElectricityTreeReport electricity;
     private final WaterReport water;
     private final PaymentsReport payments;
+    private final IncomeExpenseReport incomeExpense;
     private final ReportLimits limits;
 
     TemplateValues(TenantDirectory tenants, CooperativeSettings settings, ChargeTypeCatalog chargeTypes,
             LedgerReadModel ledger, PlotBalancesReport plotBalances, LandTaxReport landTax,
             ChargesByMonthReport chargesByMonth, ElectricityTreeReport electricity, WaterReport water,
-            PaymentsReport payments, ReportLimits limits) {
+            PaymentsReport payments, IncomeExpenseReport incomeExpense, ReportLimits limits) {
         this.tenants = tenants;
         this.settings = settings;
         this.chargeTypes = chargeTypes;
@@ -131,6 +140,7 @@ class TemplateValues {
         this.electricity = electricity;
         this.water = water;
         this.payments = payments;
+        this.incomeExpense = incomeExpense;
         this.limits = limits;
     }
 
@@ -175,6 +185,7 @@ class TemplateValues {
         private @Nullable List<PlotLandTax> landTaxPlots;
         private @Nullable Map<UUID, Money> chargedByType;
         private @Nullable Map<UUID, Money> paidByType;
+        private @Nullable IncomeExpense incomeExpenseFigures;
 
         private Resolver(LocalDate from, LocalDate to, ReportTexts texts, String generatedBy,
                 LocalDateTime generatedAt, ReportContext context, Set<Permission> permissions) {
@@ -240,6 +251,7 @@ class TemplateValues {
                     case METERS -> meterRows();
                     case WATER -> waterRows();
                     case PAYMENTS -> paymentRows();
+                    case INCOME_EXPENSE -> incomeExpenseRows();
                 };
                 if (rows.size() > limits.rowCap()) {
                     throw new ApiProblemException(HttpStatus.UNPROCESSABLE_ENTITY, ProblemCodes.REPORT_TOO_LARGE,
@@ -281,6 +293,14 @@ class TemplateValues {
                 case TOTALS_PLOTS_AREA_SOTKA -> TemplateValue.of(ReportTemplateFieldType.NUMBER, balances().stream()
                         .map(balance -> ChargeCalculator.sotkas(balance.plot().areaM2()))
                         .reduce(BigDecimal.ZERO, BigDecimal::add));
+                case TOTALS_CASHBOOK_CASH_START -> money(incomeExpenseFigures().cashStart());
+                case TOTALS_CASHBOOK_CASH_END -> money(incomeExpenseFigures().cashEnd());
+                case TOTALS_CASHBOOK_BANK_START -> money(incomeExpenseFigures().bankStart());
+                case TOTALS_CASHBOOK_BANK_END -> money(incomeExpenseFigures().bankEnd());
+                case TOTALS_CASHBOOK_INCOME -> money(incomeExpenseFigures().income());
+                case TOTALS_CASHBOOK_EXPENSES -> money(incomeExpenseFigures().expenses());
+                case TOTALS_CASHBOOK_DIFFERENCES -> money(incomeExpenseFigures().differences());
+                case TOTALS_CASHBOOK_RESULT -> money(incomeExpenseFigures().result());
                 default -> throw new IllegalArgumentException("Not a single value: " + placeholder.field());
             };
         }
@@ -417,6 +437,41 @@ class TemplateValues {
             return rows(sheet, row -> true, columns);
         }
 
+        /**
+         * The lines of the income and expense report ({@link IncomeExpenseReport#lines}): the section's text, the
+         * line's name (the charge type, the category or the kind of difference; for the advances and the payment
+         * reversals the section's text again) in the file's language, the amount.
+         */
+        private List<Map<String, TemplateValue>> incomeExpenseRows() {
+            List<CategoryRef> categories = incomeExpense.categories();
+            Map<UUID, CategoryRef> byId = new HashMap<>();
+            categories.forEach(category -> byId.put(category.id(), category));
+            Function<UUID, String> chargeTypeNames = ReportRunner.chargeTypeNames(context, texts);
+            List<Map<String, TemplateValue>> rows = new ArrayList<>();
+            for (IncomeExpenseReport.Line line : IncomeExpenseReport.lines(incomeExpenseFigures(),
+                    context.chargeTypes(), categories)) {
+                String section = texts.text(IncomeExpenseReport.SECTIONS + "." + line.section().name());
+                String name;
+                if (line.chargeTypeId() != null) {
+                    name = chargeTypeNames.apply(line.chargeTypeId());
+                } else if (line.categoryId() != null) {
+                    CategoryRef category = byId.get(line.categoryId());
+                    name = category == null ? line.categoryId().toString() : category.name() != null
+                            ? category.name() : texts.text("expenseCategories.system." + category.systemCode());
+                } else if (line.difference() != null) {
+                    name = texts.text(AccountBookSheet.KINDS + "." + line.difference().name());
+                } else {
+                    name = section;
+                }
+                Map<String, TemplateValue> row = new LinkedHashMap<>();
+                row.put(TemplateField.INCOME_EXPENSE_SECTION.key(), text(section));
+                row.put(TemplateField.INCOME_EXPENSE_NAME.key(), text(name));
+                row.put(TemplateField.INCOME_EXPENSE_AMOUNT.key(), money(line.amount()));
+                rows.add(row);
+            }
+            return rows;
+        }
+
         /** The rows of a sheet that {@code take} keeps, each the fields' values read from their columns. */
         private List<Map<String, TemplateValue>> rows(Sheet sheet, Predicate<Row> take,
                 Map<TemplateField, String> columns) {
@@ -490,6 +545,10 @@ class TemplateValues {
 
         private Map<UUID, Money> paidByType() {
             return paidByType = once(paidByType, () -> ledger.paidByType(from, to));
+        }
+
+        private IncomeExpense incomeExpenseFigures() {
+            return incomeExpenseFigures = once(incomeExpenseFigures, () -> incomeExpense.figures(from, to));
         }
 
         private static <T> T once(@Nullable T loaded, Supplier<T> load) {

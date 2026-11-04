@@ -1,6 +1,6 @@
 # Money rules
 
-This document is the source of truth for the `tariffs`, `meters`, `ledger`, `payments` and `documents` modules.
+This document is the source of truth for the `tariffs`, `meters`, `ledger`, `payments`, `documents` and `treasury` modules.
 Any rule change is made here first.
 
 ## 1. Representing amounts
@@ -859,3 +859,134 @@ not count), on request and in the month build alike; otherwise the latest versio
 the plot balances of 12 (2, by debt date), not the booking-month rule: `LedgerReadModel.debtsAsOf(asOf, every type)`,
 the same figures as the plot balances report for that day. «Заборгованість відсутня» when the total is 0,00. A
 certificate never changes; a mistake is answered by a new certificate and the annulment of the old one.
+
+## 14. Cash and bank («Каса і банк»)
+
+Feature 018 (ADR 0019, module `treasury`). The cooperative's own money: what it holds, not what members owe. Members'
+debts (2) never change here; the cash book only shows where the money they paid went.
+
+**Accounts and opening balances.** A cooperative has exactly two money accounts, «Каса» (`CASH`, the cash the treasurer
+holds) and «Банківський рахунок» (`BANK`). Each gets one **opening balance** («Вхідний залишок»): an amount (0.00 or
+more) and a date, entered once by the chairman, never changed. It is the balance **at the start** of its date. A
+mistake in it is corrected by a cash count (cash) or a bank difference (bank), not by editing it. Before an account has
+one, every entry on it except a member payment is refused (`OPENING_BALANCE_MISSING`), and so is an entry dated before
+it (`BEFORE_OPENING_BALANCE`). Member payments are always recorded; those dated before the opening date stay in the
+journal marked «до вхідного залишку» and count in no balance.
+
+**The journal.** Every change of an account is a movement (`account_movement`): a date, a signed amount (in positive,
+out negative, never 0.00), a kind, the billing month it belongs to, what caused it, who entered it and when. Kinds:
+member payment (a 015 payment or its reversal, written in the payment's own transaction), handover (one record, two
+lines of the same date and amount: out of the cash, into the bank), expense, other income, count difference, bank
+difference. The journal is append-only like the ledger (3): a wrong entry is **reversed**, a new line of the opposite
+amount on the same account, dated **the day of the reversal**, with a required reason; the reversed entry stays,
+marked «Сторновано». An entry is reversed once; a reversal is never reversed. Member payments are reversed only in 015,
+and the treasury dates that reversal's line on the day it is made (example 10), while the member's debt view (the
+account, the reconciliation act) keeps the 015 dating (the original's day).
+
+**Balance of an account on a day** = opening amount + Σ movements dated from the opening date up to and including that
+day. Never stored; the server computes it, the clients show it. A reversed entry and its reversal both count (they
+cancel). The balance «at the start of a day» is the balance at the end of the day before (for the opening date: the
+opening amount).
+
+**Closed billing months.** A movement dated in a closed billing month belongs to the earliest open month and keeps its
+date (as payments, 3.1). Reports by day use the date; reports by billing month use the month. A closed month never
+changes: what is entered later lands in an open month.
+
+**Cash never goes negative.** A cash expense, a handover, the reversal of a cash other income or of a booked surplus
+and a booked cash shortage are refused (`CASH_INSUFFICIENT`) when the cash balance would go below 0.00 **on their date
+or on any later day**: the lowest running balance from that date on, plus the entry, must stay ≥ 0.00; the refusal names
+that lowest balance and the earliest day it is reached. So a back-dated entry is refused although its own day stays
+positive when a later day would go negative (example 5). The check runs under a lock of the cash account, so two
+entries saved at the same moment are checked one after the other. **The one exemption** is the reversal of a cash
+member payment: the money is already gone, so it is allowed, and if the cash then shows a negative balance the cash
+card says so and asks for a count. The bank may go negative (an overdraft is the bank's business); the screen only
+warns.
+
+**Cash count** («Перерахунок каси»). The book balance is the cash balance at the end of the count's day with every line
+entered so far; the difference is counted − book. A saved count keeps the book balance it showed: a line entered later
+for an earlier day never changes it (the next count sees it). Difference 0.00: «Збігається». Any other difference needs
+an explanation and stays «Неврегульована» until the chairman books it once: a «Надлишок» (receipt) or «Нестача»
+(spending) line of exactly the difference, dated the count's day, with a reason; a shortage goes through the
+no-negative-cash rule. A booked line is undone only by its reversal; the count stays booked and its act shows the
+reversal. Every count has its act (a PDF, ADR 0017).
+
+**Bank reconciliation** («Звірка з банком») is by **calendar month of the line dates**, not by billing month. The
+statement's four figures must agree: opening + in − out = closing (`STATEMENT_INCONSISTENT`). The books' four figures
+are the bank balance at the start of the 1st, the month's receipts and spendings (both positive, as a statement shows
+them; a reversal counts against the direction of the line it reverses, so a mistake and its reversal in one month
+cancel), and the balance at the end of the last day. Each difference is statement − books. A difference is closed by
+the missing entry (a payment, an expense, an other income) or by a bank difference the chairman books (dated the
+month's last day, or today if earlier). «Звірено» needs a statement and **the closing difference 0.00** (owner decision
+on PR #66). A difference in the opening, `in` or `out` while the closing agrees does not block: the screen shows it as a
+warning with a short explanation. A bank line dated in a reconciled month added later (payments included) puts that
+month back to «Потребує повторної звірки» with the line and the time, and so does every later month that is «Звірено»
+(see below).
+
+Why `in` and `out` can differ while the closing agrees: a line moves between two months while the money is the same.
+
+- **A mistaken line reversed in a later month.** The reversal is dated on its own day, so the line stays in its month
+  and the reversal lowers `in` (or `out`) of the later month. In the later month the opening and that flow differ by
+  the same amount and the closing agrees (a warning); the month of the line keeps a closing difference.
+- **A line the bank books in another month** than the books date it (a payment entered as 31.10 that the bank credited
+  on 01.11). The later of the two months closes with a warning; the earlier keeps a closing difference.
+
+The earlier month of such a pair closes when the chairman books a bank difference of the amount in it (it counts in
+`in` or `out` as well as in the closing) and reverses it in the later month, where the reversal lands while that month
+is the current one. Both months then show `in` and `out` off by the same amount, a closing difference of 0.00, and can
+be marked «Звірено».
+
+Later months (owner decision on PR #66): a bank line dated in month M changes the opening and closing of every later
+month by its amount, so it reopens M and every later month that is «Звірено»: each goes back to «Потребує повторної
+звірки» naming the same line and time, with its own audit entry. A later month «Не звірено» stays as it is, and a month
+already «Потребує повторної звірки» keeps the line that reopened it first. Only lines dated on or after the bank's
+opening date count. Example: September and October «Звірено»; a bank fee dated 15.09 entered on 04.11 reopens both,
+each with the reopen notice naming that fee; a line dated 20.10 would reopen only October.
+
+**Reconciliation act** («Акт звірки», a PDF per plot and period) follows the **ledger's dates**, not the cash book's:
+the opening balance is the plot's balance (2) at the end of the day before the period, the closing balance at the end of
+its last day (both equal the plot balances report on those days, example 11); the lines are the charges, adjustments
+and reversals by their debt date and the payments by `received_on`, a payment reversal on the day of the payment it
+reverses (as the debt view counts it). The closing sentence uses the net balance (debt − prepayment): a debt, an
+overpayment or «заборгованість відсутня». The period starts no earlier than the plot's first ledger day and ends no
+later than today.
+
+**Income and expense** («Доходи та витрати», the report for the general meeting), example 12 as restated (FS §4.1):
+
+```
+member income   = payments whose journal line is dated in the period and not reversed in it,
+                  split by charge type as allocated at the end of the period, the unallocated part as «Аванси»,
+                  + the reversal lines dated in the period of payments received before it (negative)
+income          = member income + other income by category (net of reversals in the period)
+expenses        = expenses by category, positive (net of reversals in the period)
+differences     = booked count differences + booked bank differences, signed (net of reversals)
+result          = income − expenses + differences = (cash + bank at the end) − (cash + bank at the start)
+```
+
+Handovers move money between the two accounts and cancel out. The member lines by charge type equal the payments
+report's allocations of the same payments when nothing was allocated after the period. The requirement's wording
+("minus the change of unallocated prepayment") holds only when «Аванси» are left out of income and there are no
+differences. The «Витрати» report lists expenses and totals those not reversed (whenever reversed), so its total can
+differ from the expenses here when an expense and its reversal fall in different periods.
+
+**Rounding.** None: every amount in the cash book is entered or an exact `Money` sum of entered amounts (1).
+
+**Worked examples** (FS 2.17; cash opening 1 000.00 and bank opening 20 000.00 on 01.10.2026;
+`CashBookExamplesTests`, `IncomeExpenseCalculatorTests`):
+
+| # | Event | Expected |
+|---|---|---|
+| 1 | 05.10 cash payment 500.00 (015) | cash 1 500.00 |
+| 2 | 06.10 cash expense 300.00 «Матеріали» | cash 1 200.00 |
+| 3 | 07.10 handover 1 000.00 to the bank | cash 200.00; bank 21 000.00 |
+| 4 | 07.10 cash expense 250.00 | refused: insufficient cash (balance 200.00 on 07.10) |
+| 5 | 08.10 a cash expense of 400.00 dated 06.10 | refused: 06.10 stays positive (800.00), but 07.10 would be −200.00 |
+| 6 | 10.10 count: counted 180.00, book 200.00 | difference −20.00, unresolved; the chairman books «Нестача» −20.00: cash 180.00 |
+| 7 | Bank October: statement 20 000.00 / 3 000.00 / 150.00 / 22 850.00; books in 3 000.00 (2 000.00 member bank payments + 1 000.00 handover), out 0.00 | out differs by 150.00; an expense of 150.00 «Банківські комісії» makes every difference 0.00; October «Звірено» |
+| 8 | After «Звірено», a bank payment dated 20.10 is entered on 03.11 | October «Потребує повторної звірки» |
+| 9 | Statement 100 / 50 / 20 / 200 | refused: the figures do not agree |
+| 10 | A cash payment is reversed | a reversing member payment line on the day of the reversal; cash goes down by its amount; allowed even if the cash goes negative, the cash card warns |
+| 11 | Reconciliation act, plot 9, 01.09–31.10 | start balance as on 31.08; lines by date; end balance equals the plot balances report on 31.10 |
+| 12 | Income and expense, October | member payments by type equal the payments report's allocations of those payments; income − expenses + differences = change of (cash + bank) over October |
+
+The demo cooperative shows the identity on its own data for the previous and the current month
+(`treasury.internal.DemoTreasuryTests`).

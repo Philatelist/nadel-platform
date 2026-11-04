@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import nadel.contract.model.MeterKind;
 import nadel.contract.model.MeterResource;
+import nadel.contract.model.MoneyAccountKind;
 import nadel.contract.model.PaymentSource;
 import nadel.contract.model.PlotStatus;
 import nadel.contract.model.ReportCorrectionKind;
@@ -32,11 +33,24 @@ record RawFilters(
         @Nullable List<MeterKind> meterKinds,
         @Nullable WaterSourceKind waterSource,
         @Nullable List<ReportCorrectionKind> correctionKinds,
-        @Nullable PaymentSource source) {
+        @Nullable PaymentSource source,
+        @Nullable MoneyAccountKind account,
+        @Nullable List<UUID> expenseCategoryIds) {
 
     /** No parameter given: every filter takes its default. */
     static final RawFilters NONE = new RawFilters(null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null);
+            null, null, null, null, null, null, null);
+
+    /** The parameters of the reports before the cash book reports: no {@code account}, no expense categories. */
+    RawFilters(@Nullable String fromMonth, @Nullable String toMonth, @Nullable LocalDate from, @Nullable LocalDate to,
+            @Nullable LocalDate asOf, @Nullable Integer year, @Nullable List<UUID> chargeTypeIds,
+            @Nullable String street, @Nullable List<PlotStatus> statuses, @Nullable String minDebt,
+            @Nullable Integer olderThanDays, @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
+            @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds,
+            @Nullable PaymentSource source) {
+        this(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses, minDebt, olderThanDays,
+                resource, meterKinds, waterSource, correctionKinds, source, null, null);
+    }
 
     /** The parameters of the reports before the payments report: no {@code source}. */
     RawFilters(@Nullable String fromMonth, @Nullable String toMonth, @Nullable LocalDate from, @Nullable LocalDate to,
@@ -45,6 +59,6 @@ record RawFilters(
             @Nullable Integer olderThanDays, @Nullable MeterResource resource, @Nullable List<MeterKind> meterKinds,
             @Nullable WaterSourceKind waterSource, @Nullable List<ReportCorrectionKind> correctionKinds) {
         this(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses, minDebt, olderThanDays,
-                resource, meterKinds, waterSource, correctionKinds, null);
+                resource, meterKinds, waterSource, correctionKinds, null, null, null);
     }
 }

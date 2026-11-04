@@ -113,6 +113,9 @@ abstract class ReportsTestSupport extends IntegrationTest {
             // payments (feature 015): releases point at their allocation, reversals at their payment
             sql.update("delete from allocation where tenant_id = ? and releases_allocation_id is not null", id);
             sql.update("delete from allocation where tenant_id = ?", id);
+            // the journal movements of feature 018 point at the payments (and a reversal at its movement): first
+            sql.update("delete from account_movement where tenant_id = ? and reverses_movement_id is not null", id);
+            sql.update("delete from account_movement where tenant_id = ?", id);
             sql.update("delete from payment where tenant_id = ? and reverses_payment_id is not null", id);
             sql.update("delete from payment where tenant_id = ?", id);
             sql.update("delete from meter_value_use where tenant_id = ?", id);
@@ -128,6 +131,9 @@ abstract class ReportsTestSupport extends IntegrationTest {
             sql.update("delete from common_consumer_run where tenant_id = ?", id);
             sql.update("delete from not_charged_item where tenant_id = ?", id);
             sql.update("delete from billing_month where tenant_id = ?", id);
+            // the money accounts and categories seed_base_roles adds (V32, seed_treasury)
+            sql.update("delete from money_account where tenant_id = ?", id);
+            sql.update("delete from expense_category where tenant_id = ?", id);
         });
         // a replacement points at the meter it replaced
         ownerJdbc().update("delete from meter_reading where tenant_id = ?", id);

@@ -665,10 +665,14 @@ DROP TABLE pg_temp.demo_anchor;
 --  - payments and allocations (spec 015, see the payments part at the end of the block): cash and bank money for 14 owned
 --    plots, one prepayment, one split, one reversed payment;
 --  - settings: proportional losses, the red threshold at 2 000,00 or 90 days; plot_status holds every plot's debt,
---    oldest unpaid charge and prepayment.
+--    oldest unpaid charge and prepayment;
+--  - the cash book (feature 018): the two money accounts without opening balances and one journal line per payment
+--    row (as the V32 backfill writes them); the opening balances, expenses, handovers, the cash count and the bank
+--    reconciliations are entered by the application's DemoTreasury runner (the expenses seal their counterparty with
+--    the Java cipher), on the next start after this block ran.
 -- Every amount is what the application calculates from the same rows (DemoLedgerDataTests recalculates them with the
 -- calculators and compares). The block assumes one version per demo tariff and real readings on the ends of the runs.
--- Re-runnable: it first removes every ledger row of the demo cooperative (charges are append-only, so as nadel_owner
+-- Re-runnable: it first removes every cash book and ledger row of the demo cooperative (both are append-only, so as nadel_owner
 -- with app.ledger_maintenance on, the owner-only bypass of the triggers), its water connections and common consumer
 -- settings, then books everything again; a change the chairman made to the demo ledger is lost on a re-run. It runs only when the
 -- Flyway placeholder demoledger is 'on' (the dev profile); integration tests keep it off so the demo cooperative they
@@ -734,6 +738,28 @@ BEGIN
     DELETE FROM telegram_link WHERE tenant_id = demo;
     DELETE FROM bot_poll_state WHERE tenant_id = demo;
     DELETE FROM delivery_settings WHERE tenant_id = demo;
+
+    -- Remove the cash book of the demo cooperative (feature 018) before the payments: a member payment's journal line
+    -- points at its payment row (account_movement_payment_fk, ON DELETE RESTRICT). Rows that point at a movement go
+    -- first (files, expenses, other income, handovers, booked bank differences, counts with their booking reason, bank
+    -- reconciliations), reversals before what they reverse, then the movements, then the two accounts with their opening
+    -- balances (written once, so they are removed with the account and seeded again below). The categories stay: the
+    -- chairman's renames are kept. The application's demo cash book runner (DemoTreasury) enters it again on the next
+    -- start.
+    DELETE FROM expense_attachment WHERE tenant_id = demo;
+    DELETE FROM expense WHERE tenant_id = demo AND reverses_expense_id IS NOT NULL;
+    DELETE FROM expense WHERE tenant_id = demo;
+    DELETE FROM other_income WHERE tenant_id = demo AND reverses_other_income_id IS NOT NULL;
+    DELETE FROM other_income WHERE tenant_id = demo;
+    DELETE FROM handover WHERE tenant_id = demo AND reverses_handover_id IS NOT NULL;
+    DELETE FROM handover WHERE tenant_id = demo;
+    DELETE FROM bank_difference WHERE tenant_id = demo;
+    DELETE FROM cash_count WHERE tenant_id = demo;
+    DELETE FROM bank_reconciliation WHERE tenant_id = demo;
+    DELETE FROM account_movement WHERE tenant_id = demo AND reverses_movement_id IS NOT NULL;
+    DELETE FROM account_movement WHERE tenant_id = demo;
+    DELETE FROM money_account WHERE tenant_id = demo;
+    PERFORM seed_treasury(demo);
 
     -- Remove the ledger of the demo cooperative (reversals before what they reverse; payments and allocations first,
     -- they point at charges and billing months).
@@ -1410,6 +1436,33 @@ BEGIN
 
     INSERT INTO receipt_counter (tenant_id, last_number)
     VALUES (demo, coalesce((SELECT max(receipt_number) FROM payment WHERE tenant_id = demo), 0));
+
+    -- The journal lines of the payments (feature 018): the application writes one in the payment's own transaction
+    -- (PaymentMovementListener), these rows are inserted directly, so they get theirs here, exactly as the payment
+    -- backfill of V32__treasury.sql (between BACKFILL BEGIN and END) writes them, for the demo cooperative only: a
+    -- payment on its received_on in its billing month, on the account of its source; the reversal of plot 3's payment
+    -- on the Kyiv day it was made, in greatest(its month, that day's month), reversing the payment's line. Without them
+    -- the cash journal would miss the demo payments and reversing a demo payment would fail (no line to reverse).
+    INSERT INTO account_movement (tenant_id, account_id, kind, amount, moved_on, booking_month, source_type, source_id,
+                                  payment_row_id, created_by, created_at)
+    SELECT p.tenant_id, md5(p.tenant_id::text || ':ACCOUNT:' || p.source)::uuid, 'MEMBER_PAYMENT', p.amount,
+           p.received_on, bm.month, 'PAYMENT', p.id, p.id, p.created_by, p.created_at
+    FROM payment p
+    JOIN billing_month bm ON bm.tenant_id = p.tenant_id AND bm.id = p.billing_month_id
+    WHERE p.tenant_id = demo AND p.kind = 'PAYMENT'
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO account_movement (tenant_id, account_id, kind, amount, moved_on, booking_month, source_type, source_id,
+                                  payment_row_id, reverses_movement_id, reason, created_by, created_at)
+    SELECT p.tenant_id, o.account_id, 'MEMBER_PAYMENT', p.amount, d.day,
+           greatest(bm.month, date_trunc('month', d.day)::date), 'PAYMENT', p.id, p.id, o.id, p.reason, p.created_by,
+           p.created_at
+    FROM payment p
+    JOIN billing_month bm ON bm.tenant_id = p.tenant_id AND bm.id = p.billing_month_id
+    JOIN account_movement o ON o.tenant_id = p.tenant_id AND o.payment_row_id = p.reverses_payment_id
+    CROSS JOIN LATERAL (SELECT (p.created_at AT TIME ZONE 'Europe/Kyiv')::date AS day) d
+    WHERE p.tenant_id = demo AND p.kind = 'PAYMENT_REVERSAL'
+    ON CONFLICT DO NOTHING;
 
     -- The plot status cache after payments: the debt (charges with their reversals and adjustments minus the net
     -- allocations), the day the oldest REGULAR or OPENING charge that is not reversed and still has an open amount

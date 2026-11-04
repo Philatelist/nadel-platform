@@ -5,6 +5,7 @@ import app.nadel.documents.internal.CashReceipts.ReceiptFile;
 import app.nadel.identity.CurrentUser;
 import app.nadel.ledger.InvoiceLedger;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
@@ -58,8 +59,11 @@ import org.springframework.web.bind.annotation.RestController;
  * current owner and the latest version, decided by {@link Invoices}), {@code GET /me/invoices} (the caller's own
  * plots, no permission, {@link Invoices#mine}). The month: {@code POST
  * /billing-months/{month}/invoices} ({@code INVOICES_ISSUE}, {@link InvoiceBuilder#forMonth}) and {@code GET
- * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). Files are sent as
- * attachments and never cached.
+ * /billing-months/{month}/invoices/print.pdf} ({@code INVOICES_ISSUE}, {@link PrintBundle}). The act of a cash count
+ * {@code GET /cash-counts/{id}/act.pdf} ({@code CASHBOOK_VIEW}, {@link CashCountActDocuments}; feature 018). The
+ * reconciliation act of a plot {@code GET /plots/{id}/reconciliation-act.pdf} (no permission annotation:
+ * {@code CHARGES_VIEW} for any plot or a current owner for their plot, decided by {@link ReconciliationActs}; feature
+ * 018). Files are sent as attachments and never cached.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -70,19 +74,41 @@ class DocumentsController implements DocumentsApi {
     private final InvoiceBuilder builder;
     private final Invoices invoices;
     private final PrintBundle printBundle;
+    private final CashCountActDocuments cashCountActs;
+    private final ReconciliationActs reconciliationActs;
 
     DocumentsController(CurrentUser currentUser, CashReceipts receipts, InvoiceBuilder builder, Invoices invoices,
-            PrintBundle printBundle) {
+            PrintBundle printBundle, CashCountActDocuments cashCountActs, ReconciliationActs reconciliationActs) {
         this.currentUser = currentUser;
         this.receipts = receipts;
         this.builder = builder;
         this.invoices = invoices;
         this.printBundle = printBundle;
+        this.cashCountActs = cashCountActs;
+        this.reconciliationActs = reconciliationActs;
     }
 
     @Override
     public ResponseEntity<Resource> getPaymentReceiptPdf(UUID id) {
         ReceiptFile file = receipts.receipt(id, currentUser.profile());
+        return pdf(file.fileName(), file.content());
+    }
+
+    /** The act of a cash count (feature 018 §2.6), for whoever may view the cash book. */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_CASHBOOK_VIEW')")
+    public ResponseEntity<Resource> getCashCountActPdf(UUID id) {
+        CashCountActDocuments.ActFile file = cashCountActs.act(id);
+        return pdf(file.fileName(), file.content());
+    }
+
+    /**
+     * The reconciliation act of a plot (feature 018 §2.10). No permission annotation: {@code CHARGES_VIEW} for any plot,
+     * otherwise only a plot the caller owns now ({@link ReconciliationActs}).
+     */
+    @Override
+    public ResponseEntity<Resource> getPlotReconciliationActPdf(UUID id, LocalDate from, LocalDate to) {
+        ReconciliationActs.ActFile file = reconciliationActs.act(id, from, to, currentUser.profile());
         return pdf(file.fileName(), file.content());
     }
 

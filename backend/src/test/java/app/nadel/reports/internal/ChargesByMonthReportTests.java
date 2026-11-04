@@ -101,15 +101,72 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         assertThat(columns(service)).containsExactly("month:MONTH", "chargeType:CHARGE_TYPE", "plots:INTEGER",
                 "regular:MONEY", "opening:MONEY", "reversals:MONEY", "adjustments:MONEY", "effective:MONEY",
                 "paid:MONEY");
-        // the electricity of 16.12.2024-15.01.2025 starts in December, before the range
+        // the same charges as the main sheet: the electricity of 16.12.2024-15.01.2025, booked in January, is under
+        // December, and the totals are the main sheet's
         assertThat(lines(service)).containsExactly(
+                "DETAIL 2024-12 ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50 0.00",
+                "SUBTOTAL 2024-12 - - 52.50 0.00 0.00 0.00 52.50 0.00",
                 "DETAIL 2025-01 MEMBERSHIP 2 60.00 1500.00 0.00 -5.00 1555.00 0.00",
                 "SUBTOTAL 2025-01 - - 60.00 1500.00 0.00 -5.00 1555.00 0.00",
                 "DETAIL 2025-02 MEMBERSHIP 2 60.00 0.00 -30.00 -5.00 25.00 0.00",
                 "SUBTOTAL 2025-02 - - 60.00 0.00 -30.00 -5.00 25.00 0.00",
                 "DETAIL 2025-03 MEMBERSHIP 2 50.00 0.00 0.00 0.00 50.00 0.00",
                 "SUBTOTAL 2025-03 - - 50.00 0.00 0.00 0.00 50.00 0.00",
-                "TOTAL all - - - 170.00 1500.00 -30.00 -10.00 1630.00 0.00");
+                "TOTAL all - - - 222.50 1500.00 -30.00 -10.00 1682.50 0.00");
+    }
+
+    /**
+     * The service sheet regroups exactly the charges of the billing months asked (the owner's October case). Booked in
+     * October 2025: P2's electricity interval 20.08-19.10.2025 (120.00), P1's September membership booked late
+     * (30.00), a -5.00 adjustment of P2's September membership (that one booked in September), the October membership
+     * of both (25.00 each) and the reversal of P2's. Booked in November: P1's electricity 20.10-19.11.2025 (40.00),
+     * whose service starts in October. P1 pays 50.00 on 15.10.2025 on its September (30.00) and October (20.00)
+     * membership; P2 pays 10.00 on its September membership, which is not booked in October.
+     */
+    @Test
+    void theServiceSheetRegroupsExactlyTheChargesOfTheBillingMonthsAskedAndHasTheSameTotals() throws Exception {
+        UUID septemberP2 = charge(p2, membership, "REGULAR", "TARIFF", "30.00", "2025-09-01", "2025-09-30",
+                "2025-09");
+        charge(p2, electricity, "REGULAR", "CONSUMPTION", "120.00", "2025-08-20", "2025-10-19", "2025-10");
+        UUID septemberP1 = charge(p1, membership, "REGULAR", "TARIFF", "30.00", "2025-09-01", "2025-09-30",
+                "2025-10");
+        adjustment(septemberP2, recalculation(), "-5.00", "2025-10");
+        UUID octoberP1 = charge(p1, membership, "REGULAR", "TARIFF", "25.00", "2025-10-01", "2025-10-31", "2025-10");
+        UUID octoberP2 = charge(p2, membership, "REGULAR", "TARIFF", "25.00", "2025-10-01", "2025-10-31", "2025-10");
+        reversal(octoberP2);
+        charge(p1, electricity, "REGULAR", "CONSUMPTION", "40.00", "2025-10-20", "2025-11-19", "2025-11");
+        UUID x = payment(p1, "CASH", "50.00", LocalDate.of(2025, 10, 15), 1L, null, null);
+        allocate(x, septemberP1, "30.00");
+        allocate(x, octoberP1, "20.00");
+        UUID y = payment(p2, "CASH", "10.00", LocalDate.of(2025, 9, 15), 2L, null, null);
+        allocate(y, septemberP2, "10.00");
+        closeMonth("2025-09");
+
+        JsonNode preview = body(send(treasurer, get(REPORT + "?fromMonth=2025-10&toMonth=2025-10"))
+                .andExpect(status().isOk()));
+
+        List<String> main = lines(preview.get("sheets").get(0));
+        assertThat(main).containsExactly(
+                "DETAIL 2025-10 OPEN MEMBERSHIP 2 80.00 0.00 -25.00 -5.00 50.00 50.00",
+                "DETAIL 2025-10 OPEN ELECTRICITY 1 120.00 0.00 0.00 0.00 120.00 0.00",
+                "SUBTOTAL 2025-10 OPEN - - 200.00 0.00 -25.00 -5.00 170.00 50.00",
+                "TOTAL all - - - - 200.00 0.00 -25.00 -5.00 170.00 50.00");
+        List<String> service = lines(preview.get("sheets").get(1));
+        assertThat(service).containsExactly(
+                // the interval that started in August
+                "DETAIL 2025-08 ELECTRICITY 1 120.00 0.00 0.00 0.00 120.00 0.00",
+                "SUBTOTAL 2025-08 - - 120.00 0.00 0.00 0.00 120.00 0.00",
+                // P1's late September charge and the adjustment of P2's September charge, both booked in October
+                "DETAIL 2025-09 MEMBERSHIP 2 30.00 0.00 0.00 -5.00 25.00 30.00",
+                "SUBTOTAL 2025-09 - - 30.00 0.00 0.00 -5.00 25.00 30.00",
+                // November's electricity of 20.10.2025 is not booked in October
+                "DETAIL 2025-10 MEMBERSHIP 2 50.00 0.00 -25.00 0.00 25.00 20.00",
+                "SUBTOTAL 2025-10 - - 50.00 0.00 -25.00 0.00 25.00 20.00",
+                "TOTAL all - - - 200.00 0.00 -25.00 -5.00 170.00 50.00");
+        // every amount column of the totals, paid included, equals the main sheet's
+        List<String> mainTotals = List.of(main.getLast().split(" ")).subList(6, 12);
+        List<String> serviceTotals = List.of(service.getLast().split(" ")).subList(5, 11);
+        assertThat(serviceTotals).isEqualTo(mainTotals);
     }
 
     @Test
@@ -172,9 +229,11 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
                 "DETAIL 2025-03 OPEN MEMBERSHIP 2 50.00 0.00 0.00 -10.00 40.00 0.00",
                 "SUBTOTAL 2025-03 OPEN - - 50.00 0.00 0.00 -10.00 40.00 0.00",
                 "TOTAL all - - - - 222.50 1500.00 -30.00 -10.00 1682.50 1577.50");
-        // by service month the electricity of 16.12.2024, and what is paid on it, is outside the months asked
-        assertThat(lines(preview.get("sheets").get(1)).getLast())
-                .isEqualTo("TOTAL all - - - 170.00 1500.00 -30.00 -10.00 1630.00 1525.00");
+        // by service month the same charges, and what is paid on them, are regrouped: the electricity of 16.12.2024
+        // and its 52.50 paid are under December, the totals are the main sheet's
+        List<String> service = lines(preview.get("sheets").get(1));
+        assertThat(service.getFirst()).isEqualTo("DETAIL 2024-12 ELECTRICITY 1 52.50 0.00 0.00 0.00 52.50 52.50");
+        assertThat(service.getLast()).isEqualTo("TOTAL all - - - 222.50 1500.00 -30.00 -10.00 1682.50 1577.50");
         // the charged totals per month and type are still the screen's, cent for cent
         everyMonthOfTheBillingMonthsScreenHasTheSameTotalsCentForCent();
     }
@@ -306,7 +365,7 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
             assertThat(rowTexts(service, 7)).containsExactly("Місяць", "Вид нарахування", "Ділянок", "Нараховано",
                     "Вхідні залишки", "Сторно", "Коригування", "Разом нараховано",
                     "Сплачено");
-            assertNumber(service.get(service.size() - 1).getCell(7), "1630", "#,##0.00");
+            assertNumber(service.get(service.size() - 1).getCell(7), "1682.5", "#,##0.00");
         }
         // the header row (the eighth) stays in view: the pane is frozen below it on both sheets
         assertThat(sheetXml(bytes, "xl/worksheets/sheet1.xml")).contains("ySplit=\"8\"").contains("state=\"frozen\"");
@@ -400,9 +459,10 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
             send(treasurer, get(FILE + RANGE))
                     .andExpect(status().isUnprocessableContent())
                     .andExpect(jsonPath("$.code").value("REPORT_TOO_LARGE"));
-            // seven rows on the main sheet are over a cap of six; the second month alone has two
+            // seven rows on the main sheet and eight on the service sheet are over a cap of six; the second month
+            // alone has two
             send(treasurer, get(REPORT + "?fromMonth=2025-02&toMonth=2025-02")).andExpect(status().isOk());
-            limits.rowCap(7);
+            limits.rowCap(8);
             send(treasurer, get(REPORT + RANGE)).andExpect(status().isOk());
         } finally {
             limits.rowCap(ReportLimits.DEFAULT_ROW_CAP);
@@ -435,7 +495,7 @@ class ChargesByMonthReportTests extends ReportsTestSupport {
         assertThat(file.get("entity_id")).isEqualTo(preview.get("entity_id"));
         assertThat(changes(file)).containsExactly("report=charges-by-month", "output=XLSX",
                 "filters=[{\"param\":\"fromMonth\",\"value\":\"2025-01\"},{\"param\":\"toMonth\",\"value\":\"2025-03\"}]",
-                "rows=13", "personalData=false");
+                "rows=15", "personalData=false");
         // no amount of the report is in the entry
         assertThat((String) file.get("changes")).doesNotContain("1682.50").doesNotContain("1560.00");
     }

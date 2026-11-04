@@ -16,7 +16,7 @@ help: ## Show available targets
 install: ## Install client dependencies
 	pnpm install --frozen-lockfile
 
-infra: ## Start Postgres + PostGIS, Keycloak, Mailpit and the fake Telegram API and wait until healthy
+infra: ## Start Postgres + PostGIS, Keycloak, Mailpit and the fake Telegram API, wait until healthy (NADEL_DB_PORT=5433 moves Postgres)
 	$(COMPOSE) up -d --wait
 
 down: ## Stop local infrastructure
@@ -68,8 +68,12 @@ e2e-install: ## Install the Playwright browser (chromium) for the end-to-end spe
 # so the demo database `nadel` of `make up` is never touched. Keycloak keeps its own database.
 E2E_DB ?= nadel_e2e
 
-# Needs JDK 25 on PATH/JAVA_HOME (as the backend build does). Ports 8080 and 5173 must be free (infra also uses 5432, 8180, 1025, 8025, 8091). Not part of `check`.
-e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, runs Playwright, stops them
+# Host port of the Docker Postgres (default 5432). Set it, e.g. `NADEL_DB_PORT=5433 make infra` / `make e2e`, when another
+# Postgres (Homebrew) already listens on 127.0.0.1:5432. For `make up` also set NADEL_DB_URL=jdbc:postgresql://localhost:5433/nadel.
+NADEL_DB_PORT ?= 5432
+
+# Needs JDK 25 on PATH/JAVA_HOME (as the backend build does). Ports 8080 and 5173 must be free (infra also uses $(NADEL_DB_PORT), 8180, 1025, 8025, 8091). Not part of `check`.
+e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, runs Playwright (NADEL_DB_PORT=5433 for another DB port)
 	cd backend && ./mvnw -B -q -DskipTests package
 	@set -e -m; mkdir -p backend/target; \
 	pids=""; \
@@ -88,7 +92,7 @@ e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, ru
 	drop_db; \
 	psql_su -q -c "CREATE DATABASE $(E2E_DB) OWNER nadel_owner"; \
 	psql_su -q -d $(E2E_DB) -c "CREATE EXTENSION IF NOT EXISTS postgis; GRANT USAGE ON SCHEMA public TO nadel_app"; \
-	NADEL_DB_URL=jdbc:postgresql://localhost:5432/$(E2E_DB) \
+	NADEL_DB_URL=jdbc:postgresql://localhost:$(NADEL_DB_PORT)/$(E2E_DB) \
 	java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend/target/e2e-backend.log 2>&1 & pids="$$pids $$!"; \
 	pnpm --filter web dev > backend/target/e2e-web.log 2>&1 & pids="$$pids $$!"; \
 	wait_for() { for i in $$(seq 1 90); do \

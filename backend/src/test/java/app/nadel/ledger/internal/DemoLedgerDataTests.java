@@ -632,16 +632,18 @@ class DemoLedgerDataTests extends IntegrationTest {
                 + "|| (select count(*) from recalculation_line where tenant_id = ?) || '|' "
                 + "|| (select count(*) from payment where tenant_id = ?) || '|' "
                 + "|| (select coalesce(sum(amount), 0) from allocation where tenant_id = ?) || '|' "
-                + "|| (select coalesce(sum(last_number), 0) from receipt_counter where tenant_id = ?)";
+                + "|| (select coalesce(sum(last_number), 0) from receipt_counter where tenant_id = ?) || '|' "
+                + "|| (select count(*) from account_movement where tenant_id = ?) || '|' "
+                + "|| (select coalesce(sum(amount), 0) from account_movement where tenant_id = ?)";
         Object[] tenant = {DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT,
-            DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT};
+            DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT, DEMO_TENANT};
         String before = owner.queryForObject(counts, String.class, tenant);
 
         DemoLedgerData.restore(owner);
         assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo(before);
 
         DemoLedgerData.clear(owner);
-        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186|0|0|0|0|0");
+        assertThat(owner.queryForObject(counts, String.class, tenant)).isEqualTo("0|0|0|0|0|0|0|186|0|0|0|0|0|0|0");
         assertThat(owner.queryForObject("select count(*) from meter where tenant_id = ?", Integer.class,
                 DEMO_TENANT)).isEqualTo(38);
         assertThat(owner.queryForObject("select count(*) from plot_status s join plot p on p.id = s.plot_id "

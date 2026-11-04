@@ -19,9 +19,12 @@ import app.nadel.ledger.MonthGrouping;
 import app.nadel.ledger.MonthStatus;
 import app.nadel.ledger.MonthTypeTotals;
 import app.nadel.ledger.PaymentFilter;
+import app.nadel.ledger.PaymentRef;
 import app.nadel.ledger.PaymentRow;
+import app.nadel.ledger.PaymentSplit;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PlotDebts;
+import app.nadel.ledger.PlotStatement;
 import app.nadel.ledger.RunStatus;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.Quantity;
@@ -65,7 +68,8 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code ChargeRepository.totalsPerMonthAndType}: every row booked in the month, of every kind, {@code SUM(amount)}),
  * so the effective total of a month and type is the screen's figure cent for cent; the split by kind uses
  * {@code FILTER} clauses over the same rows, and the paid amount a lateral sum of the allocations of each row counted
- * as of the day ({@code allocation_charge_idx}). The service month grouping takes the month of {@code service_from}.
+ * as of the day ({@code allocation_charge_idx}). The service month grouping takes the same rows (booked in the billing
+ * months asked) and groups them by the month of {@code service_from}, so both groupings add up to the same totals.
  * <p>
  * {@link #debtsAsOf}: {@code DebtCalculator}'s rule after payments in SQL over the charges dated on or before the day
  * and their allocations counted as of the day, one row per plot and charge type (charged, paid and the oldest unpaid
@@ -74,6 +78,10 @@ import org.springframework.transaction.annotation.Transactional;
  * charge they correct. The prepayment is a second query per chunk (payments received by the day minus allocations
  * counted as of the day, per plot, never below zero; {@code payment_plot_received_idx}, {@code allocation_plot_idx}).
  * Plots go 500 per {@code IN} list. {@link #prepaymentAsOf} is that query over every plot, summed.
+ * {@link #plotStatement}: {@link #debtsAsOf} on the day before the period and on its last day, and one {@code UNION ALL}
+ * of the plot's charge rows by {@code accrued_on} and payment rows by {@code received_on} in the period (a payment
+ * reversal joined to its payment for the receipt number and bank reference); {@link #firstDebtDate} the earlier of the
+ * plot's least {@code accrued_on} and least {@code received_on}.
  * <p>
  * {@link #paidByType}: the allocations counted as of {@code to} to the regular charges whose {@code service_from} lies
  * in the range, per charge type. {@link #payments}: the {@code PAYMENT} rows of the billing months or of the days
@@ -109,6 +117,11 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link #lossesRunsInRange} and {@link #commonConsumerRunsInRange}: the nodes or consumers of the runs overlapping the
  * range as stored, booked and reversed, with the distinct plots that have a regular charge of the run for the node (a
  * part with its {@code node_meter_id}) or the consumer (its calculation's {@code consumerMeterId}).
+ * <p>
+ * {@link #paymentRefs}: the payment rows of the treasury's journal lines, joined to the payment a reversal cancels for
+ * its receipt number and bank reference, 500 ids per {@code IN} list. {@link #paymentSplits}: the payments' net
+ * allocations per charge type (through the allocated charge) of the allocation rows created by the cut-off
+ * ({@code allocation_payment_idx}), 500 ids per {@code IN} list; the unallocated part is the amount minus their sum.
  * <p>
  * {@link #cashReceipt}: the payment group of a printed cash receipt, read by {@link CashReceiptQueries}.
  * {@link #invoiceLedgers}: the figures of the invoices of plots for a month by the booking-month rule, read by
@@ -151,9 +164,12 @@ class LedgerReportQueries implements LedgerReadModel {
     private static final String BY_BILLING_MONTH = MONTH_TOTALS.formatted("bm.month", "bm.status",
             "join billing_month bm on bm.id = c.billing_month_id", "bm.month");
 
-    /** By the month of the first service day; no status. */
+    /**
+     * The same rows as {@link #BY_BILLING_MONTH} (booked in the billing months asked), grouped by the month of the
+     * first service day; no status.
+     */
     private static final String BY_SERVICE_MONTH = MONTH_TOTALS.formatted("c.service_from",
-            "cast(null as text)", "", "c.service_from");
+            "cast(null as text)", "join billing_month bm on bm.id = c.billing_month_id", "bm.month");
 
     /** Values per {@code IN} list. */
     private static final int CHUNK = 500;
@@ -271,6 +287,22 @@ class LedgerReportQueries implements LedgerReadModel {
             limit :limit
             """;
 
+    /**
+     * The payments (never a reversal row) with the given ids and their net allocations per charge type of the
+     * allocation rows created up to the later of {@code :recordedBy} and the payment's own {@code created_at} (a
+     * payment without such a row has one line with a null charge type).
+     */
+    private static final String PAYMENT_SPLITS = """
+            select p.id, p.amount, c.charge_type_id, sum(a.amount)
+            from payment p
+            left join allocation a on a.payment_id = p.id
+                                  and a.created_at <= greatest(cast(:recordedBy as timestamptz), p.created_at)
+            left join charge c on c.id = a.charge_id
+            where p.kind = 'PAYMENT'
+              and p.id in (:ids)
+            group by p.id, p.amount, c.charge_type_id
+            """;
+
     /** The payments (never a reversal row) with the given ids, as {@link #PAYMENTS} reads them. */
     private static final String PAYMENTS_BY_IDS = """
             select p.id, p.receipt_number, p.bank_reference, p.received_on,
@@ -283,6 +315,35 @@ class LedgerReportQueries implements LedgerReadModel {
             where p.kind = 'PAYMENT'
               and p.id in (:ids)
             order by p.received_on, p.created_at, p.id
+            """;
+
+    /**
+     * The rows of one plot dated in a period, as {@link #DEBTS_AS_OF} and {@link #PREPAYMENT_AS_OF} date them: the
+     * charges (every kind) by {@code accrued_on}, the payments and their reversals by {@code received_on}, a reversal
+     * with the receipt number and bank reference of the payment it reverses. Charges before payments on a day.
+     */
+    private static final String PLOT_STATEMENT = """
+            select 0 as grp, c.id, c.kind, c.accrued_on as day, c.charge_type_id, c.service_from, c.service_to,
+                   c.amount, cast(null as text) as source, cast(null as bigint) as receipt_number,
+                   cast(null as text) as bank_reference, c.created_at
+            from charge c
+            where c.plot_id = :plotId
+              and c.accrued_on between :from and :to
+            union all
+            select 1, p.id, p.kind, p.received_on, cast(null as uuid), cast(null as date), cast(null as date),
+                   p.amount, p.source, coalesce(p.receipt_number, o.receipt_number),
+                   coalesce(p.bank_reference, o.bank_reference), p.created_at
+            from payment p
+            left join payment o on o.id = p.reverses_payment_id
+            where p.plot_id = :plotId
+              and p.received_on between :from and :to
+            order by day, grp, created_at, id
+            """;
+
+    /** The earliest debt date or day received of the plot's rows; null without any row. */
+    private static final String FIRST_DEBT_DATE = """
+            select least((select min(c.accrued_on) from charge c where c.plot_id = :plotId),
+                         (select min(p.received_on) from payment p where p.plot_id = :plotId))
             """;
 
     /** Bound to a date parameter that a flag switches off. */
@@ -405,6 +466,20 @@ class LedgerReportQueries implements LedgerReadModel {
     private static String ofCharge(String sql) {
         return sql.replaceAll("\\bo\\.(\\w+)", "coalesce(orv.$1, oad.$1, c.$1)");
     }
+
+    /**
+     * The payment rows of the treasury's journal lines: the row, its payment, plot, kind, source, the receipt number
+     * and bank reference (of the payment a reversal cancels) and the reason of a reversal.
+     */
+    private static final String PAYMENT_REFS = """
+            select p.id, coalesce(p.reverses_payment_id, p.id) as payment_id, p.plot_id,
+                   p.kind = 'PAYMENT_REVERSAL' as reversal, p.source,
+                   coalesce(p.receipt_number, o.receipt_number) as receipt_number,
+                   coalesce(p.bank_reference, o.bank_reference) as bank_reference, p.reason
+            from payment p
+            left join payment o on o.id = p.reverses_payment_id
+            where p.id in (:ids)
+            """;
 
     /** The open reading interval items of the queue per meter. */
     private static final String OPEN_INTERVAL_ITEMS = """
@@ -535,12 +610,11 @@ class LedgerReportQueries implements LedgerReadModel {
         if (plotIds != null && plotIds.isEmpty()) {
             return List.of();
         }
-        boolean byBillingMonth = grouping == MonthGrouping.BILLING_MONTH;
-        // a billing month is stored as its first day; a service month covers every day of the month
-        LocalDate to = byBillingMonth ? toMonth.atDay(1) : toMonth.atEndOfMonth();
-        List<?> rows = entityManager.createNativeQuery(byBillingMonth ? BY_BILLING_MONTH : BY_SERVICE_MONTH)
+        // both groupings select the rows booked in the billing months asked; a billing month is stored as its first day
+        List<?> rows = entityManager.createNativeQuery(grouping == MonthGrouping.BILLING_MONTH ? BY_BILLING_MONTH
+                : BY_SERVICE_MONTH)
                 .setParameter("from", fromMonth.atDay(1))
-                .setParameter("to", to)
+                .setParameter("to", toMonth.atDay(1))
                 .setParameter("allTypes", chargeTypeIds.isEmpty())
                 .setParameter("typeIds", orNone(chargeTypeIds))
                 .setParameter("allPlots", plotIds == null)
@@ -576,6 +650,56 @@ class LedgerReportQueries implements LedgerReadModel {
         Map<UUID, PlotDebts> debts = new LinkedHashMap<>();
         byPlot.forEach((plotId, sum) -> debts.put(plotId, sum.debts(plotId, asOf)));
         return debts;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PlotStatement plotStatement(UUID plotId, LocalDate from, LocalDate to) {
+        Objects.requireNonNull(plotId, "plotId");
+        requireRange(from, to);
+        PlotDebts opening = debtsAsOf(from.minusDays(1), Set.of(), List.of(plotId)).get(plotId);
+        PlotDebts closing = debtsAsOf(to, Set.of(), List.of(plotId)).get(plotId);
+        List<PlotStatement.Line> lines = new ArrayList<>();
+        for (Object row : entityManager.createNativeQuery(PLOT_STATEMENT)
+                .setParameter("plotId", plotId)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList()) {
+            lines.add(statementLine((Object[]) row));
+        }
+        return new PlotStatement(plotId, from, to, opening, closing, lines);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<LocalDate> firstDebtDate(UUID plotId) {
+        Object first = entityManager.createNativeQuery(FIRST_DEBT_DATE)
+                .setParameter("plotId", Objects.requireNonNull(plotId, "plotId"))
+                .getSingleResult();
+        return Optional.ofNullable(date(first));
+    }
+
+    /** A row of {@link #PLOT_STATEMENT}: a charge row in «Нараховано», a payment row in «Сплачено». */
+    private static PlotStatement.Line statementLine(Object[] v) {
+        boolean charge = ((Number) v[0]).intValue() == 0;
+        String kind = (String) v[2];
+        Money amount = money(v[7]);
+        LocalDate day = Objects.requireNonNull(date(v[3]));
+        if (charge) {
+            PlotStatement.LineKind lineKind = switch (ChargeKind.valueOf(kind)) {
+                case OPENING -> PlotStatement.LineKind.OPENING;
+                case REGULAR -> PlotStatement.LineKind.CHARGE;
+                case ADJUSTMENT -> PlotStatement.LineKind.ADJUSTMENT;
+                case REVERSAL -> PlotStatement.LineKind.CHARGE_REVERSAL;
+            };
+            return new PlotStatement.Line(day, lineKind, (UUID) v[1], (UUID) v[4], date(v[5]), date(v[6]), amount,
+                    Money.ZERO, null, null, null);
+        }
+        PlotStatement.LineKind lineKind = PaymentKind.valueOf(kind) == PaymentKind.PAYMENT
+                ? PlotStatement.LineKind.PAYMENT : PlotStatement.LineKind.PAYMENT_REVERSAL;
+        return new PlotStatement.Line(day, lineKind, (UUID) v[1], null, null, null, Money.ZERO, amount,
+                PaymentSource.valueOf((String) v[8]), v[9] == null ? null : ((Number) v[9]).longValue(),
+                (String) v[10]);
     }
 
     @Override
@@ -724,6 +848,61 @@ class LedgerReportQueries implements LedgerReadModel {
             rows.forEach(row -> found.add((Object[]) row));
         }
         return found.stream().map(LedgerReportQueries::payment).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, PaymentRef> paymentRefs(Collection<UUID> ledgerRowIds) {
+        List<UUID> ids = ledgerRowIds.stream().map(id -> Objects.requireNonNull(id, "ledgerRowId")).distinct()
+                .toList();
+        Map<UUID, PaymentRef> found = new HashMap<>();
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            for (Object row : entityManager.createNativeQuery(PAYMENT_REFS)
+                    .setParameter("ids", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .getResultList()) {
+                Object[] v = (Object[]) row;
+                found.put((UUID) v[0], new PaymentRef((UUID) v[0], (UUID) v[1], (UUID) v[2], (Boolean) v[3],
+                        PaymentSource.valueOf((String) v[4]), v[5] == null ? null : ((Number) v[5]).longValue(),
+                        (String) v[6], (String) v[7]));
+            }
+        }
+        Map<UUID, PaymentRef> refs = new LinkedHashMap<>();
+        ids.stream().filter(found::containsKey).forEach(id -> refs.put(id, found.get(id)));
+        return refs;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, PaymentSplit> paymentSplits(Collection<UUID> paymentIds, Instant recordedBy) {
+        Objects.requireNonNull(recordedBy, "recordedBy");
+        List<UUID> ids = paymentIds.stream().map(id -> Objects.requireNonNull(id, "paymentId")).distinct().toList();
+        Map<UUID, Money> amounts = new HashMap<>();
+        Map<UUID, Map<UUID, Money>> byType = new HashMap<>();
+        for (int from = 0; from < ids.size(); from += CHUNK) {
+            for (Object row : entityManager.createNativeQuery(PAYMENT_SPLITS)
+                    .setParameter("ids", ids.subList(from, Math.min(ids.size(), from + CHUNK)))
+                    .setParameter("recordedBy", recordedBy)
+                    .getResultList()) {
+                Object[] v = (Object[]) row;
+                UUID paymentId = (UUID) v[0];
+                amounts.put(paymentId, money(v[1]));
+                Map<UUID, Money> types = byType.computeIfAbsent(paymentId, id -> new LinkedHashMap<>());
+                if (v[2] != null && money(v[3]).signum() != 0) {
+                    types.merge((UUID) v[2], money(v[3]), Money::plus);
+                }
+            }
+        }
+        Map<UUID, PaymentSplit> splits = new LinkedHashMap<>();
+        for (UUID id : ids) {
+            Money amount = amounts.get(id);
+            if (amount == null) {
+                continue;
+            }
+            Map<UUID, Money> types = byType.getOrDefault(id, Map.of());
+            Money allocated = types.values().stream().reduce(Money.ZERO, Money::plus);
+            splits.put(id, new PaymentSplit(id, amount, types, amount.minus(allocated)));
+        }
+        return splits;
     }
 
     private static PaymentRow payment(Object[] v) {

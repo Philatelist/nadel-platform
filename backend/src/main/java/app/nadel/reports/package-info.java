@@ -11,6 +11,7 @@
  * {@code ReportLanguage}, {@code ReportTexts}), one definition per report and the template store
  * ({@code ReportTemplateService}, {@code TemplateUploadChecks}). Depends on {@code ledger} ({@code LedgerReadModel};
  * {@code PaymentNotes}: the payer notes of the payments report, only for a caller with {@code MEMBERS_VIEW}),
+ * {@code treasury} ({@code TreasuryReadModel}: the four cash book reports, {@code CASHBOOK_VIEW}),
  * {@code meters} ({@code MeterReports}: the electricity tree), {@code plots} ({@code PlotCatalog}, {@code PlotOwners},
  * {@code PlotStatuses}), {@code members} ({@code MemberDirectory}: the debtors' contacts, the payers' short names,
  * the names of who booked a correction or uploaded a template), {@code settings} ({@code CooperativeSettings}: the red

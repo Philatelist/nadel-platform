@@ -81,9 +81,15 @@ class ReportsAcceptanceTests extends IntegrationTest {
     private static final ZoneId KYIV = ZoneId.of("Europe/Kyiv");
     private static final String IBAN = "UA213223130000026007233566001";
     private static final List<String> ALL_REPORTS = List.of("charges-by-month", "plot-balances", "debtors",
-            "electricity-tree", "water", "missing-readings", "land-tax", "corrections", "payments");
+            "electricity-tree", "water", "missing-readings", "land-tax", "corrections", "payments", "cash-book",
+            "bank-movements", "income-expense", "expenses");
     /** The reports that name people and need a permission besides "View reports" (feature 015 adds payments). */
     private static final Set<String> GATED = Set.of("debtors", "payments");
+    /** The cash book reports (feature 018): they need "View the cash book" instead of "View reports". */
+    private static final Set<String> CASH_BOOK = Set.of("cash-book", "bank-movements", "income-expense", "expenses");
+    /** The reports that hold personal data: the gated ones and the cash book reports with counterparties. */
+    private static final Set<String> PERSONAL = Set.of("debtors", "payments", "cash-book", "bank-movements",
+            "expenses");
 
     @Autowired
     MockMvc mvc;
@@ -129,7 +135,7 @@ class ReportsAcceptanceTests extends IntegrationTest {
             assertThat(codes(reports)).containsExactlyInAnyOrderElementsOf(ALL_REPORTS);
             for (JsonNode report : reports) {
                 assertThat(report.get("personalData").asBoolean()).as(report.get("code").asString())
-                        .isEqualTo(GATED.contains(report.get("code").asString()));
+                        .isEqualTo(PERSONAL.contains(report.get("code").asString()));
             }
         }
         // negative: a member has no report at all, whatever the address
@@ -149,7 +155,7 @@ class ReportsAcceptanceTests extends IntegrationTest {
 
         List<String> listed = codes(body(send(auditor, get(REPORTS)).andExpect(status().isOk())));
         assertThat(listed).containsExactlyInAnyOrderElementsOf(
-                ALL_REPORTS.stream().filter(code -> !GATED.contains(code)).toList());
+                ALL_REPORTS.stream().filter(code -> !GATED.contains(code) && !CASH_BOOK.contains(code)).toList());
         // its address shows no access, for the preview and for the file
         send(auditor, get(REPORTS + "/debtors")).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
@@ -164,8 +170,8 @@ class ReportsAcceptanceTests extends IntegrationTest {
         send(membersOnly, get(REPORTS)).andExpect(status().isForbidden());
         String both = personWithPermissions("Ревізор з членами", "REPORTS_VIEW", "MEMBERS_VIEW");
         assertThat(codes(body(send(both, get(REPORTS)).andExpect(status().isOk()))))
-                .containsExactlyInAnyOrderElementsOf(ALL_REPORTS.stream().filter(code -> !code.equals("payments"))
-                        .toList());
+                .containsExactlyInAnyOrderElementsOf(ALL_REPORTS.stream().filter(code -> !code.equals("payments")
+                        && !CASH_BOOK.contains(code)).toList());
     }
 
     /** §2.14 #2: "View reports" and "Manage report templates" are on the roles screen with descriptions; roles hold them as stated. */

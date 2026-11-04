@@ -13,6 +13,7 @@ import app.nadel.tariffs.ChargeTypeCatalog;
 import app.nadel.tariffs.ChargeTypeCatalog.ChargeTypeFacts;
 import app.nadel.tenancy.TenantDirectory;
 import app.nadel.tenancy.TenantSummary;
+import app.nadel.treasury.CategoryRef;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,6 +28,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import nadel.contract.model.ChargeTypeCode;
 import nadel.contract.model.ChargeTypeRef;
+import nadel.contract.model.ExpenseCategory;
+import nadel.contract.model.ExpenseCategoryKind;
 import nadel.contract.model.ReportCell;
 import nadel.contract.model.ReportCode;
 import nadel.contract.model.ReportColumn;
@@ -91,7 +94,8 @@ class ReportRunner {
         ReportPreview preview = new ReportPreview(code, run.startedAt().atZone(KYIV).toOffsetDateTime(),
                 run.filters().values(), run.result().notes().stream()
                         .map(note -> new ReportNote(note.code(), note.params())).toList(),
-                chargeTypeRefs(run), run.result().sheets().stream().map(ReportRunner::sheet).toList());
+                chargeTypeRefs(run), run.result().sheets().stream().map(ReportRunner::sheet).toList())
+                .expenseCategories(run.result().categories().stream().map(ReportRunner::category).toList());
         publish(run, Output.PREVIEW);
         return preview;
     }
@@ -104,7 +108,7 @@ class ReportRunner {
         String cooperative = tenants.current().map(TenantSummary::name).orElse("");
         byte[] content = writer.write(run.definition(), run.filters(), run.result(),
                 new XlsxReportWriter.Header(cooperative, run.startedAt().atZone(KYIV), run.caller().displayName()),
-                texts, chargeTypeNames(run.context(), texts));
+                texts, chargeTypeNames(run.context(), texts), categoryNames(run.result(), texts));
         ReportFilters.Period range = run.definition().filenameRange(run.filters(), run.context());
         publish(run, Output.XLSX);
         return new ReportFile(code.getValue() + "_" + range.from() + "_" + range.to() + ".xlsx", content);
@@ -134,7 +138,8 @@ class ReportRunner {
     private static ReportSheet sheet(Sheet sheet) {
         List<Column> columns = sheet.columns();
         List<ReportRow> rows = sheet.rows().stream().limit(ReportLimits.PREVIEW_ROWS)
-                .map(row -> new ReportRow(row.kind(), row.level(), cells(columns, row.cells()))).toList();
+                .map(row -> new ReportRow(row.kind(), row.level(), cells(columns, row.cells()))
+                        .expenseId(row.expenseId())).toList();
         return new ReportSheet(sheet.key(), columns.stream().map(ReportRunner::column).toList(), rows,
                 sheet.totals().stream().map(total -> new ReportTotal(total.key(), cells(columns, total.cells())))
                         .toList(),
@@ -179,7 +184,7 @@ class ReportRunner {
     }
 
     /** A charge type's name in the file: a customised name as stored, a seeded one's default in the language. */
-    private static Function<UUID, String> chargeTypeNames(ReportContext context, ReportTexts texts) {
+    static Function<UUID, String> chargeTypeNames(ReportContext context, ReportTexts texts) {
         Map<UUID, ChargeTypeFacts> byId = context.chargeTypes().stream()
                 .collect(Collectors.toMap(ChargeTypeFacts::id, Function.identity()));
         return id -> {
@@ -189,6 +194,31 @@ class ReportRunner {
             }
             return type.code() != null && !type.nameCustomized()
                     ? texts.text("chargeTypes.defaultNames." + type.code()) : type.name();
+        };
+    }
+
+    /** A category as the preview names it: the seeded code or the cooperative's name. */
+    private static ExpenseCategory category(CategoryRef ref) {
+        ExpenseCategory category = new ExpenseCategory(ref.id(), ExpenseCategoryKind.fromValue(ref.kind().name()),
+                ref.sortOrder(), ref.archived());
+        category.setSystemCode(ref.systemCode());
+        category.setName(ref.name());
+        return category;
+    }
+
+    /**
+     * A category's name in the file: a renamed or added category's name as stored, a seeded one's catalog name
+     * ({@code expenseCategories.system.<CODE>}) in the language.
+     */
+    static Function<UUID, String> categoryNames(ReportResult result, ReportTexts texts) {
+        Map<UUID, CategoryRef> byId = result.categories().stream()
+                .collect(Collectors.toMap(CategoryRef::id, Function.identity()));
+        return id -> {
+            CategoryRef ref = byId.get(id);
+            if (ref == null) {
+                return id.toString();
+            }
+            return ref.name() != null ? ref.name() : texts.text("expenseCategories.system." + ref.systemCode());
         };
     }
 

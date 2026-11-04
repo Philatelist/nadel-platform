@@ -734,8 +734,12 @@ export const useArchiveReportTemplate = <TError = UnauthorizedResponse | Forbidd
  * `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
  * `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
  * (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
- * `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
- * written to the audit log); the platform operator has no cooperative data: 403.
+ * `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW`, and one that uses a cash book field
+ * (`totals.cashbook.*` or the row set `incomeExpense`) also needs `CASHBOOK_VIEW` (403 `PERMISSION_DENIED`,
+ * nothing written to the audit log); the platform operator has no cooperative data: 403. The cash book fields are
+ * the income and expense report of the period: without both opening balances they are 409
+ * `OPENING_BALANCE_MISSING`, and a period that starts before an opening date is 400 `BEFORE_OPENING_BALANCE`
+ * (`errors[{field: from}]`).
  * @summary Fill the latest version of a template for a period
  */
 export const generateReportTemplate = async (id: string,

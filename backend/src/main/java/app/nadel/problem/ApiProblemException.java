@@ -1,5 +1,6 @@
 package app.nadel.problem;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -10,7 +11,8 @@ import org.springframework.http.HttpStatus;
  * {@code code} is the stable machine-readable value clients switch on. {@code detail} is English text for developers
  * and must not contain personal data. {@code missing} carries the codes of the missing requisites of
  * {@code REQUISITES_MISSING} ({@code IBAN}, {@code EDRPOU}); it is empty on every other problem. {@code limit} carries
- * the limit of {@code INVOICE_BUILD_TOO_LARGE}; it is null on every other problem.
+ * the limit of {@code INVOICE_BUILD_TOO_LARGE}; it is null on every other problem. {@code balance} and {@code date}
+ * carry the lowest cash balance and its day of {@code CASH_INSUFFICIENT}; they are null on every other problem.
  */
 public class ApiProblemException extends RuntimeException {
 
@@ -19,23 +21,27 @@ public class ApiProblemException extends RuntimeException {
     private final List<FieldProblem> errors;
     private final List<String> missing;
     private final @Nullable Integer limit;
+    private final @Nullable String balance;
+    private final @Nullable LocalDate date;
 
     public ApiProblemException(HttpStatus status, String code, String detail) {
         this(status, code, detail, List.of());
     }
 
     public ApiProblemException(HttpStatus status, String code, String detail, List<FieldProblem> errors) {
-        this(status, code, detail, errors, List.of(), null);
+        this(status, code, detail, errors, List.of(), null, null, null);
     }
 
     private ApiProblemException(HttpStatus status, String code, String detail, List<FieldProblem> errors,
-            List<String> missing, @Nullable Integer limit) {
+            List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date) {
         super(detail);
         this.status = status;
         this.code = code;
         this.errors = List.copyOf(errors);
         this.missing = List.copyOf(missing);
         this.limit = limit;
+        this.balance = balance;
+        this.date = date;
     }
 
     /**
@@ -47,7 +53,8 @@ public class ApiProblemException extends RuntimeException {
             throw new IllegalArgumentException("At least one requisite is missing");
         }
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.REQUISITES_MISSING,
-                "The cooperative's requisites needed for the document are not set.", List.of(), missing, null);
+                "The cooperative's requisites needed for the document are not set.", List.of(), missing, null, null,
+                null);
     }
 
     /**
@@ -56,7 +63,17 @@ public class ApiProblemException extends RuntimeException {
      */
     public static ApiProblemException invoiceBuildTooLarge(int limit) {
         return new ApiProblemException(HttpStatus.UNPROCESSABLE_ENTITY, ProblemCodes.INVOICE_BUILD_TOO_LARGE,
-                "The month has more invoiceable plots than one build takes.", List.of(), List.of(), limit);
+                "The month has more invoiceable plots than one build takes.", List.of(), List.of(), limit, null, null);
+    }
+
+    /**
+     * 409 {@code CASH_INSUFFICIENT}: a cash book entry would make the cash balance negative on its date or a later day
+     * (feature 018 §2.2); {@code balance} is the lowest balance from that date on before the entry (two decimals, the
+     * text of {@code Money}) and {@code date} the earliest day it is reached.
+     */
+    public static ApiProblemException cashInsufficient(String balance, LocalDate date) {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.CASH_INSUFFICIENT,
+                "The entry would make the cash balance negative.", List.of(), List.of(), null, balance, date);
     }
 
     /** 404 {@code NOT_FOUND}: the resource does not exist or is not visible to the caller. */
@@ -84,5 +101,15 @@ public class ApiProblemException extends RuntimeException {
     /** The limit of {@code INVOICE_BUILD_TOO_LARGE}; null on every other problem. */
     public @Nullable Integer limit() {
         return limit;
+    }
+
+    /** The lowest cash balance of {@code CASH_INSUFFICIENT}; null on every other problem. */
+    public @Nullable String balance() {
+        return balance;
+    }
+
+    /** The day of the lowest cash balance of {@code CASH_INSUFFICIENT}; null on every other problem. */
+    public @Nullable LocalDate date() {
+        return date;
     }
 }

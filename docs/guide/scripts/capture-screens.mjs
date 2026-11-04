@@ -31,6 +31,8 @@ function monthRange(offset) {
 const augustLike = monthRange(-2);
 /** The demo closed month: the month before the open one (see R__demo_data.sql); its invoices are in the demo data. */
 const closedMonth = monthRange(-1).from.slice(0, 7);
+/** The month whose invoices the demo data already has (two months back): only then "Send invoices" is offered. */
+const invoicedMonth = monthRange(-2).from.slice(0, 7);
 /** Fills the two dates of a range run page and previews it (a preview writes nothing). */
 const previewRange = [
   { fill: { label: T('З', 'From'), value: augustLike.from } },
@@ -39,7 +41,8 @@ const previewRange = [
 ];
 
 /**
- * name, demo user, path, optional link to follow (CSS selector, optional exact text), optional phone viewport.
+ * name, demo user, path, optional link to follow (CSS selector, optional exact text or `withFiles` to take the first table
+ * row whose last cell is not 0), optional phone viewport.
  * Also optional: `steps` ({ fill: { label, value, within? } }, { check: checkbox label }, { link: link name }, { tab: tab name },
  * { table: caption of a table to wait for } or { click: button name };
  * nothing is ever saved: a recalculation is only previewed, and a correction of a used tariff version or reading stops
@@ -327,12 +330,12 @@ const SHOTS = [
   {
     name: 'invoices-send',
     user: 'treasurer',
-    path: `/charges/months/${closedMonth}`,
+    path: `/charges/months/${invoicedMonth}`,
     steps: [
       {
         click: T(
-          `Надіслати рахунки за ${monthLabel(closedMonth, 'uk')}`,
-          `Send invoices for ${monthLabel(closedMonth, 'en')}`,
+          `Надіслати рахунки за ${monthLabel(invoicedMonth, 'uk')}`,
+          `Send invoices for ${monthLabel(invoicedMonth, 'en')}`,
         ),
       },
     ],
@@ -358,6 +361,48 @@ const SHOTS = [
     ],
   },
   { name: 'announcements', user: 'chairman', path: '/announcements' },
+  // feature 018: cash and bank. Read-only: every screen is only opened (the forms are never submitted). The demo has the
+  // previous bank month reconciled, the current month with a difference to find, a count with a booked shortage and
+  // expenses in four categories, one of them with a photo of a receipt.
+  { name: 'cashbook', user: 'chairman', path: '/cashbook' },
+  { name: 'cashbook-phone', user: 'chairman', path: '/cashbook', phone: true },
+  { name: 'expense-form', user: 'chairman', path: '/cashbook/expenses/new' },
+  {
+    name: 'expense-card',
+    user: 'chairman',
+    path: '/cashbook/expenses',
+    open: {
+      css: 'main a[href^="/cashbook/expenses/"]:not([href$="/new"])',
+      withFiles: true,
+      rowText: 'Будмаркет',
+    },
+  },
+  {
+    name: 'cash-count',
+    user: 'chairman',
+    path: '/cashbook',
+    open: { css: 'main a[href^="/cashbook/counts/"]:not([href$="/new"])' },
+  },
+  { name: 'bank-reconciliation', user: 'chairman', path: `/cashbook/bank/${thisMonth}` },
+  {
+    name: 'settings-expense-categories',
+    user: 'chairman',
+    path: '/settings',
+    element: { heading: T('Статті витрат і доходів', 'Expense and income categories') },
+  },
+  {
+    name: 'plot-reconciliation-act',
+    user: 'chairman',
+    path: '/plots',
+    open: { css: 'main a[href^="/plots/"]', text: '9' },
+    steps: [{ tab: T('Акт звірки', 'Reconciliation act') }],
+  },
+  {
+    name: 'account-reconciliation-act',
+    user: 'member',
+    path: '/account',
+    steps: [{ click: T('Акт звірки', 'Reconciliation act') }],
+  },
   { name: 'treasurer-charges', user: 'treasurer', path: `/charges/months/${thisMonth}` },
   {
     name: 'member-charges',
@@ -463,6 +508,15 @@ try {
             await page.goto(BASE + shot.path, { waitUntil: 'networkidle' });
             if (shot.open) {
               let link = page.locator(shot.open.css);
+              // A table row without files (the last cell is 0) is skipped: the expense card shot needs a photo.
+              // `rowText` keeps only the table rows that contain this text (the demo record, not data entered while
+              // trying the app on the same database).
+              if (shot.open.withFiles)
+                link = page
+                  .locator('main tbody tr')
+                  .filter({ hasNot: page.locator('td:last-child', { hasText: /^\s*0\s*$/ }) })
+                  .filter(shot.open.rowText ? { hasText: shot.open.rowText } : {})
+                  .locator(shot.open.css.replace(/^main /, ''));
               if (shot.open.text)
                 link = link.filter({
                   hasText: new RegExp(`^\\s*${shot.open.text.replace(/[/.-]/g, '\\$&')}\\s*$`),

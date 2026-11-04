@@ -29,6 +29,7 @@ import type {
   ForbiddenResponse,
   GetReportParams,
   ReportBadRequestResponse,
+  ReportConflictResponse,
   ReportInfo,
   ReportPreview,
   ReportTooLargeResponse,
@@ -70,13 +71,17 @@ export const getListReportsUrl = () => {
  * is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
  * it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
  * service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
- * caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+ * caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`, and the
+ * four cash book reports (`cash-book`, `bank-movements`, `income-expense`, `expenses`) need `CASHBOOK_VIEW`
+ * instead of `REPORTS_VIEW`, so a role with `CASHBOOK_VIEW` alone (an audit committee) sees exactly those four and
+ * a role with `REPORTS_VIEW` alone none of them. A cooperative that has booked nothing still gets every report it
+ * may run.
  *
  * The server returns codes only: the name and description of a report and the label of a filter come from the
  * client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
  * day (today, the previous calendar month, the current year) are worked out in Europe/Kyiv when the list is
  * read; the defaults of `debtors` (`minDebt`, `olderThanDays`) are the cooperative's current red amount and red
- * days. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+ * days. Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`; the platform operator has no cooperative data: 403.
  * @summary The reports the caller may run, with their filters
  */
 export const listReports = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<ReportInfo[]> => {
@@ -168,12 +173,12 @@ export function useListReports<TData = Awaited<ReturnType<typeof listReports>>, 
 
 
 
-export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    const explodeParameters = ["chargeTypeIds","statuses","meterKinds","correctionKinds"];
+    const explodeParameters = ["chargeTypeIds","statuses","meterKinds","correctionKinds","expenseCategoryIds"];
 
     if (Array.isArray(value) && explodeParameters.includes(key)) {
       value.forEach((v) => {
@@ -226,13 +231,22 @@ export const getGetReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'de
  *
  * Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
  * filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
- * Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
- * `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
- * `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+ * Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`. Every report but the four cash book reports needs `REPORTS_VIEW`;
+ * `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`; `cash-book`, `bank-movements`,
+ * `income-expense` and `expenses` need `CASHBOOK_VIEW` (403 `PERMISSION_DENIED` otherwise); the payer note column
+ * of `payments` is there only for a caller with `MEMBERS_VIEW`.
+ *
+ * The cash book reports (feature 018): `account` left out means both accounts; `expenseCategoryIds` left out
+ * means every expense category (an id that is not an expense category of the cooperative is `NOT_FOUND` on
+ * `expenseCategoryIds[i]`). `cash-book`, `bank-movements` and `income-expense` need the opening balance of their
+ * account (`income-expense`: both): 409 `OPENING_BALANCE_MISSING` without it, and 400 `BEFORE_OPENING_BALANCE`
+ * with `errors[{field: from, code: BEFORE_OPENING_BALANCE}]` when `from` is before its opening date (a balance is
+ * known only from the opening date on). Their counterparty columns are shown to every caller who may run them
+ * (`CASHBOOK_VIEW`). An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
  * yet is 404 `NOT_FOUND`.
  * @summary The on-screen preview of a report
  */
-export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams, options?: Parameters<typeof nadelFetch>[1]): Promise<ReportPreview> => {
 
   return nadelFetch<ReportPreview>(getGetReportUrl(code,params),
@@ -248,7 +262,7 @@ export const getReport = async (code: 'charges-by-month' | 'plot-balances' | 'de
 
 
 
-export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams,) => {
     return [
     `/api/v1/reports/${code}`, ...(params ? [params] : [])
@@ -256,7 +270,7 @@ export const getGetReportQueryKey = (code: 'charges-by-month' | 'plot-balances' 
     }
 
 
-export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
@@ -276,11 +290,11 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReportQueryResult = NonNullable<Awaited<ReturnType<typeof getReport>>>
-export type GetReportQueryError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse
+export type GetReportQueryError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse
 
 
-export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params: undefined |  GetReportParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReport>>,
@@ -290,8 +304,8 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReport>>,
@@ -301,8 +315,8 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -310,8 +324,8 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
  * @summary The on-screen preview of a report
  */
 
-export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: GetReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -328,12 +342,12 @@ export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TErr
 
 
 
-export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    const explodeParameters = ["chargeTypeIds","statuses","meterKinds","correctionKinds"];
+    const explodeParameters = ["chargeTypeIds","statuses","meterKinds","correctionKinds","expenseCategoryIds"];
 
     if (Array.isArray(value) && explodeParameters.includes(key)) {
       value.forEach((v) => {
@@ -373,7 +387,7 @@ export const getDownloadReportUrl = (code: 'charges-by-month' | 'plot-balances' 
  * before `/reports/{code}`.
  * @summary Download a report as an Excel file
  */
-export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
 
   return nadelFetch<Blob>(getDownloadReportUrl(code,params),
@@ -389,7 +403,7 @@ export const downloadReport = async (code: 'charges-by-month' | 'plot-balances' 
 
 
 
-export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams,) => {
     return [
     `/api/v1/reports/${code}.xlsx`, ...(params ? [params] : [])
@@ -397,7 +411,7 @@ export const getDownloadReportQueryKey = (code: 'charges-by-month' | 'plot-balan
     }
 
 
-export const getDownloadReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export const getDownloadReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
@@ -417,11 +431,11 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type DownloadReportQueryResult = NonNullable<Awaited<ReturnType<typeof downloadReport>>>
-export type DownloadReportQueryError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse
+export type DownloadReportQueryError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse
 
 
-export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params: undefined |  DownloadReportParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadReport>>,
@@ -431,8 +445,8 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof downloadReport>>,
@@ -442,8 +456,8 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
       >, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -451,8 +465,8 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
  * @summary Download a report as an Excel file
  */
 
-export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportTooLargeResponse>(
- code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments',
+export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadReport>>, TError = ReportBadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ReportConflictResponse | ReportTooLargeResponse>(
+ code: 'charges-by-month' | 'plot-balances' | 'debtors' | 'electricity-tree' | 'water' | 'missing-readings' | 'land-tax' | 'corrections' | 'payments' | 'cash-book' | 'bank-movements' | 'income-expense' | 'expenses',
     params?: DownloadReportParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadReport>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

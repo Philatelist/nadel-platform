@@ -13,7 +13,10 @@
  * plot status can follow the debt, the event {@link app.nadel.ledger.PaymentsChanged}, published after every change of
  * payments or allocations (feature 015), the events {@link app.nadel.ledger.PaymentRecorded} and
  * {@link app.nadel.ledger.PaymentReversed} (ids of payments entered or reversed, for the payment messages of feature
- * 017), the import facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
+ * 017), the event {@link app.nadel.ledger.PaymentMoneyMoved} (the money of payment rows, for the treasury's journal of
+ * feature 018: a synchronous listener in the publishing transaction, never the outbox), the port
+ * {@link app.nadel.ledger.BookingMonths} (the billing month a money entry of another module belongs to), the import
+ * facade {@link app.nadel.ledger.OpeningBalanceImport} (the "Opening
  * balances" sheet of the Excel import) and the read facade of the reports {@link app.nadel.ledger.LedgerReadModel}
  * (aggregates in the caller's transaction, no personal data: month totals, {@link app.nadel.ledger.PlotDebts} as
  * of a day, the {@link app.nadel.ledger.CorrectionRow} of every reversal and adjustment of the billing months, the
@@ -22,7 +25,8 @@
  * items of the "not charged" queue per meter, and the booked losses and common consumer runs of a range as
  * {@link app.nadel.ledger.LossesRunNodeRow} and {@link app.nadel.ledger.CommonConsumerRunLineRow}; after payments, the
  * paid amounts and prepayment as of a day and the {@link app.nadel.ledger.PaymentRow} of the payments report; for the
- * documents of feature 016 the {@link app.nadel.ledger.CashReceiptData} of a printed cash receipt), and the
+ * documents of feature 016 the {@link app.nadel.ledger.CashReceiptData} of a printed cash receipt; for the treasury of
+ * feature 018 the {@link app.nadel.ledger.PaymentRef} of payment rows), and the
  * port {@link app.nadel.ledger.PaymentNotes} (the payer notes for the payments report, only with {@code MEMBERS_VIEW}:
  * the one documented exception to "no personal data"). Everything else is
  * internal: the entities, the pure
@@ -54,7 +58,8 @@
  * {@code settings} ({@code CooperativeSettings}), {@code members} ({@code MemberDirectory}: the payer of a payment),
  * {@code privacy} ({@code PersonalDataCipher}: the payer note), {@code money}, {@code identity}, {@code audit},
  * {@code problem} and {@code tenancy}; {@code imports} depends on it (the opening balances sheet) and {@code reports}
- * and {@code documents} read it through {@code LedgerReadModel}.
+ * and {@code documents} read it through {@code LedgerReadModel}; {@code treasury} listens to
+ * {@code PaymentMoneyMoved} and reads {@code LedgerReadModel#paymentRefs} and {@code BookingMonths}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Ledger and charges")
 package app.nadel.ledger;

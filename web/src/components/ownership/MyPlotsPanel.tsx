@@ -7,6 +7,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { UserContent, formatUser } from '../UserContent';
 import { Panel } from '../ui';
 import { OwnershipLists } from './OwnershipLists';
+import { MyPlotReconciliationAct } from '../reconciliation/MyPlotReconciliationAct';
 
 function MyPlotCard({ plot }: { plot: OwnedPlot }) {
   const t = useT();
@@ -29,6 +30,7 @@ function MyPlotCard({ plot }: { plot: OwnedPlot }) {
       <QueryBoundary query={ownerships} isEmpty={() => false}>
         {(data) => <OwnershipLists ownerships={data} />}
       </QueryBoundary>
+      <MyPlotReconciliationAct plotId={plot.plotId} />
     </Panel>
   );
 }

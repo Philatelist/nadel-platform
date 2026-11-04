@@ -24,4 +24,5 @@ export * from './reports/reports';
 export * from './roles/roles';
 export * from './settings/settings';
 export * from './tariffs/tariffs';
+export * from './treasury/treasury';
 export * from './water/water';

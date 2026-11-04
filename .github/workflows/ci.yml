@@ -63,7 +63,7 @@ jobs:
           cache: maven
       - name: Demo ledger and documents on every day of January and February 2027 and on 29.02.2028
         run: >-
-          ./mvnw --batch-mode --no-transfer-progress test -Dtest='DemoLedgerDataTests,DemoDocumentsTests'
+          ./mvnw --batch-mode --no-transfer-progress test -Dtest='DemoLedgerDataTests,DemoDocumentsTests,DemoTreasuryTests'
           -Dnadel.demo.days=all -Djacoco.skip=true
       - name: Test reports
         if: always()

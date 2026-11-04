@@ -255,3 +255,21 @@ describe('PlotPage enter payment link', () => {
     expect(screen.queryByRole('link', { name: 'Enter payment' })).not.toBeInTheDocument();
   });
 });
+
+describe('PlotPage reconciliation act tab', () => {
+  beforeEach(() => {
+    plot = active;
+  });
+
+  it('shows the tab with CHARGES_VIEW', () => {
+    permissions = ['PLOTS_VIEW', 'CHARGES_VIEW'];
+    renderCard();
+    expect(screen.getByRole('tab', { name: 'Reconciliation act' })).toBeInTheDocument();
+  });
+
+  it('hides the tab without CHARGES_VIEW', () => {
+    permissions = ['PLOTS_VIEW'];
+    renderCard();
+    expect(screen.queryByRole('tab', { name: 'Reconciliation act' })).toBeNull();
+  });
+});

@@ -5,7 +5,9 @@ Every error the API returns is `application/problem+json` (RFC 9457) in the shap
 only for `REQUISITES_MISSING` (feature 016), `missing` (the codes of the requisites that are not set: `IBAN`, `EDRPOU`;
 built with `ApiProblemException.requisitesMissing(missing)`) and, only for `INVOICE_BUILD_TOO_LARGE` (422, feature
 016), `limit` (the most plots one month build of invoices takes; built with
-`ApiProblemException.invoiceBuildTooLarge(limit)`).
+`ApiProblemException.invoiceBuildTooLarge(limit)`) and, only for `CASH_INSUFFICIENT` (409, feature 018), `balance`
+(the lowest cash balance from the entry's date on, two decimals) and `date` (the earliest day of it, ISO; built with
+`ApiProblemException.cashInsufficient(balance, date)`).
 Texts are fixed English sentences and never contain personal data, exception messages or SQL.
 
 ## Public API

@@ -138,6 +138,9 @@ class MeterReportsTests extends IntegrationTest {
                 "role", "member", "charge_type", "cooperative_settings")) {
             owner.update("delete from " + table + " where tenant_id = ?", tenant);
         }
+        // the money accounts and categories seed_base_roles adds (V32, seed_treasury)
+        owner.update("delete from money_account where tenant_id = ?", tenant);
+        owner.update("delete from expense_category where tenant_id = ?", tenant);
         deleteDataKeys(tenant);
         owner.update("delete from tenant where id = ?", tenant);
     }

@@ -22,6 +22,7 @@ interface NavItem {
     | 'meters'
     | 'charges'
     | 'payments'
+    | 'cashbook'
     | 'reports'
     | 'certificates'
     | 'deliveries'
@@ -45,7 +46,12 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/meters', label: 'meters', permission: 'METERS_VIEW' },
   { to: '/charges', label: 'charges', permission: 'CHARGES_VIEW' },
   { to: '/payments', label: 'payments', permission: 'PAYMENTS_VIEW' },
-  { to: '/reports', label: 'reports', permission: 'REPORTS_VIEW' },
+  { to: '/cashbook', label: 'cashbook', permission: 'CASHBOOK_VIEW' },
+  {
+    to: '/reports',
+    label: 'reports',
+    visible: (me) => me.permissions.includes('REPORTS_VIEW') || me.permissions.includes('CASHBOOK_VIEW'),
+  },
   { to: '/documents/certificates', label: 'certificates', permission: 'CHARGES_VIEW' },
   { to: '/deliveries', label: 'deliveries', permission: 'INVOICES_ISSUE' },
   { to: '/announcements', label: 'announcements', permission: 'ANNOUNCEMENTS_SEND' },

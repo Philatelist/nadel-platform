@@ -1,5 +1,6 @@
 package app.nadel.documents;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
@@ -18,8 +19,9 @@ import java.util.UUID;
  * <b>Permissions.</b> The facade checks none: it answers as the system, and the caller decides who receives what. The
  * rules the endpoints apply are the caller's to keep: a member may receive only the latest version of an invoice of a
  * plot they own now ({@code GET /invoices/{id}}) and only a receipt of a payment group whose every plot they own now
- * ({@code GET /payments/{id}/receipt.pdf}). The receipt is drawn without the payer note (the endpoints show it only to
- * a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} and
+ * ({@code GET /payments/{id}/receipt.pdf}), and only the reconciliation act of a plot they own now
+ * ({@code GET /plots/{id}/reconciliation-act.pdf}). The receipt is drawn without the payer note (the endpoints show it
+ * only to a viewer with {@code MEMBERS_VIEW}). Nothing here is audited except {@link #invoiceForToday} and
  * {@link #invoiceForDay} when they issue a new version.
  */
 public interface DocumentsFacade {
@@ -65,6 +67,16 @@ public interface DocumentsFacade {
      * bank payment (which has no receipt).
      */
     Optional<byte[]> receiptPdf(UUID paymentId);
+
+    /**
+     * The reconciliation act of the plot for the period (feature 018 §2.10), drawn now from the ledger and not stored:
+     * the same build as {@code GET /plots/{id}/reconciliation-act.pdf} after its access check, with the same answers
+     * ({@code ApiProblemException} 404 {@code PLOT_NOT_FOUND}, 409 {@code PLOT_COMMON_LAND}, 400
+     * {@code VALIDATION_FAILED} for {@code from} after {@code to}, {@code to} after today or a plot without ledger rows,
+     * 409 {@code REQUISITES_MISSING}); a {@code from} before the plot's first ledger day starts the act on that day.
+     * The same plot and period give the same bytes while the plot's ledger stays the same. Not audited.
+     */
+    byte[] reconciliationActPdf(UUID plotId, LocalDate from, LocalDate to);
 
     /**
      * The print set of the month's invoices ({@code GET /billing-months/{month}/invoices/print.pdf}): the latest

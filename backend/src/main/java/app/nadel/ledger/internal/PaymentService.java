@@ -4,6 +4,7 @@ import app.nadel.audit.FieldChange;
 import app.nadel.identity.AccessProfile;
 import app.nadel.identity.OwnedPlot;
 import app.nadel.identity.OwnedPlotsSource;
+import app.nadel.ledger.PaymentMoneyMoved;
 import app.nadel.ledger.PaymentRecorded;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PaymentsChanged;
@@ -234,7 +235,8 @@ class PaymentService {
     /**
      * Writes the payments of one group under the locks the caller holds: books the month of the received day, takes
      * one receipt number for cash (stored on every payment of the group), writes each payment with its allocations,
-     * publishes one {@code PAYMENT_RECORDED} per payment, one {@link PaymentsChanged} with every plot and one
+     * publishes {@link PaymentMoneyMoved} with a line per payment (the treasury writes their journal movements in this
+     * transaction), one {@code PAYMENT_RECORDED} per payment, one {@link PaymentsChanged} with every plot and one
      * {@link PaymentRecorded} with every payment.
      */
     private List<SavedPayment> book(Entry entry, @Nullable UUID payerMemberId, List<Booking> bookings,
@@ -272,6 +274,12 @@ class PaymentService {
             }
         }
         entityManager.flush();
+        // the money of the group on the cash or bank account, in this transaction (treasury, ADR 0019)
+        events.publishEvent(new PaymentMoneyMoved(tenantId, payments.stream()
+                .map(payment -> new PaymentMoneyMoved.Line(payment.getId(), payment.getId(), false,
+                        payment.getSource(), payment.getAmount(), payment.getReceivedOn(), month.yearMonth(),
+                        payment.getCreatedBy(), payment.getCreatedAt()))
+                .toList()));
 
         Set<UUID> plotIds = new LinkedHashSet<>();
         for (int i = 0; i < bookings.size(); i++) {

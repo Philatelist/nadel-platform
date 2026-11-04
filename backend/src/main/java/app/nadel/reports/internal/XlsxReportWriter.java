@@ -6,6 +6,7 @@ import app.nadel.reports.internal.ReportResult.Column;
 import app.nadel.reports.internal.ReportResult.Row;
 import app.nadel.reports.internal.ReportResult.Sheet;
 import app.nadel.reports.internal.ReportResult.Total;
+import app.nadel.treasury.CategoryRef;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -53,15 +54,28 @@ class XlsxReportWriter {
     record Header(String cooperativeName, ZonedDateTime generatedAt, String generatedBy) {
     }
 
+    /** As the full form, the categories of the result named as {@link ReportRunner#categoryNames} names them. */
+    byte[] write(ReportDefinition definition, ReportFilters filters, ReportResult result, Header header,
+            ReportTexts texts, Function<UUID, String> chargeTypeNames) {
+        return write(definition, filters, result, header, texts, chargeTypeNames,
+                ReportRunner.categoryNames(result, texts));
+    }
+
     /**
      * @param chargeTypeNames the name of a charge type in the file's language (a customised name as stored)
+     * @param categoryNames   the name of an expense or income category of the result in the file's language (a
+     *                        renamed or added one as stored)
      * @return the workbook
      */
     byte[] write(ReportDefinition definition, ReportFilters filters, ReportResult result, Header header,
-            ReportTexts texts, Function<UUID, String> chargeTypeNames) {
+            ReportTexts texts, Function<UUID, String> chargeTypeNames, Function<UUID, String> categoryNames) {
         String code = definition.code().getValue();
+        Set<UUID> categoryIds = result.categories().stream().map(CategoryRef::id).collect(Collectors.toSet());
+        // a filter names charge types or categories by id; the ids of the two never meet
+        Function<UUID, String> filterNames = id -> categoryIds.contains(id) ? categoryNames.apply(id)
+                : chargeTypeNames.apply(id);
         String filterLine = texts.text("reports.file.filters") + ": " + definition.filters().stream()
-                .map(filter -> filter.describe(filters, texts, chargeTypeNames)).collect(Collectors.joining("; "));
+                .map(filter -> filter.describe(filters, texts, filterNames)).collect(Collectors.joining("; "));
         List<String> headerLines = List.of(header.cooperativeName(), texts.text("reports." + code + ".title"),
                 filterLine,
                 texts.text("reports.file.generatedAt") + ": " + GENERATED_AT.format(header.generatedAt()),
@@ -74,7 +88,8 @@ class XlsxReportWriter {
             for (Sheet sheet : result.sheets()) {
                 Worksheet worksheet = workbook.newWorksheet(sheetName(texts.text("reports." + code + ".sheets."
                         + sheet.key()), names));
-                new SheetWriter(worksheet, code, texts, chargeTypeNames).write(sheet, headerLines, notes);
+                new SheetWriter(worksheet, code, texts, chargeTypeNames, categoryNames).write(sheet, headerLines,
+                        notes);
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write the report", e);
@@ -102,12 +117,15 @@ class XlsxReportWriter {
         private final String code;
         private final ReportTexts texts;
         private final Function<UUID, String> chargeTypeNames;
+        private final Function<UUID, String> categoryNames;
 
-        SheetWriter(Worksheet worksheet, String code, ReportTexts texts, Function<UUID, String> chargeTypeNames) {
+        SheetWriter(Worksheet worksheet, String code, ReportTexts texts, Function<UUID, String> chargeTypeNames,
+                Function<UUID, String> categoryNames) {
             this.worksheet = worksheet;
             this.code = code;
             this.texts = texts;
             this.chargeTypeNames = chargeTypeNames;
+            this.categoryNames = categoryNames;
         }
 
         void write(Sheet sheet, List<String> headerLines, List<String> notes) {
@@ -185,7 +203,7 @@ class XlsxReportWriter {
             for (int index = 0; index < columns.size(); index++) {
                 ReportColumnType type = columns.get(index).type();
                 boolean text = type == ReportColumnType.TEXT || type == ReportColumnType.CODE
-                        || type == ReportColumnType.CHARGE_TYPE;
+                        || type == ReportColumnType.CHARGE_TYPE || type == ReportColumnType.EXPENSE_CATEGORY;
                 if (text && cells.get(index).value() == null && cells.get(index).reason() == null) {
                     return index;
                 }
@@ -215,6 +233,7 @@ class XlsxReportWriter {
                 }
                 case CODE -> text(row, index, texts.text(column.codes() + "." + value));
                 case CHARGE_TYPE -> text(row, index, chargeTypeNames.apply((UUID) value));
+                case EXPENSE_CATEGORY -> text(row, index, categoryNames.apply((UUID) value));
                 case TEXT -> text(row, index, (String) value);
             };
         }
@@ -231,7 +250,7 @@ class XlsxReportWriter {
 
         private static double width(ReportColumnType type) {
             return switch (type) {
-                case TEXT, CHARGE_TYPE -> 24;
+                case TEXT, CHARGE_TYPE, EXPENSE_CATEGORY -> 24;
                 case CODE -> 16;
                 case MONEY, QUANTITY -> 15;
                 case DATE, DECIMAL -> 12;

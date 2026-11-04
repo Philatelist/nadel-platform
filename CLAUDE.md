@@ -35,7 +35,7 @@ make gen            # regenerate packages/api-client from api/openapi.yaml
 make test           # backend ./mvnw verify (Testcontainers, coverage floor) + client typecheck
 make check          # everything CI runs: contract, format, lint, tests
 make e2e-install    # once: install the Playwright browser (chromium)
-make e2e            # end-to-end specs in web/e2e: starts infra, backend jar and web; not part of make check; needs JDK 25 on PATH
+make e2e            # end-to-end specs in web/e2e: starts infra, backend jar and web; not part of make check; needs JDK 25 on PATH; NADEL_DB_PORT=5433 if another Postgres holds 5432
 ```
 
 Before finishing any task, run `make check` and fix what it reports.

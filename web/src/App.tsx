@@ -196,7 +196,51 @@ const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequirePermission permission="REPORTS_VIEW" />,
+        element: <RequirePermission permission="CASHBOOK_VIEW" />,
+        children: [
+          {
+            path: 'cashbook',
+            lazy: () => import('./pages/CashbookPage').then((m) => ({ Component: m.CashbookPage })),
+          },
+          {
+            path: 'cashbook/expenses',
+            lazy: () => import('./pages/ExpensesPage').then((m) => ({ Component: m.ExpensesPage })),
+          },
+          {
+            element: <RequirePermission permission="CASHBOOK_ENTER" />,
+            children: [
+              {
+                path: 'cashbook/expenses/new',
+                lazy: () => import('./pages/ExpenseFormPage').then((m) => ({ Component: m.ExpenseFormPage })),
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission="CASHBOOK_ENTER" />,
+            children: [
+              {
+                path: 'cashbook/counts/new',
+                lazy: () => import('./pages/CashCountPage').then((m) => ({ Component: m.CashCountNewPage })),
+              },
+            ],
+          },
+          {
+            path: 'cashbook/counts/:id',
+            lazy: () => import('./pages/CashCountPage').then((m) => ({ Component: m.CashCountPage })),
+          },
+          {
+            path: 'cashbook/bank/:month',
+            lazy: () =>
+              import('./pages/BankReconciliationPage').then((m) => ({ Component: m.BankReconciliationPage })),
+          },
+          {
+            path: 'cashbook/expenses/:id',
+            lazy: () => import('./pages/ExpenseCardPage').then((m) => ({ Component: m.ExpenseCardPage })),
+          },
+        ],
+      },
+      {
+        element: <RequirePermission permission={['REPORTS_VIEW', 'CASHBOOK_VIEW']} any />,
         children: [
           {
             path: 'reports',

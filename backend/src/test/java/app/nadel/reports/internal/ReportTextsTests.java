@@ -48,6 +48,12 @@ import app.nadel.tariffs.ExpectedAmounts;
 import app.nadel.tariffs.Frequency;
 import app.nadel.tariffs.VersionShare;
 import app.nadel.tariffs.YearExpectation;
+import app.nadel.treasury.AccountBook;
+import app.nadel.treasury.BankMonthStatus;
+import app.nadel.treasury.IncomeExpense;
+import app.nadel.treasury.MoneyAccountKind;
+import app.nadel.treasury.MovementKind;
+import app.nadel.treasury.TreasuryReadModel;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -192,6 +198,28 @@ class ReportTextsTests {
         for (CommonConsumerSplit split : CommonConsumerSplit.values()) {
             keys.add(electricity + "splits." + split.name());
         }
+        // the cash book reports (feature 018): their filters and code columns
+        keys.add("reports.filters.params.account");
+        keys.add("reports.filters.expenseCategories");
+        for (MoneyAccountKind account : MoneyAccountKind.values()) {
+            keys.add("reports.filters.options.account." + account.name());
+        }
+        for (MovementKind kind : MovementKind.values()) {
+            keys.add(AccountBookSheet.KINDS + "." + kind.name());
+        }
+        for (BankMonthStatus status : BankMonthStatus.values()) {
+            keys.add("cashbook.bank.status." + status.name());
+        }
+        for (String line : List.of("OPENING", "DAY", "CLOSING")) {
+            keys.add(AccountBookSheet.LINES + "." + line);
+        }
+        for (IncomeExpenseReport.Section section : IncomeExpenseReport.Section.values()) {
+            keys.add(IncomeExpenseReport.SECTIONS + "." + section.name());
+        }
+        for (String code : List.of("ELECTRICITY_SUPPLIER", "WATER", "PAYROLL_TAXES", "NETWORK_REPAIR", "MATERIALS",
+                "WASTE", "BANK_FEES", "TAXES_FEES", "OFFICE_COMMS", "OTHER", "BANK_INTEREST", "GRANTS", "SALES")) {
+            keys.add("expenseCategories.system." + code);
+        }
         for (Run run : runs()) {
             ReportResult result = run.definition().load(run.filters(), CONTEXT);
             String code = run.definition().code().getValue();
@@ -256,6 +284,13 @@ class ReportTextsTests {
         ReportDefinition payments = paymentsWithMembersView();
         RawFilters receivedCashOnAStreet = new RawFilters(null, null, TODAY.minusDays(10), TODAY, null, null, null,
                 "Лісова", null, null, null, null, null, null, null, nadel.contract.model.PaymentSource.CASH);
+        TreasuryReadModel treasury = emptyTreasury();
+        ReportDefinition cashBook = new CashBookReport(treasury, mock(PlotCatalog.class));
+        ReportDefinition bankMovements = new BankMovementsReport(treasury, mock(PlotCatalog.class));
+        ReportDefinition incomeExpense = new IncomeExpenseReport(treasury);
+        ReportDefinition expenses = new ExpensesReport(treasury);
+        RawFilters bankExpenses = new RawFilters(null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, nadel.contract.model.MoneyAccountKind.BANK, null);
         ReportDefinition fixedLosses = electricityTree(LossesMode.FIXED_PERCENT);
         ReportDefinition proportionalLosses = electricityTree(LossesMode.PROPORTIONAL);
         return List.of(new Run(fixedLosses, ReportFilters.parse(fixedLosses.filters(), RawFilters.NONE, CONTEXT)),
@@ -271,7 +306,29 @@ class ReportTextsTests {
                 new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), waterMeters, CONTEXT)),
                 new Run(missingReadings, ReportFilters.parse(missingReadings.filters(), RawFilters.NONE, CONTEXT)),
                 new Run(payments, ReportFilters.parse(payments.filters(), RawFilters.NONE, CONTEXT)),
-                new Run(payments, ReportFilters.parse(payments.filters(), receivedCashOnAStreet, CONTEXT)));
+                new Run(payments, ReportFilters.parse(payments.filters(), receivedCashOnAStreet, CONTEXT)),
+                new Run(cashBook, ReportFilters.parse(cashBook.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(bankMovements, ReportFilters.parse(bankMovements.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(incomeExpense, ReportFilters.parse(incomeExpense.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(expenses, ReportFilters.parse(expenses.filters(), RawFilters.NONE, CONTEXT)),
+                new Run(expenses, ReportFilters.parse(expenses.filters(), bankExpenses, CONTEXT)));
+    }
+
+    /** A treasury with opening balances and nothing booked: an empty book, one bank month, all zeros. */
+    private static TreasuryReadModel emptyTreasury() {
+        TreasuryReadModel treasury = mock(TreasuryReadModel.class);
+        Money zero = Money.ZERO;
+        when(treasury.cashBook(any(), any(), anyInt())).thenAnswer(call -> new AccountBook(MoneyAccountKind.CASH,
+                call.getArgument(0), call.getArgument(1), zero, zero, List.of(), List.of()));
+        when(treasury.bankMovements(any(), any(), anyInt())).thenAnswer(call -> new AccountBook(
+                MoneyAccountKind.BANK, call.getArgument(0), call.getArgument(1), zero, zero, List.of(),
+                List.of(new AccountBook.BankMonth(YearMonth.from((LocalDate) call.getArgument(0)),
+                        BankMonthStatus.NOT_RECONCILED))));
+        when(treasury.incomeExpense(any(), any())).thenAnswer(call -> new IncomeExpense(call.getArgument(0),
+                call.getArgument(1), Map.of(), zero, zero, Map.of(), Map.of(), zero, zero, zero, zero, zero, zero));
+        when(treasury.expenses(any(), any(), any(), any(), anyInt())).thenReturn(List.of());
+        when(treasury.categories()).thenReturn(List.of());
+        return treasury;
     }
 
     /** The payments report for a caller who may view members, so it has the payer note column too. */

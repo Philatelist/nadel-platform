@@ -34,6 +34,7 @@ import type {
   ConflictResponse,
   ForbiddenResponse,
   GetMonthInvoicesPrintPdfParams,
+  GetPlotReconciliationActPdfParams,
   InvoiceBuild,
   InvoiceBuildRequest,
   InvoiceBuildTooLargeResponse,
@@ -167,6 +168,255 @@ export function useGetPaymentReceiptPdf<TData = Awaited<ReturnType<typeof getPay
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetPaymentReceiptPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetCashCountActPdfUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/cash-counts/${id}/act.pdf`
+}
+
+/**
+ * «Акт перерахунку каси» (A4, Ukrainian, feature 018 §2.6): the cooperative's name and requisites, the date and
+ * time of the count (Europe/Kyiv), the book balance, the counted balance, the difference with «Збігається»,
+ * «Нестача» or «Надлишок», the explanation, how the difference was booked (the day, the line and the reason, and
+ * its reversal) or that it is not booked yet, and signature lines for the cashier (treasurer) and the chairman
+ * of the board, each with the name of the first active holder of that base role, or an empty line without one.
+ * Made on request from the count and not stored; not written to the audit log. 404 `NOT_FOUND` for an unknown
+ * count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+ * @summary The act of a cash count as a PDF file
+ */
+export const getCashCountActPdf = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetCashCountActPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCashCountActPdfQueryKey = (id: string,) => {
+    return [
+    `/api/v1/cash-counts/${id}/act.pdf`
+    ] as const;
+    }
+
+
+export const getGetCashCountActPdfQueryOptions = <TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCashCountActPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCashCountActPdf>>> = ({ signal }) => getCashCountActPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCashCountActPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getCashCountActPdf>>>
+export type GetCashCountActPdfQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCountActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCountActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCashCountActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getCashCountActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The act of a cash count as a PDF file
+ */
+
+export function useGetCashCountActPdf<TData = Awaited<ReturnType<typeof getCashCountActPdf>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCashCountActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCashCountActPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getGetPlotReconciliationActPdfUrl = (id: string,
+    params: GetPlotReconciliationActPdfParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/plots/${id}/reconciliation-act.pdf?${stringifiedParams}` : `/api/v1/plots/${id}/reconciliation-act.pdf`
+}
+
+/**
+ * «Акт звірки взаєморозрахунків» (A4, Ukrainian, feature 018 §2.10): the cooperative's requisites, the plot and
+ * its current owners, the period, the balance at the start of the period (the debt and the prepayment as of the
+ * day before `from`), every charge, adjustment, charge reversal, payment and payment reversal dated in the period
+ * in date order with the columns «Нараховано» and «Сплачено», the turnover totals of the period, the balance at
+ * the end of the period (as of `to`), the sentence «За даними кооперативу заборгованість станом на {to}
+ * становить …» (or «переплата … становить …», or «заборгованість відсутня») by the net balance (the debt minus
+ * the prepayment), and the signature blocks «Від кооперативу» (the name of the first active holder of the
+ * treasurer base role, or an empty line without one) and «Член кооперативу». The balances at both ends are those
+ * of the plot balances report (`LedgerReadModel.debtsAsOf`, every charge type) on the day before the period's
+ * first day and on `to`: a charge counts on its debt date (a reversal and an adjustment on the date of the charge they correct), a
+ * payment on the day it was received (a payment reversal on the day of the payment it reverses). Made on request
+ * and not stored; not written to the audit log; the same plot and period give the same bytes as long as the
+ * ledger of the plot does not change.
+ *
+ * The period runs from `from` to `to`, both inclusive, `to` not after today (Europe/Kyiv). A `from` before
+ * `first`, the earliest day in the plot's ledger (its first charge or opening balance, or an earlier payment), is
+ * moved to `first`, and the act (its period line, opening balance and file name) shows the period it covers.
+ * Otherwise 400 `VALIDATION_FAILED` with `errors[{field: from, code: INVALID}]` (`from` after `to`, `to` before
+ * `first`, or a plot without any ledger row) or `errors[{field: to, code: INVALID}]` (`to` after today). 409
+ * `PLOT_COMMON_LAND` for common land (an
+ * archived plot gets its act: its history stays). 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) as
+ * for invoices.
+ *
+ * No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the cooperative, anyone else
+ * only for a plot they currently own. Any other plot, an unknown id and a plot of another cooperative are the same
+ * 404 `PLOT_NOT_FOUND` (checked before the period and the requisites); the platform operator has no cooperative
+ * data: 403.
+ * @summary The reconciliation act of a plot for a period as a PDF file
+ */
+export const getPlotReconciliationActPdf = async (id: string,
+    params: GetPlotReconciliationActPdfParams, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetPlotReconciliationActPdfUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlotReconciliationActPdfQueryKey = (id: string,
+    params?: GetPlotReconciliationActPdfParams,) => {
+    return [
+    `/api/v1/plots/${id}/reconciliation-act.pdf`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPlotReconciliationActPdfQueryOptions = <TData = Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>(id: string,
+    params: GetPlotReconciliationActPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlotReconciliationActPdfQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>> = ({ signal }) => getPlotReconciliationActPdf(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlotReconciliationActPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>>
+export type GetPlotReconciliationActPdfQueryError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+
+
+export function useGetPlotReconciliationActPdf<TData = Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>(
+ id: string,
+    params: GetPlotReconciliationActPdfParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotReconciliationActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotReconciliationActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotReconciliationActPdf<TData = Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>(
+ id: string,
+    params: GetPlotReconciliationActPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlotReconciliationActPdf>>,
+          TError,
+          Awaited<ReturnType<typeof getPlotReconciliationActPdf>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlotReconciliationActPdf<TData = Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>(
+ id: string,
+    params: GetPlotReconciliationActPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The reconciliation act of a plot for a period as a PDF file
+ */
+
+export function useGetPlotReconciliationActPdf<TData = Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>(
+ id: string,
+    params: GetPlotReconciliationActPdfParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlotReconciliationActPdf>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlotReconciliationActPdfQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

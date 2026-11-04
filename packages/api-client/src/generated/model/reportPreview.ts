@@ -10,6 +10,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChargeTypeRef } from './chargeTypeRef';
+import type { ExpenseCategory } from './expenseCategory';
 import type { ReportCode } from './reportCode';
 import type { ReportFilterValue } from './reportFilterValue';
 import type { ReportNote } from './reportNote';
@@ -26,6 +27,8 @@ export interface ReportPreview {
   headerNotes: ReportNote[];
   /** The charge types the report refers to, in their configured order: a `CHARGE_TYPE` cell and a column with `chargeTypeId` name one of them by id */
   chargeTypes: ChargeTypeRef[];
+  /** The expense and income categories the report refers to (expense categories first, each kind in its configured order): an `EXPENSE_CATEGORY` cell and the `expenseCategoryIds` filter name one of them by id. Empty for the reports without categories */
+  expenseCategories?: ExpenseCategory[];
   /**
      * @minItems 1
      * @maxItems 2

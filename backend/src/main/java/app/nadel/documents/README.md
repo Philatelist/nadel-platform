@@ -17,6 +17,8 @@ it.
 | Endpoint | Operation | Who |
 |---|---|---|
 | `GET /payments/{id}/receipt.pdf` | `getPaymentReceiptPdf` | `PAYMENTS_VIEW`, or a member who owns every plot of the payment's group now |
+| `GET /cash-counts/{id}/act.pdf` | `getCashCountActPdf` (feature 018) | `CASHBOOK_VIEW`; another cooperative's count 404 |
+| `GET /plots/{id}/reconciliation-act.pdf?from&to` | `getPlotReconciliationActPdf` (feature 018) | no annotation: `CHARGES_VIEW` any plot, otherwise a plot the caller owns now (else 404 `PLOT_NOT_FOUND`); operator 403 |
 | `POST /plots/{id}/invoices` (body `{month?}`) | `issuePlotInvoice` | `INVOICES_ISSUE` |
 | `GET /invoices?month&plotId&latestOnly&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
@@ -71,6 +73,45 @@ now), names it and draws it with `ReceiptLayout` on one A5 page:
 The number and the amounts never change; the placement is the one at the moment of printing. Nothing is stored. The
 file's `/ID` is derived from the content and its dates are the moment it was printed, so the same payment printed at
 the same moment gives the same bytes.
+
+## The cash count act (feature 018 §2.6)
+
+`CashCountActDocuments` reads the count through `treasury.CashCountActs#act` (the treasury module's public facade:
+moment, day, book balance, counted, difference, explanation, booking and its reversal; `documents → treasury`, never
+the other way), the requisites as for the receipt, and the signers through `members.RoleHolders` (the first active
+holder of the `TREASURER` and of the `CHAIRMAN` base role, in name order, «Last First Middle»; an empty line without
+one). `CashCountActLayout` draws one A4 page: the requisites; «Акт перерахунку каси»; «Дата і час перерахунку» (Kyiv);
+a table of «Залишок готівки за касовою книгою», «Фактична наявність готівки (перераховано)» and «Різниця»; «Результат:
+збігається / нестача … / надлишок …»; «Пояснення»; for a difference «Різницю не оформлено.» or how it was booked (the
+day booked, the line's date and month, the reason) and «Оформлення різниці сторновано …»; the signature lines «Касир
+(скарбник)» and «Голова правління»; the footer. Made on request, not stored and not audited; the file's `/ID` comes
+from the content and its dates are the moment it is printed.
+
+## The reconciliation act (feature 018 §2.10)
+
+`ReconciliationActs` answers, in this order: 403 `PERMISSION_DENIED` for the platform operator; 404 `PLOT_NOT_FOUND`
+for an unknown plot, another cooperative's and, without `CHARGES_VIEW`, any plot the caller does not own now
+(`identity.OwnedPlotsSource`, as the plot account), before anything else is looked at; 409 `PLOT_COMMON_LAND` for
+common land (as a certificate; an **archived plot gets its act**: its history stays, although the plot balances report
+no longer lists it); 400 `VALIDATION_FAILED` with `to INVALID` for a last day after today (Kyiv) and `from INVALID` for
+a first day after the last one or for a plot without any ledger row; 409 `REQUISITES_MISSING` as for invoices. A first
+day before `LedgerReadModel.firstDebtDate` (the earliest charge, opening balance or payment of the plot) is moved to
+that day (the web form starts on 1 January; FS 2.10 as amended in Slice 9), and the period line, the opening balance
+and the file name show the period the act covers; a period that ends before that day is `from INVALID`. Then it reads
+`LedgerReadModel.plotStatement` (opening `debtsAsOf(from − 1)`, closing `debtsAsOf(to)`, every charge and payment row
+of the period by the `debtsAsOf` dating), the current owners (`plots.PlotOwners`, `members.MemberDirectory`, «Last
+First Middle»), the charge type names (the Ukrainian default of a seeded, not renamed type, as on receipts and
+invoices) and the treasurer (`members.RoleHolders`, the first active holder of the `TREASURER` base role; an empty line
+without one). `ReconciliationActLayout` draws A4: the requisites; «Акт звірки взаєморозрахунків»; «за період з … по
+…»; the plot with its street and «Власники»; a table «Дата», «Документ, зміст операції», «Нараховано», «Сплачено» with
+«Сальдо на початок періоду» (a net debt under «Нараховано», an overpayment under «Сплачено»), one row per line
+(«Вхідне сальдо», «Нарахування», «Перерахунок», «Сторно нарахування» with the type and service period; «Оплата
+готівкою / через банк» and «Сторно оплати …» with the receipt number or bank document number), «Обороти за період» and
+«Сальдо на кінець періоду»; the debt and the prepayment at both ends; «За даними кооперативу заборгованість станом на
+{to} становить …» / «… переплата … становить …» / «… заборгованість … відсутня» by the closing net balance (debt minus
+prepayment); the signature lines «Від кооперативу (скарбник)» and «Член кооперативу»; a footer without a time. Made on
+request, not stored, not audited; the file's `/ID` comes from the content and its dates are the start of `to` in Kyiv,
+so the same plot and period give the same bytes while the plot's ledger stays the same. Names are never logged.
 
 ## The invoice (feature 016 §2.3 to §2.6)
 
@@ -296,6 +337,7 @@ over the internal `DocumentFormat`) and, with `number`, a decimal that is not mo
 | `invoiceForToday(plotId)` | the current month's invoice as of now (as `POST /plots/{id}/invoices`, the same lock and problems): a new version with the `INVOICE_REISSUED` audit only when its content changed, otherwise the latest version's id; issued by the system: no `issued_by`, audit subject `system:documents` |
 | `invoiceForDay(plotId)` | the bot's «Рахунок» (feature 017 §2.5): under the month's build lock, taken first, the latest version of the current month (Europe/Kyiv) when it was issued today (by any path: the month build, an on-request invoice, an earlier call), otherwise `invoiceForToday`. One day, one invoice per plot; the next day a new version only when the content changed; two calls at once issue at most one new version. The same problems as `invoiceForToday` |
 | `receiptPdf(paymentId)` | the cash receipt drawn now, without the payer note; empty for an unknown payment, a reversal row or a bank payment |
+| `reconciliationActPdf(plotId, from, to)` | the reconciliation act (feature 018), the same bytes as the endpoint, without its access check; the endpoint's other answers as `ApiProblemException` |
 | `printPdf(month, scope)` | the print set (as the endpoint, without the month check: an unknown month is the one page "no invoices"); read-write, as the paper recipients may create link codes |
 | `qrLink(invoiceId)` | the stored NBU link of a version, or empty (unknown id, nothing due) |
 
@@ -448,6 +490,16 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   again after a payment; a version the month build issued today is the invoice of the day; the next day (the stored
   versions moved one day back) the same invoice when nothing changed and one new version after a payment; two requests
   at once issue one new version; the refusals of `invoiceForToday`.
+- `ReconciliationActTests` (Testcontainers, feature 018): the requisites, plot, owner, period, both balances, the lines
+  by date with a reversed payment, the turnover and the debt sentence; the overpayment and «відсутня» sentences and a
+  later period starting with the balance before it; the same bytes twice and from the facade; no treasurer; the period
+  (`to` after today, `from` after `to`, a plot without rows, a period ending before the first day, a missing
+  parameter); a start before the plot's first day gives the act from that day, byte-identical to asking for it; common land
+  409, an archived plot's act, missing requisites 409.
+- `ReconciliationActAccessTests` (Testcontainers): the chairman, the treasurer and a `CHARGES_VIEW` custom role for any
+  plot; a member for their own plot; another member's plot, an unknown id, a plot owned in the past and a role without
+  `CHARGES_VIEW` 404 `PLOT_NOT_FOUND` (before the period and the requisites); another cooperative 404; the operator 403;
+  no token 401.
 - `CertificateTests` (Testcontainers): the debt text with the per-type amounts and the no-debt text, the figures
   equal to the plot balances report for today and for the end of last month, the names sealed, a future day (400, no
   number taken), common land, an archived plot, an unknown plot and missing requisites, a plot without owners, the

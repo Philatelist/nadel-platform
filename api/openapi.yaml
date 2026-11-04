@@ -83,6 +83,11 @@ tags:
       Delivery to members by e-mail through the cooperative's own mailbox and by Telegram through its own bot: the
       channel settings and their checks, the member's own channel choice and Telegram link, sending invoices and
       the delivery screen, and the board's announcements
+  - name: treasury
+    description: >-
+      The cooperative's own money (feature 018): the cash account («Каса») and the bank account («Банківський
+      рахунок»), their opening balances, balances on a day and journals of movements; member payments and their
+      reversals appear in the journals by themselves
 
 paths:
   /me:
@@ -3860,6 +3865,114 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /cash-counts/{id}/act.pdf:
+    get:
+      tags: [documents]
+      operationId: getCashCountActPdf
+      summary: The act of a cash count as a PDF file
+      description: |
+        «Акт перерахунку каси» (A4, Ukrainian, feature 018 §2.6): the cooperative's name and requisites, the date and
+        time of the count (Europe/Kyiv), the book balance, the counted balance, the difference with «Збігається»,
+        «Нестача» or «Надлишок», the explanation, how the difference was booked (the day, the line and the reason, and
+        its reversal) or that it is not booked yet, and signature lines for the cashier (treasurer) and the chairman
+        of the board, each with the name of the first active holder of that base role, or an empty line without one.
+        Made on request from the count and not stored; not written to the audit log. 404 `NOT_FOUND` for an unknown
+        count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The act, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /plots/{id}/reconciliation-act.pdf:
+    get:
+      tags: [documents]
+      operationId: getPlotReconciliationActPdf
+      summary: The reconciliation act of a plot for a period as a PDF file
+      description: |
+        «Акт звірки взаєморозрахунків» (A4, Ukrainian, feature 018 §2.10): the cooperative's requisites, the plot and
+        its current owners, the period, the balance at the start of the period (the debt and the prepayment as of the
+        day before `from`), every charge, adjustment, charge reversal, payment and payment reversal dated in the period
+        in date order with the columns «Нараховано» and «Сплачено», the turnover totals of the period, the balance at
+        the end of the period (as of `to`), the sentence «За даними кооперативу заборгованість станом на {to}
+        становить …» (or «переплата … становить …», or «заборгованість відсутня») by the net balance (the debt minus
+        the prepayment), and the signature blocks «Від кооперативу» (the name of the first active holder of the
+        treasurer base role, or an empty line without one) and «Член кооперативу». The balances at both ends are those
+        of the plot balances report (`LedgerReadModel.debtsAsOf`, every charge type) on the day before the period's
+        first day and on `to`: a charge counts on its debt date (a reversal and an adjustment on the date of the charge they correct), a
+        payment on the day it was received (a payment reversal on the day of the payment it reverses). Made on request
+        and not stored; not written to the audit log; the same plot and period give the same bytes as long as the
+        ledger of the plot does not change.
+
+        The period runs from `from` to `to`, both inclusive, `to` not after today (Europe/Kyiv). A `from` before
+        `first`, the earliest day in the plot's ledger (its first charge or opening balance, or an earlier payment), is
+        moved to `first`, and the act (its period line, opening balance and file name) shows the period it covers.
+        Otherwise 400 `VALIDATION_FAILED` with `errors[{field: from, code: INVALID}]` (`from` after `to`, `to` before
+        `first`, or a plot without any ledger row) or `errors[{field: to, code: INVALID}]` (`to` after today). 409
+        `PLOT_COMMON_LAND` for common land (an
+        archived plot gets its act: its history stays). 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) as
+        for invoices.
+
+        No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the cooperative, anyone else
+        only for a plot they currently own. Any other plot, an unknown id and a plot of another cooperative are the same
+        404 `PLOT_NOT_FOUND` (checked before the period and the requisites); the platform operator has no cooperative
+        data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          description: The first day of the period, inclusive; a day before the plot's first ledger day means that day
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: The last day of the period, inclusive; not after today (Europe/Kyiv)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The act, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /plots/{id}/invoices:
     post:
       tags: [documents]
@@ -5635,6 +5748,1159 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /money-accounts:
+    get:
+      tags: [treasury]
+      operationId: listMoneyAccounts
+      summary: The cash and the bank account with their balances on a day
+      description: |
+        The two money accounts of the cooperative, cash first (feature 018 §2.1, §2.11). A bank account shows the IBAN
+        of the cooperative's requisites (absent while it is not entered). An account with an opening balance has its
+        `balance` on `asOf`: the opening amount plus every movement dated from the opening date to `asOf`, inclusive
+        (money in positive, money out negative; a reversed entry and its reversal both count); movements dated before
+        the opening date never count. Without an opening balance there is no `balance` and `negative` is false.
+        `negative` is true when the balance is below 0.00 (the cash card's «Залишок каси від'ємний», the bank card's
+        «Залишок банку від'ємний»). All amounts come from the server; the client never computes them.
+
+        `asOf` defaults to today in Europe/Kyiv; a day after today is 400 `VALIDATION_FAILED` with
+        `errors[{field: asOf, code: INVALID}]`. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: asOf
+          in: query
+          required: false
+          description: The day of the balances; today (Europe/Kyiv) when left out
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The cash account, then the bank account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MoneyAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /money-accounts/{id}/opening-balance:
+    post:
+      tags: [treasury]
+      operationId: setOpeningBalance
+      summary: Enter the opening balance of a money account, once
+      description: |
+        Sets the account's opening balance («Вхідний залишок», feature 018 §2.1): the balance at the start of `date`.
+        It is entered once and never changed; a mistake is corrected by a cash count (cash) or a bank difference
+        (bank). 409 `OPENING_BALANCE_ALREADY_SET` when the account has one (also when two arrive at once). `amount` is
+        0.00 or more with at most 12 integer digits (400 `VALIDATION_FAILED` with `errors[{field: amount, code:
+        INVALID}]`); `date` is not after today in Europe/Kyiv (`errors[{field: date, code: DATE_IN_FUTURE}]`). Member
+        payments dated before `date` stay in the journal but never count in the balance. Written to the audit log as
+        `OPENING_BALANCE_SET`. 404 `NOT_FOUND` for an unknown account or one of another cooperative. Requires
+        `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpeningBalanceRequest'
+      responses:
+        '200':
+          description: The account with its opening balance and its balance today
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /money-accounts/{id}/movements:
+    get:
+      tags: [treasury]
+      operationId: listAccountMovements
+      summary: The journal of a money account for a period
+      description: |
+        A page of the account's movements dated from `from` to `to` (inclusive), oldest first (by date, then the time
+        entered, then id), with the account's balance at the start of `from` (`openingBalance`) and at the end of
+        `to` (`closingBalance`), both over the whole period whatever the page (feature 018 §2.2). Each movement has its
+        date, kind, signed amount (money in positive, money out negative), the billing month it belongs to (a movement
+        dated in a closed month belongs to the earliest open month and keeps its date), what caused it (`source`),
+        `reversed` once a reversal points at it, the reversal's `reversesMovementId` and `reason`, who entered it
+        (`createdByName`, the member's current name; absent for the system or an unknown member) and when. A member
+        payment line adds the plot, and the receipt number (cash) or the bank document number (`documentNumber`, bank)
+        of its payment; its reversal is dated on the day of the reversal. A movement dated before the opening date is
+        listed with `beforeOpening: true` and does not count in any balance. The balance at the end of the day before
+        the opening date is the opening amount; no balance is known earlier, so `openingBalance` is absent while the
+        account has no opening balance or `from` is before the opening date, and `closingBalance` while it has none or
+        `to` is earlier than the day before the opening date. `negative` is true when `closingBalance` is below 0.00.
+
+        `from` defaults to the first day of the current month and `to` to today (Europe/Kyiv); `from` after `to` is
+        400 `VALIDATION_FAILED` with `errors[{field: from, code: INVALID}]`. 404 `NOT_FOUND` for an unknown account
+        or one of another cooperative. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: The first day; the first day of the current month when left out
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: The last day; today (Europe/Kyiv) when left out
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountMovementPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /money-accounts/{id}/movements/{movementId}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseAccountMovement
+      summary: Reverse a booked count or bank difference line of the journal
+      description: |
+        Reverses a booked count difference («Надлишок» or «Нестача» of a cash count, kind `COUNT_DIFFERENCE`) or a
+        booked bank difference («Банківська різниця», kind `BANK_DIFFERENCE`) with a reason (feature 018 §2.8): a new
+        journal line of the opposite amount on the same account, of the same kind, dated today (Europe/Kyiv) in
+        today's open billing month, with `source {type: MOVEMENT, id: <the reversed line>}`; the reversed line stays,
+        marked `reversed`. Expenses, handovers and other income are reversed through their own endpoints and member
+        payments on the payments screen: any other line, and a reversal line itself, is 409
+        `MOVEMENT_NOT_REVERSIBLE`.
+
+        The reversal of a surplus takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when
+        it would make the cash balance negative today or on a later day; the reversal of a shortage gives the money
+        back and is never refused for the balance. The reversal of a bank difference is never refused for the balance
+        (the bank may go negative); dated today, it sets a reconciled current month back to `NEEDS_RECHECK`. A line is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two
+        reversals arrive at once). A missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason,
+        code: REQUIRED}]`. The count stays booked (its difference is booked once) and its card shows the reversal; the
+        cash book differs from the counted cash again until the next count. Written to the audit log as
+        `COUNT_DIFFERENCE_REVERSED` (about the count) or `BANK_DIFFERENCE_REVERSED` (about the bank reconciliation). 404 `NOT_FOUND` for an unknown account, a line of another
+        account and anything of another cooperative. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: movementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The reversal line
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountMovement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /expenses:
+    get:
+      tags: [treasury]
+      operationId: listExpenses
+      summary: The expenses of the cooperative, newest first
+      description: |
+        The expenses («Витрати», feature 018 §2.3), newest first (by date, then the time entered, then id), with the
+        filters `from` and `to` (the expense date, inclusive; each optional), `account` and `categoryId`. A reversal
+        is not a line of its own: the reversed expense is listed with `reversed: true`. Each line has the date, the
+        account, the category, the counterparty (user content, personal data: shown to everyone with the right to view
+        the cash book), the amount, the number of attachments and whether it is reversed. The files themselves are
+        never part of the list. `from` after `to` is 400 `VALIDATION_FAILED` with `errors[{field: from, code:
+        INVALID}]`. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: account
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MoneyAccountKind'
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpensePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: createExpense
+      summary: Record an expense with up to five receipt files
+      description: |
+        Records an expense (feature 018 §2.3): a spending line on the cash or the bank account dated `date`, in the
+        billing month of that date or, when it is closed, the earliest open month (the date is kept). The request is
+        `multipart/form-data` with the part `expense` (JSON, `ExpenseInput`) and 0 to 5 parts `files` (a JPEG, PNG or
+        PDF each, at most 5 MB each). `reuseAttachments` copies files of an earlier expense (the «Сторнувати і внести
+        заново» flow) on the server; they count towards the five. Stored files come first in the order of
+        `reuseAttachments`, then the uploaded ones; their numbers `n` are 1 to 5.
+
+        The type of a file is decided by its content, never by its name or the declared type. Location and camera data
+        are removed from photos before they are stored, without re-encoding: a JPEG keeps only its image data, JFIF,
+        Adobe and ICC segments and, when it had one, the Orientation tag; a PNG keeps only its image, colour and
+        animation chunks (no `eXIf`, `tEXt`, `iTXt`, `zTXt`, `tIME`). A PDF is stored as received.
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an expense
+          category (`INVALID`) or archived (`ARCHIVED`); a text too long (`TOO_LONG`); a required field missing
+          (`REQUIRED`); a `reuseAttachments[i]` that names no file (`INVALID`);
+        - 400 `TOO_MANY` with `errors[{field: files, code: TOO_MANY}]`: more than five files, reused ones included;
+        - 413 `FILE_TOO_LARGE` with `errors[{field: files[i], code: FILE_TOO_LARGE}]`: a file over 5 MB (a request
+          over the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+        - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: files[i], code: FILE_TYPE_NOT_ALLOWED}]`: a file that is
+          not a JPEG, PNG or PDF by content, or a JPEG or PNG that cannot be read;
+        - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date;
+        - 409 `CASH_INSUFFICIENT` with `balance` and `date`: a cash expense would make the cash balance negative on its
+          date or on a later day; `balance` is the lowest balance from that date on (before this expense) and `date`
+          the earliest day it is reached («Недостатньо готівки в касі: залишок 200,00 ₴ на 07.10.2026»). A bank
+          expense is never refused for the balance.
+
+        The counterparty and the description are personal data: stored encrypted, and in the audit log
+        (`EXPENSE_RECORDED`, with `amount`, `account`, `category` and `date`) shown only to readers with
+        `MEMBERS_VIEW`. Two expenses saved at the same moment never together take the cash below zero. Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [expense]
+              properties:
+                expense:
+                  $ref: '#/components/schemas/ExpenseInput'
+                files:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: binary
+                  description: The receipt files (JPEG, PNG or PDF, at most 5 MB each)
+            encoding:
+              expense:
+                contentType: application/json
+      responses:
+        '201':
+          description: The recorded expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /expenses/{id}:
+    get:
+      tags: [treasury]
+      operationId: getExpense
+      summary: The card of an expense
+      description: |
+        The expense with its counterparty, description, document, attachments (number, name, type and size; the files
+        are downloaded with `downloadExpenseAttachment`) and, once reversed, its reversal (date, reason, who and
+        when). 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative. Requires
+        `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /expenses/{id}/attachments/{n}:
+    get:
+      tags: [treasury]
+      operationId: downloadExpenseAttachment
+      summary: Download a receipt file of an expense
+      description: |
+        The stored file `n` (1 to 5) of the expense as an attachment (`Content-Disposition: attachment` with the
+        stored file name), with its stored type, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. A
+        photo carries no location or camera data. 404 `NOT_FOUND` for an unknown expense or file, or one of another
+        cooperative. Downloads are not audited. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+        - name: n
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 5
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /expenses/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseExpense
+      summary: Reverse an expense
+      description: |
+        Reverses the expense with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+        account, dated today (Europe/Kyiv) in today's open billing month; the expense stays, marked reversed. An
+        expense is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A reversal
+        gives the money back to the account, so it is never refused for the cash balance. A missing or blank reason
+        is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `EXPENSE_REVERSED`. «Сторнувати і внести заново» is this reversal followed by `createExpense` with
+        `reuseAttachments`. 404 `NOT_FOUND` for an unknown expense, a reversal row or one of another cooperative.
+        Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - $ref: '#/components/parameters/ExpenseIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The expense, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /handovers:
+    post:
+      tags: [treasury]
+      operationId: createHandover
+      summary: Record a handover of cash to the bank
+      description: |
+        Records a handover of cash to the bank («Здати в банк», feature 018 §2.4): one record with two journal lines of
+        the same date and amount, a spending line on the cash account (`HANDOVER_OUT`) and a receipt line on the bank
+        account (`HANDOVER_IN`), both with the bank's document number (the cash deposit slip). Both lines belong to the
+        billing month of `date` or, when it is closed, the earliest open month (the date is kept).
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `documentNumber` blank (`REQUIRED`) or
+          longer than 64 characters (`TOO_LONG`); a required field missing (`REQUIRED`);
+        - 409 `OPENING_BALANCE_MISSING`: the cash or the bank account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the opening date of the cash or
+          of the bank account;
+        - 409 `CASH_INSUFFICIENT` with `balance` and `date`: the handover would make the cash balance negative on its
+          date or on a later day (as for a cash expense).
+
+        Written to the audit log as `HANDOVER_RECORDED` (with `amount`, `date` and `documentNumber`). Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoverInput'
+      responses:
+        '201':
+          description: The recorded handover
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /handovers/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseHandover
+      summary: Reverse a handover
+      description: |
+        Reverses the handover with a reason (feature 018 §2.8): two new journal lines of the opposite amounts, a receipt
+        line on the cash account and a spending line on the bank account, dated today (Europe/Kyiv) in today's open
+        billing month; the handover stays, marked reversed. The cash goes up, so the reversal is never refused for the
+        cash balance; the bank may go below zero (it is not refused, the bank card warns). A handover is reversed once:
+        409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A missing or blank reason is 400
+        `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `HANDOVER_REVERSED`. 404 `NOT_FOUND` for an unknown handover, a reversal record or one of another cooperative.
+        The id is the `source.id` of a handover line of the journal. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The handover, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Handover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /other-income:
+    post:
+      tags: [treasury]
+      operationId: createOtherIncome
+      summary: Record other income
+      description: |
+        Records income that is not a member payment («Інший прихід», feature 018 §2.5): bank interest, a grant, a sale
+        of scrap. A receipt line (`OTHER_INCOME`) on the cash or the bank account dated `date`, in the billing month of
+        that date or, when it is closed, the earliest open month (the date is kept).
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `amount` 0.00 or less (`AMOUNT_NOT_POSITIVE`) or more than 12 integer digits
+          (`INVALID`); `date` after today in Europe/Kyiv (`DATE_IN_FUTURE`); `categoryId` unknown or not an income
+          category (`INVALID`) or archived (`ARCHIVED`); `description` too long (`TOO_LONG`); a required field missing
+          (`REQUIRED`);
+        - 409 `OPENING_BALANCE_MISSING`: the account has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: date}]`: `date` is before the account's opening date.
+
+        The description is personal data: stored encrypted, and in the audit log (`OTHER_INCOME_RECORDED`, with
+        `amount`, `account`, `category` and `date`) shown only to readers with `MEMBERS_VIEW`. Requires
+        `CASHBOOK_ENTER`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtherIncomeInput'
+      responses:
+        '201':
+          description: The recorded income
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtherIncome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /other-income/{id}/reverse:
+    post:
+      tags: [treasury]
+      operationId: reverseOtherIncome
+      summary: Reverse other income
+      description: |
+        Reverses the income with a reason (feature 018 §2.8): a new journal line of the opposite amount on the same
+        account, dated today (Europe/Kyiv) in today's open billing month; the income stays, marked reversed. A cash
+        income's reversal takes money out of the cash: 409 `CASH_INSUFFICIENT` with `balance` and `date` when it would
+        make the cash balance negative today or on a later day; a bank income's reversal is never refused for the
+        balance. An income is reversed once: 409 `ENTRY_ALREADY_REVERSED` (also when two reversals arrive at once). A
+        missing or blank reason is 400 `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to
+        the audit log as `OTHER_INCOME_REVERSED`. 404 `NOT_FOUND` for an unknown income, a reversal record or one of
+        another cooperative. The id is the `source.id` of an other income line of the journal. Requires
+        `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryReversal'
+      responses:
+        '200':
+          description: The income, now reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtherIncome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cash-counts:
+    get:
+      tags: [treasury]
+      operationId: listCashCounts
+      summary: The cash counts of the cooperative, newest first
+      description: |
+        A page of the saved cash counts (feature 018 §2.6), newest first (by `countedAt`, then the time saved, then
+        id), each with its counted amount, the book balance it kept, the difference and its status. Requires
+        `CASHBOOK_VIEW`.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCountPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: enterCashCount
+      summary: Preview or save a cash count
+      description: |
+        A count of the cash («Перерахунок каси», feature 018 §2.6). `countedAt` is the moment of the count; its day in
+        Europe/Kyiv is `countedOn`. The **book balance** is the cash balance at the end of `countedOn` with every
+        journal line entered so far (the opening amount plus every cash line dated from the opening date to
+        `countedOn`); the **difference** is `counted − bookBalance` (negative: a shortage, positive: a surplus). The
+        server computes both; the client never subtracts.
+
+        With `preview=true` nothing is written and no lock is taken: the answer (200, `preview: true`, no `id`) has the
+        book balance, the difference, the status the count would get and the journal lines since the previous count;
+        a missing explanation is not refused. Without it the count is saved (201): the book balance is computed again
+        under the cash account lock, so a line entered between the preview and the save is included, and the count
+        keeps that book balance for good (a line entered later for an earlier day never changes a saved count).
+        Status `MATCHES` («Збігається») when the difference is 0.00, otherwise `UNRESOLVED` until the difference is
+        booked (`book-difference`).
+
+        **Lines since the previous count** (`movementsSince`, oldest first, at most 500; `movementsSinceTotal` counts
+        them all): the previous count is the latest saved count with an earlier `countedAt` (for a save or preview:
+        `countedAt` not later than this one's), the one in `previousCount`. The lines are the cash lines this book
+        balance counts and the previous count's did not: dated from the opening date to `countedOn`, and either dated
+        after the previous count's day or entered after it was saved. So `previousCount.bookBalance` plus the lines'
+        amounts is `bookBalance`. Without a previous count: every counted line since the opening date. A saved count's
+        card lists the lines entered up to the moment it was saved.
+
+        Refusals (nothing is stored):
+        - 400 `VALIDATION_FAILED`: `counted` below 0.00 or more than 12 integer digits (`INVALID`); `countedAt` after
+          now (a 5-minute allowance for clock differences) or on a day after today in Europe/Kyiv (`DATE_IN_FUTURE`);
+          on a save, a difference other than 0.00 without an explanation (`explanation` `REQUIRED`: «Вкажіть пояснення
+          різниці.»); `explanation` longer than 500 characters (`TOO_LONG`);
+        - 409 `OPENING_BALANCE_MISSING`: the cash has no opening balance;
+        - 400 `BEFORE_OPENING_BALANCE` with `errors[{field: countedAt}]`: `countedOn` is before the cash opening date.
+
+        The explanation is stored and shown as typed (it is not treated as personal data; it should say what happened
+        to the cash, not about whom). A save is written to the audit log as `CASH_COUNTED` with `counted`,
+        `bookBalance`, `difference`, `countedAt` and `explanation`. Requires `CASHBOOK_ENTER`.
+      parameters:
+        - name: preview
+          in: query
+          required: false
+          description: Compute without saving
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCountInput'
+      responses:
+        '200':
+          description: The preview (nothing saved)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '201':
+          description: The saved count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cash-counts/{id}:
+    get:
+      tags: [treasury]
+      operationId: getCashCount
+      summary: The card of a cash count
+      description: |
+        The saved count with the book balance it kept, the difference, the explanation, the lines since the previous
+        count (as they were when it was saved) and, once booked, how its difference was booked and whether that line
+        was reversed. 404 `NOT_FOUND` for an unknown count or one of another cooperative. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cash-counts/{id}/book-difference:
+    post:
+      tags: [treasury]
+      operationId: bookCashCountDifference
+      summary: Book the difference of a cash count
+      description: |
+        «Оформити різницю» (feature 018 §2.6): a journal line of kind `COUNT_DIFFERENCE` on the cash for the count's
+        difference, dated the count's day (`countedOn`) in that day's billing month or, when it is closed, the
+        earliest open month: a surplus («Надлишок») is a receipt of the difference, a shortage («Нестача») a spending
+        of it (`source {type: CASH_COUNT, id: <the count>}`). The count becomes `BOOKED` and the cash card no longer
+        shows its unresolved difference. A shortage is refused with 409 `CASH_INSUFFICIENT` (with `balance` and
+        `date`) when it would make the cash negative on the count's day or a later day.
+
+        A difference is booked once: 409 `DIFFERENCE_ALREADY_BOOKED` (also when two arrive at once, and after the
+        booked line was reversed). A count that matches: 409 `NO_DIFFERENCE`. A missing or blank reason: 400
+        `VALIDATION_FAILED` with `errors[{field: reason, code: REQUIRED}]`. Written to the audit log as
+        `COUNT_DIFFERENCE_BOOKED` with `amount`, `date` and `reason`. 404 `NOT_FOUND` for an unknown count or one of
+        another cooperative. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCountBookingRequest'
+      responses:
+        '200':
+          description: The count, now booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashCount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}:
+    get:
+      tags: [treasury]
+      operationId: getBankReconciliation
+      summary: The bank reconciliation of a calendar month
+      description: |
+        «Звірка з банком» (feature 018 §2.7): the month's status, the four figures of the bank statement as entered
+        (absent until entered), the same four figures from the books, their differences (statement − books, absent
+        without a statement), whether the closing difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
+        journal lines dated in the month, the latest reopening and who confirmed it. Every amount comes from the
+        server; the client never computes them. A month is a calendar month by the date of the lines (not the billing
+        month). A difference in the opening, the total in or the total out does not block «Звірено» while the closing
+        difference is 0.00; the client shows it as a warning (typically a line the bank books in another month, or a
+        mistaken line reversed in a later month).
+
+        The books (`books`): `opening` is the bank balance at the start of the month's first day (for the month that
+        contains the bank's opening date: the opening amount, the balance at the start of the opening date);
+        `incoming` the sum of the month's receipts and `outgoing` the sum of its spendings, **both as positive
+        figures, as a bank statement shows them**; `closing` the balance at the end of the month's last day
+        (`opening + incoming − outgoing`). A reversal counts against the line it reverses: the reversal of a receipt
+        lowers `incoming`, the reversal of a spending lowers `outgoing`, so a mistaken entry and its reversal cancel
+        out. Lines dated before the opening date count in nothing (they are listed with `beforeOpening: true`).
+
+        `movements`: the bank journal lines dated in the month, oldest first, at most 1000 (`movementsTotal` has how
+        many there are). The month of today is a month like any other: its books run to the end of its last day,
+        which is today's balance (no line is dated after today).
+
+        The month (`YYYY-MM`) after the current one (Europe/Kyiv) is 400 `VALIDATION_FAILED` with `errors[{field:
+        month, code: INVALID}]`; a month that ends before the bank's opening date is 400 `BEFORE_OPENING_BALANCE` with
+        `errors[{field: month, code: BEFORE_OPENING_BALANCE}]`; without the bank's opening balance 409
+        `OPENING_BALANCE_MISSING`. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    put:
+      tags: [treasury]
+      operationId: enterBankStatement
+      summary: Enter the four figures of the month's bank statement
+      description: |
+        Stores the statement figures of the month (feature 018 §2.7), replacing figures entered before, and answers
+        the reconciliation as `GET` does. `incoming` and `outgoing` are positive figures as the statement shows them
+        (0.00 or more); `opening` and `closing` may be below 0.00 (an overdraft). Each has at most 12 integer digits,
+        else 400 `VALIDATION_FAILED` with `errors[{field: <figure>, code: INVALID}]`. The figures must agree:
+        `opening + incoming − outgoing = closing`, else 400 `STATEMENT_INCONSISTENT` with `errors[{field: closing,
+        code: STATEMENT_INCONSISTENT}]` («Цифри виписки не сходяться: 100,00 + 50,00 − 20,00 ≠ 200,00»; the client
+        shows the four figures it sent). Nothing is stored then.
+
+        Allowed while the month is `NOT_RECONCILED` or `NEEDS_RECHECK` (the status does not change); a `RECONCILED`
+        month keeps its statement: 409 `BANK_MONTH_RECONCILED`. The month, opening balance and future checks are those
+        of `GET`. Written to the audit log as `BANK_STATEMENT_ENTERED`. Requires `CASHBOOK_ENTER`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankStatementInput'
+      responses:
+        '200':
+          description: The reconciliation with the statement entered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}/book-difference:
+    post:
+      tags: [treasury]
+      operationId: bookBankDifference
+      summary: Book a bank difference no entry explains
+      description: |
+        «Банківська різниця» (feature 018 §2.7): a journal line of kind `BANK_DIFFERENCE` on the bank account with the
+        signed `amount` (positive: money in, negative: money out; booking the `closing` difference makes it 0.00) and
+        the reason, dated the month's last day, or today when that is earlier (the current month), in that day's
+        billing month or, when it is closed, the earliest open month (`source {type: BANK_RECONCILIATION, id: <the
+        reconciliation>}`; the line's `reason` is the reason given). The bank may go negative. Answers the
+        reconciliation as `GET` does.
+
+        Needs the month's statement: 409 `BANK_STATEMENT_MISSING` before it is entered. A `RECONCILED` month: 409
+        `BANK_MONTH_RECONCILED`. An `amount` of 0.00 or with more than 12 integer digits: 400 `VALIDATION_FAILED` with
+        `errors[{field: amount, code: INVALID}]`; a missing or blank reason `errors[{field: reason, code:
+        REQUIRED}]`. The month, opening balance and future checks are those of `GET`. A booked line is corrected by
+        reversing it (`POST /money-accounts/{id}/movements/{movementId}/reverse`). Written to the audit log as
+        `BANK_DIFFERENCE_BOOKED`. Requires `CASHBOOK_APPROVE`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankDifferenceInput'
+      responses:
+        '200':
+          description: The reconciliation with the difference booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bank-reconciliations/{month}/confirm:
+    post:
+      tags: [treasury]
+      operationId: confirmBankReconciliation
+      summary: Mark the month reconciled («Звірено»)
+      description: |
+        Marks the month `RECONCILED` (feature 018 §2.7) from `NOT_RECONCILED` or `NEEDS_RECHECK`, with who did it and
+        when, after the server computes the books again: the statement must be entered and the closing difference
+        0.00, else 409 `BANK_MONTH_NOT_BALANCED`; differences in the opening, the total in or the total out do not
+        block. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any bank line later dated
+        in the month (a payment, an expense, other income, a handover, a bank difference or a reversal, whoever enters
+        it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and the time (`reopened`),
+        written to the audit log as `BANK_MONTH_REOPENED` by the system; so does a bank line dated in an earlier month,
+        which changes the month's opening balance (every later `RECONCILED` month is reopened with the same line, each
+        with its own audit entry; a month `NEEDS_RECHECK` keeps its first line). The month, opening balance and future
+        checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires `CASHBOOK_ENTER`.
+      parameters:
+        - $ref: '#/components/parameters/BankMonth'
+      responses:
+        '200':
+          description: The reconciliation, now `RECONCILED`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankReconciliation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /expense-categories:
+    get:
+      tags: [treasury]
+      operationId: listExpenseCategories
+      summary: The expense or income categories of the cooperative
+      description: |
+        The categories of one list (feature 018 §2.9), in their order (`sortOrder`, then id): `EXPENSE` (for
+        expenses) or `INCOME` (for other income). A seeded category has its `systemCode` and no `name` until it is
+        renamed: the client shows the name of its code from the catalogs. Archived categories are left out unless
+        `includeArchived` is true. Requires `CASHBOOK_VIEW`.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ExpenseCategoryKind'
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExpenseCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [treasury]
+      operationId: createExpenseCategory
+      summary: Add a category
+      description: |
+        Adds a category at the end of its list. Two categories of one list never have the same name, ignoring case
+        and surrounding spaces, archived ones included: 409 `CATEGORY_NAME_TAKEN` with `errors[{field: name, code:
+        CATEGORY_NAME_TAKEN}]` (the name of a seeded category that was never renamed is its code, so it does not
+        collide). Written to the audit log as `CASHBOOK_CATEGORY_ADDED`. Requires `CASHBOOK_APPROVE`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryCreate'
+      responses:
+        '201':
+          description: The new category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /expense-categories/order:
+    put:
+      tags: [treasury]
+      operationId: reorderExpenseCategories
+      summary: Change the order of a category list
+      description: |
+        Sets the order of the non-archived categories of one list. `ids` must be exactly those categories, each once,
+        in the new order; otherwise (the list changed since the client read it) the answer is 400
+        `VALIDATION_FAILED` with `errors[{field: ids, code: INVALID}]` and nothing changes. Archived categories keep
+        their positions. One `CASHBOOK_CATEGORY_REORDERED` audit entry is written for every category whose
+        position changed. Requires `CASHBOOK_APPROVE`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryOrder'
+      responses:
+        '204':
+          description: The new order is saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /expense-categories/{id}:
+    put:
+      tags: [treasury]
+      operationId: updateExpenseCategory
+      summary: Rename or archive a category
+      description: |
+        Renames the category (`name`; the rule of `createExpenseCategory`, 409 `CATEGORY_NAME_TAKEN`; a seeded
+        category keeps its `systemCode` and shows the new name from now on, also on its old entries) and/or archives
+        it (`archived: true`: it is no longer offered for new entries and stays on the old ones; `archived: false`
+        offers it again). A category is never deleted. A field left out is not changed; the current values change
+        nothing and write no audit entry. Written to the audit log as `CASHBOOK_CATEGORY_RENAMED` and
+        `CASHBOOK_CATEGORY_ARCHIVED`. 404 `NOT_FOUND` for an unknown category or one of another cooperative. Requires
+        `CASHBOOK_APPROVE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryUpdate'
+      responses:
+        '200':
+          description: The category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /reports:
     get:
       tags: [reports]
@@ -5645,13 +6911,17 @@ paths:
         is (`key`, `type`), which query parameters of `getReport` and `downloadReport` it fills (`params`), whether
         it must be given, the values it starts with (`defaults`) and, for a period, whether it means billing months,
         service days, reading dates or the days payments were received (`basis`). A report that needs a permission the
-        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`. A cooperative that has booked nothing still gets every report it may run.
+        caller lacks is not listed: `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`, and the
+        four cash book reports (`cash-book`, `bank-movements`, `income-expense`, `expenses`) need `CASHBOOK_VIEW`
+        instead of `REPORTS_VIEW`, so a role with `CASHBOOK_VIEW` alone (an audit committee) sees exactly those four and
+        a role with `REPORTS_VIEW` alone none of them. A cooperative that has booked nothing still gets every report it
+        may run.
 
         The server returns codes only: the name and description of a report and the label of a filter come from the
         client's catalogs by the report code and the filter key, in the user's language. Defaults that depend on the
         day (today, the previous calendar month, the current year) are worked out in Europe/Kyiv when the list is
         read; the defaults of `debtors` (`minDebt`, `olderThanDays`) are the cooperative's current red amount and red
-        days. Requires `REPORTS_VIEW`; the platform operator has no cooperative data: 403.
+        days. Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`; the platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -5705,9 +6975,18 @@ paths:
 
         Every run is written to the audit log (`REPORT_GENERATED`, entity type `REPORT`, `output` `PREVIEW`) with the
         filters as ids, codes and dates, the row count and whether the report holds personal data, never its contents.
-        Requires `REPORTS_VIEW`; `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW` (403
-        `PERMISSION_DENIED` otherwise); the payer note column of `payments` is there only for a caller with
-        `MEMBERS_VIEW`. An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
+        Requires `REPORTS_VIEW` or `CASHBOOK_VIEW`. Every report but the four cash book reports needs `REPORTS_VIEW`;
+        `debtors` also needs `MEMBERS_VIEW`, `payments` also needs `PAYMENTS_VIEW`; `cash-book`, `bank-movements`,
+        `income-expense` and `expenses` need `CASHBOOK_VIEW` (403 `PERMISSION_DENIED` otherwise); the payer note column
+        of `payments` is there only for a caller with `MEMBERS_VIEW`.
+
+        The cash book reports (feature 018): `account` left out means both accounts; `expenseCategoryIds` left out
+        means every expense category (an id that is not an expense category of the cooperative is `NOT_FOUND` on
+        `expenseCategoryIds[i]`). `cash-book`, `bank-movements` and `income-expense` need the opening balance of their
+        account (`income-expense`: both): 409 `OPENING_BALANCE_MISSING` without it, and 400 `BEFORE_OPENING_BALANCE`
+        with `errors[{field: from, code: BEFORE_OPENING_BALANCE}]` when `from` is before its opening date (a balance is
+        known only from the opening date on). Their counterparty columns are shown to every caller who may run them
+        (`CASHBOOK_VIEW`). An unknown code is 400 `MALFORMED_REQUEST`; a code of `ReportCode` this server does not produce
         yet is 404 `NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ReportCodePath'
@@ -5727,6 +7006,8 @@ paths:
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
         - $ref: '#/components/parameters/ReportSource'
+        - $ref: '#/components/parameters/ReportAccount'
+        - $ref: '#/components/parameters/ReportExpenseCategoryIds'
       responses:
         '200':
           description: OK
@@ -5740,6 +7021,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/ReportConflict'
         '422':
           $ref: '#/components/responses/ReportTooLarge'
 
@@ -5785,6 +7068,8 @@ paths:
         - $ref: '#/components/parameters/ReportWaterSource'
         - $ref: '#/components/parameters/ReportCorrectionKinds'
         - $ref: '#/components/parameters/ReportSource'
+        - $ref: '#/components/parameters/ReportAccount'
+        - $ref: '#/components/parameters/ReportExpenseCategoryIds'
         - name: lang
           in: query
           required: false
@@ -5808,6 +7093,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/ReportConflict'
         '422':
           $ref: '#/components/responses/ReportTooLarge'
 
@@ -6133,8 +7420,12 @@ paths:
         `REPORT_TEMPLATE`, entity id the template, label its name) with the fields `template` (the id), `version`,
         `filters` (`from`, `to`), `rows` (the rows written for row sets), `personalData` (`false`) and `output`
         (`XLSX`), never the contents. Requires `REPORTS_VIEW`; a template that uses a payment field (`totals.paid.<type>`,
-        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW` (403 `PERMISSION_DENIED`, nothing
-        written to the audit log); the platform operator has no cooperative data: 403.
+        `totals.prepayment` or the row set `payments`) also needs `PAYMENTS_VIEW`, and one that uses a cash book field
+        (`totals.cashbook.*` or the row set `incomeExpense`) also needs `CASHBOOK_VIEW` (403 `PERMISSION_DENIED`,
+        nothing written to the audit log); the platform operator has no cooperative data: 403. The cash book fields are
+        the income and expense report of the period: without both opening balances they are 409
+        `OPENING_BALANCE_MISSING`, and a period that starts before an opening date is 400 `BEFORE_OPENING_BALANCE`
+        (`errors[{field: from}]`).
       parameters:
         - $ref: '#/components/parameters/ReportTemplateIdPath'
       requestBody:
@@ -6178,7 +7469,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`)
+          description: >-
+            The template is archived and can no longer be generated from (code `TEMPLATE_ARCHIVED`), or it uses a cash
+            book field and an opening balance is missing (code `OPENING_BALANCE_MISSING`)
           content:
             application/problem+json:
               schema:
@@ -6237,7 +7530,12 @@ components:
         of a payment together exceed the payment (code `ALLOCATION_EXCEEDS_PAYMENT`) or a line exceeds what is open on
         its charge (code `ALLOCATION_EXCEEDS_CHARGE`); the parts of a split payment do not add up to the payment (code
         `SPLIT_TOTAL_MISMATCH`); an announcement's text is longer than 2000 characters (code `ANNOUNCEMENT_TOO_LONG`); a
-        mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`)
+        mailbox names a mail server the server may not connect to (code `SMTP_HOST_NOT_ALLOWED`); a cash book entry is
+        dated before the account's opening date (code `BEFORE_OPENING_BALANCE`, with `errors[{field: date}]`, or
+        `errors[{field: month}]` for a bank month that ends before it); the four figures of a bank statement do not
+        agree (code `STATEMENT_INCONSISTENT`, with `errors[{field: closing}]`); more
+        than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
+        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`)
       content:
         application/problem+json:
           schema:
@@ -6280,7 +7578,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
-      description: The uploaded file is over the size limit of 10 MB (code `FILE_TOO_LARGE`)
+      description: >-
+        The uploaded file is over the size limit of 10 MB, or an expense attachment over 5 MB (code
+        `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`)
       content:
         application/problem+json:
           schema:
@@ -6367,7 +7667,18 @@ components:
         is asked while it is not set up (code `DELIVERY_NOT_CONFIGURED`), or a test letter is asked by a member without
         an e-mail of their own (code `NO_OWN_EMAIL`), or a Telegram link is asked while the cooperative has no working
         bot (code `TELEGRAM_NOT_CONFIGURED`), or a paper delivery or one still queued is sent again (code
-        `DELIVERY_NOT_RETRYABLE`)
+        `DELIVERY_NOT_RETRYABLE`), or the opening balance of a money account is entered again (code
+        `OPENING_BALANCE_ALREADY_SET`), a cash book entry needs the account's opening balance (code
+        `OPENING_BALANCE_MISSING`) or would take the cash below zero on its date or a later day (code
+        `CASH_INSUFFICIENT`, with `balance` and `date`), a cash book entry is reversed again (code
+        `ENTRY_ALREADY_REVERSED`), or an expense or income category name is taken (code `CATEGORY_NAME_TAKEN`, with
+        `errors[{field: name}]`), or the difference of a cash count is booked again (code `DIFFERENCE_ALREADY_BOOKED`)
+        or a count without a difference is booked (code `NO_DIFFERENCE`), or a journal line that is not a booked
+        difference, or a reversal line, is reversed directly (code `MOVEMENT_NOT_REVERSIBLE`), or a bank month is
+        marked reconciled without its statement or with a closing difference (code `BANK_MONTH_NOT_BALANCED`), the
+        statement of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a
+        bank difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
+        entered (code `BANK_STATEMENT_MISSING`)
       content:
         application/problem+json:
           schema:
@@ -6391,6 +7702,17 @@ components:
         Malformed request or failed validation of a parameter (code `VALIDATION_FAILED` or `MALFORMED_REQUEST`), or
         filters that do not fit the report (code `REPORT_FILTER_INVALID`, with `errors[{field, code}]` naming the
         query parameter)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ReportConflict:
+      description: >-
+        A cash book report (`cash-book`, `bank-movements`, `income-expense`) needs the opening balance of its account
+        (`income-expense`: of both accounts) and there is none yet (code `OPENING_BALANCE_MISSING`)
       content:
         application/problem+json:
           schema:
@@ -6433,6 +7755,22 @@ components:
             $ref: '#/components/schemas/Problem'
 
   parameters:
+    BankMonth:
+      name: month
+      in: path
+      required: true
+      description: The calendar month of the bank reconciliation, `YYYY-MM`; not after the current month (Europe/Kyiv)
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    ExpenseIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id of an expense of the cooperative
+      schema:
+        type: string
+        format: uuid
     ReportTemplateIdPath:
       name: id
       in: path
@@ -6590,6 +7928,24 @@ components:
       description: Only payments of this source (`CASH` or `BANK`); left out means both (filter type `SOURCE`)
       schema:
         $ref: '#/components/schemas/PaymentSource'
+    ReportAccount:
+      name: account
+      in: query
+      required: false
+      description: Only entries of this money account (`CASH` or `BANK`); left out means both (filter type `ACCOUNT`)
+      schema:
+        $ref: '#/components/schemas/MoneyAccountKind'
+    ReportExpenseCategoryIds:
+      name: expenseCategoryIds
+      in: query
+      required: false
+      description: Expense categories to include; left out means all (filter type `EXPENSE_CATEGORIES`)
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+          format: uuid
 
   schemas:
     Money:
@@ -6630,6 +7986,9 @@ components:
         - INVOICES_ISSUE
         - CERTIFICATES_ISSUE
         - ANNOUNCEMENTS_SEND
+        - CASHBOOK_VIEW
+        - CASHBOOK_ENTER
+        - CASHBOOK_APPROVE
 
     PlotStatusVisibility:
       type: string
@@ -7126,6 +8485,25 @@ components:
         - ANNOUNCEMENT_SENT
         - TELEGRAM_LINKED
         - TELEGRAM_UNLINKED
+        - OPENING_BALANCE_SET
+        - EXPENSE_RECORDED
+        - EXPENSE_REVERSED
+        - CASHBOOK_CATEGORY_ADDED
+        - CASHBOOK_CATEGORY_RENAMED
+        - CASHBOOK_CATEGORY_REORDERED
+        - CASHBOOK_CATEGORY_ARCHIVED
+        - HANDOVER_RECORDED
+        - HANDOVER_REVERSED
+        - OTHER_INCOME_RECORDED
+        - OTHER_INCOME_REVERSED
+        - CASH_COUNTED
+        - COUNT_DIFFERENCE_BOOKED
+        - COUNT_DIFFERENCE_REVERSED
+        - BANK_STATEMENT_ENTERED
+        - BANK_DIFFERENCE_BOOKED
+        - BANK_DIFFERENCE_REVERSED
+        - BANK_MONTH_RECONCILED
+        - BANK_MONTH_REOPENED
 
     AuditEntityType:
       type: string
@@ -7176,7 +8554,38 @@ components:
         its `entityId` is the announcement and its label the code `announcement`; its fields (new values only) are
         `audience` (`ALL` or `STREETS`), `streets` (only for `STREETS`: the street names joined by ", ", user content),
         `channels` (the chosen channels, codes joined by ", ") and `telegram`, `email` and `paper` (the deliveries per
-        channel). Never the text.
+        channel). Never the text. A `MONEY_ACCOUNT` entry (`OPENING_BALANCE_SET`, feature 018) is about the cash or
+        the bank account: its `entityId` is the account and its label the account kind code (`CASH` or `BANK`); its
+        fields (new values only) are `kind`, `amount` (two decimals) and `date` (ISO date). An `EXPENSE` entry
+        (`EXPENSE_RECORDED`, `EXPENSE_REVERSED`) is about an expense: its `entityId` is the expense and its label the
+        expense date (ISO); its fields (new values only) are `amount` (two decimals), `account` (`CASH` or `BANK`),
+        `category` (the category id), `date` (the expense date), the reversal's `reason` and `reversedOn`, and the
+        counterparty `counterparty` and description `description` (personal data, sealed). A `HANDOVER` entry
+        (`HANDOVER_RECORDED`, `HANDOVER_REVERSED`) is about a handover of cash to the bank: its `entityId` is the
+        handover and its label the deposit slip number (user content); its fields (new values only) are `amount` (two
+        decimals), `date` (the handover date), `documentNumber` and the reversal's `reason` and `reversedOn`. An
+        `OTHER_INCOME` entry (`OTHER_INCOME_RECORDED`, `OTHER_INCOME_REVERSED`) is about an other income: its
+        `entityId` is the income and its label the income date (ISO); its fields (new values only) are `amount`,
+        `account`, `category` (the category id), `date`, the reversal's `reason` and `reversedOn`, and the description
+        `description` (personal data, sealed). A `CASH_COUNT` entry (`CASH_COUNTED`, `COUNT_DIFFERENCE_BOOKED`,
+        `COUNT_DIFFERENCE_REVERSED`) is about a cash count: its `entityId` is the count and its label the moment of
+        the count (ISO instant); `CASH_COUNTED` has `countedAt`, `counted`, `bookBalance`, `difference` (two decimals)
+        and `explanation` (user content, when given); `COUNT_DIFFERENCE_BOOKED` has `amount` (the booked line, signed),
+        `date` (the count's day) and `reason`; `COUNT_DIFFERENCE_REVERSED` has `amount` (the reversed line), `date`,
+        `reversedOn` and `reason` (new values only). A `BANK_RECONCILIATION` entry (`BANK_STATEMENT_ENTERED`,
+        `BANK_DIFFERENCE_BOOKED`, `BANK_DIFFERENCE_REVERSED`, `BANK_MONTH_RECONCILED`, `BANK_MONTH_REOPENED`) is about
+        the bank reconciliation of a month: its `entityId` is the reconciliation and its label the month (`YYYY-MM`);
+        `BANK_STATEMENT_ENTERED` has `opening`, `incoming`, `outgoing` and `closing` (two decimals; old values when
+        figures entered before are replaced); `BANK_DIFFERENCE_BOOKED` has `amount` (the booked line, signed), `date`
+        (the line's day) and `reason`; `BANK_DIFFERENCE_REVERSED` has `amount` (the reversed line), `date`,
+        `reversedOn` and `reason`; `BANK_MONTH_RECONCILED` has `status` (old and new) and the four statement figures
+        (new values); `BANK_MONTH_REOPENED` is written by the system (no acting member) and has `status` (old and new)
+        and the line that reopened the month: `movement` (its id), `kind`, `date` and `amount` (new values). A
+        `CASHBOOK_CATEGORY`
+        entry (`CASHBOOK_CATEGORY_ADDED`, `_RENAMED`, `_REORDERED`, `_ARCHIVED`) is about an expense or income
+        category: its `entityId` is the category and its label `base:<CODE>` for a seeded category never renamed,
+        otherwise its name; its fields are `kind` and `name` (added), `name` (renamed, old and new, `base:<CODE>`
+        for a seeded name), `position` (reordered, old and new) and `archived` (old and new).
       enum:
         [
           MEMBER,
@@ -7201,6 +8610,13 @@ components:
           CERTIFICATE,
           DELIVERY_SETTINGS,
           ANNOUNCEMENT,
+          MONEY_ACCOUNT,
+          EXPENSE,
+          CASHBOOK_CATEGORY,
+          HANDOVER,
+          OTHER_INCOME,
+          CASH_COUNT,
+          BANK_RECONCILIATION,
         ]
 
     AuditFieldChange:
@@ -7960,6 +9376,18 @@ components:
           description: >-
             The most plots one build of a month's invoices takes, for `INVOICE_BUILD_TOO_LARGE`; absent on every
             other problem
+        balance:
+          type: [string, 'null']
+          pattern: '^-?\d+\.\d{2}$'
+          description: >-
+            For `CASH_INSUFFICIENT`: the lowest cash balance from the entry's date on, before the entry (two
+            decimals); absent on every other problem
+        date:
+          type: [string, 'null']
+          format: date
+          description: >-
+            For `CASH_INSUFFICIENT`: the earliest day that lowest cash balance is reached; absent on every other
+            problem
 
     InvoiceBuildRequest:
       type: object
@@ -10038,6 +11466,916 @@ components:
         totalPages:
           type: integer
           format: int32
+
+    MoneyAccountKind:
+      type: string
+      description: "`CASH` the cash the treasurer holds («Каса»), `BANK` the cooperative's bank account"
+      enum: [CASH, BANK]
+
+    MovementKind:
+      type: string
+      description: >-
+        What moved the money of a journal line: `MEMBER_PAYMENT` a payment of a member or its reversal (feature 015),
+        `EXPENSE` an expense, `OTHER_INCOME` income not from members, `HANDOVER_OUT` / `HANDOVER_IN` the two lines of a
+        handover of cash to the bank, `COUNT_DIFFERENCE` a booked difference of a cash count, `BANK_DIFFERENCE` a
+        booked difference of a bank reconciliation. A reversal has the kind of the line it reverses.
+      enum:
+        [MEMBER_PAYMENT, EXPENSE, OTHER_INCOME, HANDOVER_OUT, HANDOVER_IN, COUNT_DIFFERENCE, BANK_DIFFERENCE]
+
+    MovementSourceType:
+      type: string
+      description: >-
+        The kind of record a journal line comes from: `PAYMENT` a payment row of the ledger (a payment or its
+        reversal), `EXPENSE`, `OTHER_INCOME`, `HANDOVER`, `CASH_COUNT`, `BANK_RECONCILIATION`, or `MOVEMENT` for the
+        direct reversal of a booked difference
+      enum: [PAYMENT, EXPENSE, OTHER_INCOME, HANDOVER, CASH_COUNT, BANK_RECONCILIATION, MOVEMENT]
+
+    OpeningBalance:
+      type: object
+      description: The balance of an account at the start of a day, entered once
+      required: [amount, date]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        date:
+          type: string
+          format: date
+
+    OpeningBalanceRequest:
+      type: object
+      required: [amount, date]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        date:
+          type: string
+          format: date
+          description: The day the amount is the balance at the start of; not after today (Europe/Kyiv)
+
+    MoneyAccount:
+      type: object
+      description: >-
+        One money account of the cooperative and its balance on a day. Only the cash account has `lastCount` (its
+        latest count by `countedAt`, absent before the first) and `unresolvedDifference` (the difference of that last
+        count while it is `UNRESOLVED`: «Неврегульована різниця −20,00 ₴»; absent once it is booked or when it
+        matches; an earlier count's difference is superseded by the later count). Neither depends on `asOf`. Only the
+        bank account has `months` (the bank months and their reconciliation status).
+      required: [id, kind, asOf, negative]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        iban:
+          type: string
+          description: The IBAN of the cooperative's requisites; only for `BANK`, absent while it is not entered
+        opening:
+          $ref: '#/components/schemas/OpeningBalance'
+        asOf:
+          type: string
+          format: date
+          description: The day of `balance`
+        balance:
+          $ref: '#/components/schemas/Money'
+        negative:
+          type: boolean
+          description: The balance is below 0.00; false without an opening balance
+        lastCount:
+          $ref: '#/components/schemas/CashCountRow'
+        unresolvedDifference:
+          $ref: '#/components/schemas/Money'
+        months:
+          type: array
+          description: >-
+            The reconciliation status of the bank months, newest first, at most 12 (the newest ones), from the month
+            of the opening date to the month of `asOf`: every month that has bank lines dated on or after the opening
+            date or a reconciliation, and always the month of `asOf`. A month without a reconciliation is
+            `NOT_RECONCILED`. The statuses are the current ones whatever `asOf`. Empty for `CASH` and for a bank
+            account without an opening balance.
+          items:
+            $ref: '#/components/schemas/BankMonth'
+
+    BankMonthStatus:
+      type: string
+      description: >-
+        The reconciliation status of a bank month: `NOT_RECONCILED` «Не звірено» (also before a statement is entered),
+        `RECONCILED` «Звірено», `NEEDS_RECHECK` «Потребує повторної звірки» (a bank line dated in the month, or in an
+        earlier month, was added after it was reconciled)
+      enum: [NOT_RECONCILED, RECONCILED, NEEDS_RECHECK]
+
+    BankMonth:
+      type: object
+      description: A bank month and its reconciliation status
+      required: [month, status]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The calendar month, `YYYY-MM`
+        status:
+          $ref: '#/components/schemas/BankMonthStatus'
+
+    BankFigures:
+      type: object
+      description: >-
+        The four figures of a bank month: the balance at the start of the month, the sum of receipts and the sum of
+        spendings (both positive, as a bank statement shows them), the balance at the end of the month. As
+        differences (statement − books) each figure is signed.
+      required: [opening, incoming, outgoing, closing]
+      properties:
+        opening:
+          $ref: '#/components/schemas/Money'
+        incoming:
+          $ref: '#/components/schemas/Money'
+        outgoing:
+          $ref: '#/components/schemas/Money'
+        closing:
+          $ref: '#/components/schemas/Money'
+
+    BankStatementInput:
+      type: object
+      description: >-
+        The four figures of the month's bank statement: `incoming` and `outgoing` 0.00 or more, `opening` and
+        `closing` may be below 0.00; `opening + incoming − outgoing` must equal `closing`
+      required: [opening, incoming, outgoing, closing]
+      properties:
+        opening:
+          $ref: '#/components/schemas/Money'
+        incoming:
+          $ref: '#/components/schemas/Money'
+        outgoing:
+          $ref: '#/components/schemas/Money'
+        closing:
+          $ref: '#/components/schemas/Money'
+
+    BankDifferenceInput:
+      type: object
+      description: A bank difference to book for the month
+      required: [amount, reason]
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    BankReopening:
+      type: object
+      description: >-
+        The bank line that last set a reconciled month back to `NEEDS_RECHECK`, and when («Потребує повторної звірки»:
+        what was added and when). Present once the month was reopened; it stays after the month is reconciled again
+        (the status tells whether it is the current state) and is replaced by the next reopening.
+      required: [movementId, kind, date, amount, at]
+      properties:
+        movementId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MovementKind'
+        date:
+          type: string
+          format: date
+          description: The day of the line, in the month
+        amount:
+          $ref: '#/components/schemas/Money'
+        at:
+          type: string
+          format: date-time
+          description: When the line was entered and the month reopened
+
+    BankReconciliation:
+      type: object
+      description: The bank reconciliation of a calendar month
+      required: [month, accountId, status, books, balanced, movements, movementsTotal]
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The calendar month, `YYYY-MM`
+        accountId:
+          type: string
+          format: uuid
+          description: The bank account
+        status:
+          $ref: '#/components/schemas/BankMonthStatus'
+        statement:
+          $ref: '#/components/schemas/BankFigures'
+        books:
+          $ref: '#/components/schemas/BankFigures'
+        differences:
+          $ref: '#/components/schemas/BankFigures'
+        balanced:
+          type: boolean
+          description: >-
+            The statement is entered and the closing difference is 0.00 («Звірено» can be pressed); differences in the
+            opening, the total in or the total out do not count
+        movements:
+          type: array
+          description: The bank journal lines dated in the month, oldest first, at most 1000
+          items:
+            $ref: '#/components/schemas/AccountMovement'
+        movementsTotal:
+          type: integer
+          format: int64
+          description: How many bank lines are dated in the month (more than listed when above 1000)
+        reopened:
+          $ref: '#/components/schemas/BankReopening'
+        reconciledByName:
+          type: string
+          description: >-
+            The current name of the member who last marked the month «Звірено»; absent before and for an unknown
+            member
+        reconciledAt:
+          type: string
+          format: date-time
+          description: When the month was last marked «Звірено»; absent before
+
+    MovementSource:
+      type: object
+      description: The record a journal line comes from
+      required: [type, id]
+      properties:
+        type:
+          $ref: '#/components/schemas/MovementSourceType'
+        id:
+          type: string
+          format: uuid
+          description: The id of that record (for `PAYMENT` the payment row, a payment or its reversal)
+
+    AccountMovement:
+      type: object
+      description: One line of an account's journal
+      required: [id, date, kind, amount, bookingMonth, beforeOpening, source, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+          description: The day the money moved
+        kind:
+          $ref: '#/components/schemas/MovementKind'
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the line belongs to, `YYYY-MM`
+        beforeOpening:
+          type: boolean
+          description: Dated before the account's opening date, so it counts in no balance («до вхідного залишку»)
+        source:
+          $ref: '#/components/schemas/MovementSource'
+        plotId:
+          type: string
+          format: uuid
+          description: The plot of a member payment line
+        receiptNumber:
+          type: integer
+          format: int64
+          description: The receipt number of a cash member payment (a reversal line shows its payment's)
+        documentNumber:
+          type: string
+          description: >-
+            The bank document number of a bank member payment when entered, or the deposit slip number of a handover
+            line (user content)
+        categoryId:
+          type: string
+          format: uuid
+          description: The category of an expense or other income line (a reversal line shows its entry's)
+        reversed:
+          type: boolean
+          description: A reversal points at this line («Сторновано»)
+        reversesMovementId:
+          type: string
+          format: uuid
+          description: The line this reversal reverses; only on a reversal
+        reason:
+          type: string
+          description: >-
+            Why the line was reversed (user content), on a reversal; on a booked bank difference (an original
+            `BANK_DIFFERENCE` line) the reason it was booked
+        createdByName:
+          type: string
+          description: >-
+            The current name of the member who entered the line ("Last First Middle"); absent for the system and an
+            unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    AccountMovementPage:
+      type: object
+      required: [accountId, kind, from, to, negative, items, page, size, totalItems, totalPages]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        openingBalance:
+          $ref: '#/components/schemas/Money'
+        closingBalance:
+          $ref: '#/components/schemas/Money'
+        negative:
+          type: boolean
+          description: '`closingBalance` is below 0.00; false without it'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountMovement'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    ExpenseCategoryKind:
+      type: string
+      description: 'Which list a category belongs to: `EXPENSE` for expenses, `INCOME` for other income'
+      enum: [EXPENSE, INCOME]
+
+    ExpenseCategory:
+      type: object
+      description: >-
+        An expense or income category. A category seeded for every cooperative has a `systemCode` and no `name` until
+        it is renamed (the client shows the name of its code from the i18n catalogs); a category added by the
+        cooperative has a `name` and no `systemCode`
+      required: [id, kind, sortOrder, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        systemCode:
+          type: string
+          description: The code of a seeded category
+        name:
+          type: string
+          description: The name given by the cooperative (user content); absent for a seeded category never renamed
+        sortOrder:
+          type: integer
+          format: int32
+        archived:
+          type: boolean
+          description: Not offered for new entries; stays on old ones
+
+    ExpenseCategoryCreate:
+      type: object
+      required: [kind, name]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: User content; surrounding whitespace is trimmed
+
+    ExpenseCategoryUpdate:
+      type: object
+      description: The fields to change; a field left out is not changed
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: The new name (user content); surrounding whitespace is trimmed
+        archived:
+          type: boolean
+
+    ExpenseCategoryOrder:
+      type: object
+      required: [kind, ids]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExpenseCategoryKind'
+        ids:
+          type: array
+          maxItems: 500
+          description: Every non-archived category of the list, each once, in the new order
+          items:
+            type: string
+            format: uuid
+
+    AttachmentRef:
+      type: object
+      description: A stored file of an earlier expense, copied to the new one on the server
+      required: [expenseId, n]
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        n:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 5
+
+    ExpenseInput:
+      type: object
+      description: The fields of a new expense (the `expense` part of `createExpense`)
+      required: [account, date, amount, categoryId]
+      properties:
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+          description: The day the money was spent; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        categoryId:
+          type: string
+          format: uuid
+          description: A non-archived expense category
+        counterparty:
+          type: string
+          maxLength: 200
+          description: Who was paid (user content, personal data); surrounding whitespace is trimmed, blank is none
+        description:
+          type: string
+          maxLength: 500
+          description: User content, personal data; surrounding whitespace is trimmed, blank is none
+        documentNumber:
+          type: string
+          maxLength: 64
+          description: The number of the supplier's invoice or receipt (user content)
+        documentDate:
+          type: string
+          format: date
+          description: The date of the supplier's invoice or receipt
+        reuseAttachments:
+          type: array
+          maxItems: 5
+          description: Files of an earlier expense to copy to this one («Сторнувати і внести заново»)
+          items:
+            $ref: '#/components/schemas/AttachmentRef'
+
+    ExpenseAttachment:
+      type: object
+      description: A stored receipt file of an expense (without its content)
+      required: [n, fileName, contentType, sizeBytes]
+      properties:
+        n:
+          type: integer
+          format: int32
+          description: The number of the file, 1 to 5
+        fileName:
+          type: string
+          description: The name the file was uploaded with (user content)
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, application/pdf]
+        sizeBytes:
+          type: integer
+          format: int64
+
+    ExpenseReversalInfo:
+      type: object
+      description: How an expense, a handover or an other income was reversed
+      required: [date, reason, createdAt]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The day of the reversal line
+        reason:
+          type: string
+          description: User content
+        createdByName:
+          type: string
+          description: The current name of the member who reversed it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    Expense:
+      type: object
+      description: The card of an expense
+      required: [id, account, date, amount, bookingMonth, category, attachments, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the expense belongs to, `YYYY-MM`
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        counterparty:
+          type: string
+          description: User content, personal data
+        description:
+          type: string
+          description: User content, personal data
+        documentNumber:
+          type: string
+        documentDate:
+          type: string
+          format: date
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseAttachment'
+        reversed:
+          type: boolean
+          description: The expense is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    ExpenseSummary:
+      type: object
+      description: One line of the expense list
+      required: [id, account, date, amount, category, attachmentCount, reversed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        counterparty:
+          type: string
+          description: User content, personal data
+        attachmentCount:
+          type: integer
+          format: int32
+        reversed:
+          type: boolean
+
+    ExpensePage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    EntryReversal:
+      type: object
+      description: Why a cash book entry is reversed
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    HandoverInput:
+      type: object
+      description: The fields of a new handover of cash to the bank
+      required: [date, amount, documentNumber]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The day the cash was handed over; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        documentNumber:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The number of the bank's cash deposit slip (user content); surrounding whitespace is trimmed
+
+    Handover:
+      type: object
+      description: A handover of cash to the bank
+      required: [id, date, amount, bookingMonth, documentNumber, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the handover belongs to, `YYYY-MM`
+        documentNumber:
+          type: string
+          description: The number of the bank's cash deposit slip (user content)
+        reversed:
+          type: boolean
+          description: The handover is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    OtherIncomeInput:
+      type: object
+      description: The fields of a new other income
+      required: [account, date, amount, categoryId]
+      properties:
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+          description: The day the money was received; not after today (Europe/Kyiv)
+        amount:
+          $ref: '#/components/schemas/Money'
+        categoryId:
+          type: string
+          format: uuid
+          description: A non-archived income category
+        description:
+          type: string
+          maxLength: 500
+          description: User content, personal data; surrounding whitespace is trimmed, blank is none
+
+    OtherIncome:
+      type: object
+      description: An income that is not a member payment
+      required: [id, account, date, amount, bookingMonth, category, reversed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          $ref: '#/components/schemas/MoneyAccountKind'
+        date:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the income belongs to, `YYYY-MM`
+        category:
+          $ref: '#/components/schemas/ExpenseCategory'
+        description:
+          type: string
+          description: User content, personal data
+        reversed:
+          type: boolean
+          description: The income is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who recorded it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    CashCountStatus:
+      type: string
+      description: >-
+        `MATCHES` the difference is 0.00 («Збігається»), `UNRESOLVED` a difference not booked yet («Неврегульована
+        різниця»), `BOOKED` the difference is booked as a journal line (it stays `BOOKED` when that line is reversed)
+      enum: [MATCHES, UNRESOLVED, BOOKED]
+
+    CashCountDifferenceKind:
+      type: string
+      description: '`SURPLUS` more cash than in the books («Надлишок»), `SHORTAGE` less («Нестача»)'
+      enum: [SURPLUS, SHORTAGE]
+
+    CashCountInput:
+      type: object
+      description: A count of the cash
+      required: [countedAt, counted]
+      properties:
+        countedAt:
+          type: string
+          format: date-time
+          description: The moment of the count; not in the future
+        counted:
+          $ref: '#/components/schemas/Money'
+        explanation:
+          type: string
+          maxLength: 500
+          description: >-
+            Why the counted cash differs from the books (user content, surrounding whitespace trimmed); required on a
+            save when the difference is not 0.00
+
+    CashCountBookingRequest:
+      type: object
+      description: Why the difference of a count is booked
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User content, stored as typed; surrounding whitespace is trimmed
+
+    CashCountRow:
+      type: object
+      description: A saved cash count in a list
+      required: [id, countedAt, countedOn, counted, bookBalance, difference, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        countedAt:
+          type: string
+          format: date-time
+        countedOn:
+          type: string
+          format: date
+          description: The day of `countedAt` in Europe/Kyiv
+        counted:
+          $ref: '#/components/schemas/Money'
+        bookBalance:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+        status:
+          $ref: '#/components/schemas/CashCountStatus'
+        createdByName:
+          type: string
+          description: The current name of the member who saved it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    CashCountPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashCountRow'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    CashCountBooking:
+      type: object
+      description: How the difference of a count was booked
+      required: [movementId, date, bookingMonth, kind, amount, reason, reversed, createdAt]
+      properties:
+        movementId:
+          type: string
+          format: uuid
+          description: The `COUNT_DIFFERENCE` line of the cash journal (reversed with `POST /money-accounts/{id}/movements/{movementId}/reverse`)
+        date:
+          type: string
+          format: date
+          description: The day of the line, the count's day
+        bookingMonth:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: The billing month the line belongs to, `YYYY-MM`
+        kind:
+          $ref: '#/components/schemas/CashCountDifferenceKind'
+        amount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          description: User content
+        reversed:
+          type: boolean
+          description: The line is reversed («Сторновано»)
+        reversal:
+          $ref: '#/components/schemas/ExpenseReversalInfo'
+        createdByName:
+          type: string
+          description: The current name of the member who booked it; absent for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+
+    CashCount:
+      type: object
+      description: >-
+        A cash count: a preview (`preview: true`, no `id`, nothing saved) or a saved count with the book balance it
+        kept
+      required:
+        - preview
+        - accountId
+        - countedAt
+        - countedOn
+        - counted
+        - bookBalance
+        - difference
+        - status
+        - movementsSince
+        - movementsSinceTotal
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent on a preview
+        preview:
+          type: boolean
+        accountId:
+          type: string
+          format: uuid
+          description: The cash account
+        countedAt:
+          type: string
+          format: date-time
+        countedOn:
+          type: string
+          format: date
+          description: The day of `countedAt` in Europe/Kyiv; the book balance is the balance at its end
+        counted:
+          $ref: '#/components/schemas/Money'
+        bookBalance:
+          $ref: '#/components/schemas/Money'
+        difference:
+          $ref: '#/components/schemas/Money'
+        status:
+          $ref: '#/components/schemas/CashCountStatus'
+        explanation:
+          type: string
+          description: User content
+        previousCount:
+          $ref: '#/components/schemas/CashCountRow'
+        movementsSince:
+          type: array
+          description: The cash lines since the previous count, oldest first, at most 500
+          items:
+            $ref: '#/components/schemas/AccountMovement'
+        movementsSinceTotal:
+          type: integer
+          format: int64
+          description: How many lines there are since the previous count (more than listed when above 500)
+        booking:
+          $ref: '#/components/schemas/CashCountBooking'
+        createdByName:
+          type: string
+          description: The current name of the member who saved it; absent on a preview and for an unknown member
+        createdAt:
+          type: string
+          format: date-time
+          description: When it was saved; absent on a preview
 
     CertificateAnnulment:
       type: object
@@ -12401,7 +14739,13 @@ components:
         `missing-readings`: active meters without an approved reading in a range. `land-tax`: the expected and the
         charged land tax per plot for a year. `corrections`: every reversal and adjustment booked in a range of
         billing months. `payments`: the payments of a range of billing months or of days, one row per payment, with
-        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`).
+        totals per source (also needs `PAYMENTS_VIEW`; the payer note only with `MEMBERS_VIEW`). The four cash book
+        reports need `CASHBOOK_VIEW` and not `REPORTS_VIEW` (feature 018): `cash-book`: the cash journal of a period,
+        per day the opening balance, each line and the closing balance; `bank-movements`: the same for the bank account,
+        with the reconciliation status of each month; `income-expense`: income and expense of a period for the general
+        meeting (member payments by charge type, advances, reversals of earlier payments, other income and expenses by
+        category, booked differences, the result and the cash and bank balances at both ends); `expenses`: the expense
+        list of a period by account and category, each with its number of receipt files.
       enum:
         - charges-by-month
         - plot-balances
@@ -12412,6 +14756,10 @@ components:
         - land-tax
         - corrections
         - payments
+        - cash-book
+        - bank-movements
+        - income-expense
+        - expenses
 
     ReportFilterType:
       type: string
@@ -12421,7 +14769,8 @@ components:
         (`minDebt`). `INT`: a whole number (`olderThanDays`). `CHARGE_TYPES`: charge types `chargeTypeIds`, several.
         `STREET`: one street `street`. `STATUS`: status colours `statuses`, several. `RESOURCE`: `resource`.
         `METER_KIND`: meter kinds `meterKinds`, several. `WATER_SOURCE`: the kind of water source `waterSource`.
-        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`.
+        `CORRECTION_KIND`: `correctionKinds`, several. `SOURCE`: the source of a payment `source`. `ACCOUNT`: one money
+        account `account` (`CASH` or `BANK`). `EXPENSE_CATEGORIES`: expense categories `expenseCategoryIds`, several.
       enum:
         - MONTH_RANGE
         - DATE_RANGE
@@ -12437,6 +14786,8 @@ components:
         - WATER_SOURCE
         - CORRECTION_KIND
         - SOURCE
+        - ACCOUNT
+        - EXPENSE_CATEGORIES
 
     ReportFilterParam:
       type: string
@@ -12458,6 +14809,8 @@ components:
         - waterSource
         - correctionKinds
         - source
+        - account
+        - expenseCategoryIds
 
     ReportPeriodBasis:
       type: string
@@ -12465,7 +14818,8 @@ components:
         What the period of a report means; the filter label says so. `BILLING_MONTHS`: the billing months the entries
         were booked in. `SERVICE_DAYS`: the days a service was provided (the service period of a charge).
         `READING_DATES`: the dates of meter readings. `PAYMENT_DATES`: the days payments were received.
-      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES]
+        `MOVEMENT_DATES`: the dates of the cash and bank journal lines and entries (feature 018).
+      enum: [BILLING_MONTHS, SERVICE_DAYS, READING_DATES, PAYMENT_DATES, MOVEMENT_DATES]
 
     ReportCorrectionKind:
       type: string
@@ -12543,7 +14897,23 @@ components:
         `DATE`: an ISO day. `MONTH`: a month `YYYY-MM`. `BOOLEAN`: `true` or `false`. `DECIMAL`: an exact number that
         is not money, with at most four decimals, never rounded, for example a tariff rate (`"35.0000"`) or an area in
         m² (`"600.00"`) or in sotkas (`"6.1235"`); shown with its significant decimals, at least two.
-      enum: [TEXT, CODE, CHARGE_TYPE, MONEY, QUANTITY, PERCENT, INTEGER, DATE, MONTH, BOOLEAN, DECIMAL]
+        `EXPENSE_CATEGORY`: the id of one of the report's `expenseCategories` (a seeded category never renamed is
+        named by the client from its `systemCode`, otherwise by its `name` as entered).
+      enum:
+        [
+          TEXT,
+          CODE,
+          CHARGE_TYPE,
+          MONEY,
+          QUANTITY,
+          PERCENT,
+          INTEGER,
+          DATE,
+          MONTH,
+          BOOLEAN,
+          DECIMAL,
+          EXPENSE_CATEGORY,
+        ]
 
     ReportColumn:
       type: object
@@ -12608,6 +14978,12 @@ components:
           description: One cell per column, in the order of the columns
           items:
             $ref: '#/components/schemas/ReportCell'
+        expenseId:
+          type: string
+          format: uuid
+          description: >-
+            Only in the `expenses` report: the expense of the row, so the screen links its receipt files
+            (`GET /expenses/{id}/attachments/{n}`, `n` from 1 to the row's `attachments`); not written to the file
 
     ReportTotal:
       type: object
@@ -12720,6 +15096,14 @@ components:
             `chargeTypeId` name one of them by id
           items:
             $ref: '#/components/schemas/ChargeTypeRef'
+        expenseCategories:
+          type: array
+          description: >-
+            The expense and income categories the report refers to (expense categories first, each kind in its
+            configured order): an `EXPENSE_CATEGORY` cell and the `expenseCategoryIds` filter name one of them by id.
+            Empty for the reports without categories
+          items:
+            $ref: '#/components/schemas/ExpenseCategory'
         sheets:
           type: array
           minItems: 1
@@ -12872,8 +15256,9 @@ components:
         The rows a template row repeats over. `PLOTS`: the active plots with their balances and land tax. `MONTHS`:
         the billing months with charges. `METERS`: the nodes of the electricity meter tree. `WATER`: the plots
         connected to water, one row per plot and source. `PAYMENTS`: the payments received in the period, one row per
-        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`)
-      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS]
+        payment, without the payer and the payer note (needs `PAYMENTS_VIEW`). `INCOME_EXPENSE`: the lines of the
+        income and expense report for the period (section, name, amount; needs `CASHBOOK_VIEW`)
+      enum: [PLOTS, MONTHS, METERS, WATER, PAYMENTS, INCOME_EXPENSE]
 
     ReportTemplateField:
       type: object

@@ -10,6 +10,7 @@ import app.nadel.plots.PlotStatus;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.treasury.MoneyAccountKind;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -52,6 +53,8 @@ final class ReportFilters {
     private Set<MeterKind> meterKinds = Set.of();
     private @Nullable WaterSourceKind waterSource;
     private @Nullable PaymentSource source;
+    private @Nullable MoneyAccountKind account;
+    private List<UUID> expenseCategoryIds = List.of();
     private final List<ReportFilterValue> values = new ArrayList<>();
 
     ReportFilters() {
@@ -155,6 +158,16 @@ final class ReportFilters {
         values.add(new ReportFilterValue(ReportFilterParam.SOURCE, paymentSource.name()));
     }
 
+    void account(MoneyAccountKind kind) {
+        this.account = Objects.requireNonNull(kind, "kind");
+        values.add(new ReportFilterValue(ReportFilterParam.ACCOUNT, kind.name()));
+    }
+
+    void expenseCategoryIds(List<UUID> ids) {
+        this.expenseCategoryIds = List.copyOf(ids);
+        ids.forEach(id -> values.add(new ReportFilterValue(ReportFilterParam.EXPENSE_CATEGORY_IDS, id.toString())));
+    }
+
     // ---- read by the report definitions
 
     /** The first billing month; only for a report with a month range. */
@@ -235,6 +248,16 @@ final class ReportFilters {
     /** The chosen payment source; null when both count. */
     @Nullable PaymentSource source() {
         return source;
+    }
+
+    /** The chosen money account; null when both count. */
+    @Nullable MoneyAccountKind account() {
+        return account;
+    }
+
+    /** The chosen expense categories in the order given; empty means every category. */
+    List<UUID> expenseCategoryIds() {
+        return expenseCategoryIds;
     }
 
     /** True when a range of days was set (a report whose days are optional reads them only then). */

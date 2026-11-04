@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import type { ChargeTypeRef, ReportCell, ReportColumn, ReportPreview, ReportSheet } from '@nadel/api-client';
+import type {
+  ChargeTypeRef,
+  ExpenseCategory,
+  ReportCell,
+  ReportColumn,
+  ReportPreview,
+  ReportSheet,
+} from '@nadel/api-client';
 import {
   format,
   formatDay,
@@ -12,13 +19,14 @@ import {
   type Messages,
 } from '@nadel/shared';
 import { chargeTypeName } from '../../chargeTypeName';
+import { CategoryName } from '../cashbook/CategoryName';
 import { useLocale, useT } from '../../i18n';
 import { reportTexts } from '../../reportTexts';
 import { ChargeTypeName } from '../ChargeTypeName';
 import { UserContent } from '../UserContent';
 
 const NUMERIC_TYPES: ReadonlySet<string> = new Set(['MONEY', 'QUANTITY', 'PERCENT', 'INTEGER', 'DECIMAL']);
-const NAMING_TYPES: ReadonlySet<string> = new Set(['TEXT', 'CODE', 'CHARGE_TYPE']);
+const NAMING_TYPES: ReadonlySet<string> = new Set(['TEXT', 'CODE', 'CHARGE_TYPE', 'EXPENSE_CATEGORY']);
 
 /** The catalog texts of a CODE column, by report code and column key; a report without an entry shows the billing status texts for `status`. */
 function codeLabels(t: Messages, report: string, key: string): Readonly<Record<string, string>> | undefined {
@@ -39,6 +47,15 @@ function codeLabels(t: Messages, report: string, key: string): Readonly<Record<s
     'water/source': t.reports.filters.options.waterSource,
     'missing-readings/resource': t.reports.filters.options.resource,
     'missing-readings/kind': t.reports.filters.options.meterKinds,
+    'cash-book/line': t.reports.accountBook.lines,
+    'bank-movements/line': t.reports.accountBook.lines,
+    'cash-book/kind': t.cashbook.kind,
+    'bank-movements/kind': t.cashbook.kind,
+    'income-expense/difference': t.cashbook.kind,
+    'bank-movements/reconciliation': t.cashbook.bank.status,
+    'income-expense/section': t.reports['income-expense'].sections,
+    'expenses/account': t.reports.filters.options.account,
+    'income-expense/account': t.reports.filters.options.account,
     '*/status': t.billing.status,
   };
   return lookup[`${report}/${key}`] ?? lookup[`*/${key}`];
@@ -49,13 +66,14 @@ interface CellContext {
   t: Messages;
   locale: string;
   chargeTypes: readonly ChargeTypeRef[];
+  expenseCategories: readonly ExpenseCategory[];
 }
 
 /** A value as the column type says. Text only: the server has already counted everything. */
 function formatValue(
   column: ReportColumn,
   value: string,
-  { report, t, locale, chargeTypes }: CellContext,
+  { report, t, locale, chargeTypes, expenseCategories }: CellContext,
 ): ReactNode {
   try {
     switch (column.type) {
@@ -77,6 +95,10 @@ function formatValue(
       case 'CHARGE_TYPE': {
         const type = chargeTypes.find((candidate) => candidate.id === value);
         return type ? <ChargeTypeName type={type} /> : value;
+      }
+      case 'EXPENSE_CATEGORY': {
+        const category = expenseCategories.find((candidate) => candidate.id === value);
+        return category ? <CategoryName category={category} /> : value;
       }
       case 'CODE': {
         return codeLabels(t, report, column.key)?.[value] ?? value;
@@ -149,7 +171,13 @@ function SheetTable({ code, sheet, preview }: { code: string; sheet: ReportSheet
   const t = useT();
   const { locale } = useLocale();
   const texts = reportTexts(t, code);
-  const context: CellContext = { report: code, t, locale, chargeTypes: preview.chargeTypes };
+  const context: CellContext = {
+    report: code,
+    t,
+    locale,
+    chargeTypes: preview.chargeTypes,
+    expenseCategories: preview.expenseCategories ?? [],
+  };
   const heading = texts?.sheets[sheet.key] ?? sheet.key;
   const totals: Readonly<Record<string, string>> = t.reports.totals;
   const subtotal = t.reports.rows.SUBTOTAL;
@@ -185,24 +213,38 @@ function SheetTable({ code, sheet, preview }: { code: string; sheet: ReportSheet
                     key={rowIndex}
                     className={`border-b border-line-subtle last:border-b-0 ${isSubtotal ? 'bg-accent-soft font-semibold' : ''}`}
                   >
-                    {sheet.columns.map((column, index) => (
-                      <td
-                        key={`${column.key}-${index}`}
-                        className={cellClass(column)}
-                        style={
-                          index === 0 && row.level > 0
-                            ? { paddingLeft: `${0.75 + row.level * 1.25}rem` }
-                            : undefined
-                        }
-                      >
+                    {sheet.columns.map((column, index) => {
+                      const cell = (
                         <Cell
                           column={column}
                           cell={row.cells[index]}
                           label={index === at ? subtotal : undefined}
                           context={context}
                         />
-                      </td>
-                    ))}
+                      );
+                      return (
+                        <td
+                          key={`${column.key}-${index}`}
+                          className={cellClass(column)}
+                          style={
+                            index === 0 && row.level > 0
+                              ? { paddingLeft: `${0.75 + row.level * 1.25}rem` }
+                              : undefined
+                          }
+                        >
+                          {index === 0 && row.expenseId !== undefined ? (
+                            <Link
+                              to={`/cashbook/expenses/${row.expenseId}`}
+                              className="text-accent underline"
+                            >
+                              {cell}
+                            </Link>
+                          ) : (
+                            cell
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
