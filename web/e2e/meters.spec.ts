@@ -112,7 +112,7 @@ test.describe('meters and readings', () => {
     }
   });
 
-  test('the electrician sees only Readings and Meters, lands on Readings and enters readings with the default and a changed date @smoke', async ({
+  test('the electrician sees My account first, then only Readings and Meters, lands on Readings and enters readings with the default and a changed date @smoke', async ({
     page,
     browser,
   }) => {
@@ -125,6 +125,7 @@ test.describe('meters and readings', () => {
       try {
         await expect(electrician).toHaveURL(/\/readings$/);
         await expect(electrician.getByRole('heading', { level: 1, name: 'Readings' })).toBeVisible();
+        await expect(electrician.locator('#app-menu nav').getByRole('link').first()).toHaveText('My account');
         await expect(menuLink(electrician, 'Readings')).toBeVisible();
         await expect(menuLink(electrician, 'Meters')).toBeVisible();
         await expect(menuLink(electrician, 'Plots')).toHaveCount(0);

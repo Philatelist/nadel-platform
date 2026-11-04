@@ -242,16 +242,17 @@ test.describe('plots registry: acceptance', () => {
     page,
   }) => {
     await loginAs(page, 'member@demo.local');
+    // the member has no plots list: /plots lands on the account, with no Add plot button
     await page.goto('/plots');
+    await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('button', { name: 'Add plot' })).toHaveCount(0);
-    await search(page, 'Search by number or street').fill('9');
-    // the search reaches the URL after its debounce: wait for it, so a late write cannot cancel the click below
-    await expect(page).toHaveURL(/[?&]q=9(&|$)/);
-    await rows(page)
-      .filter({ hasText: 'вул. Садова' })
-      .first()
-      .getByRole('link', { name: '9', exact: true })
-      .click();
+    // a plot of someone else is reached by address (the API still answers a member with the limited view)
+    const found = JSON.parse((await api(page, 'GET', '/plots?q=9')).body) as {
+      items: { id: string; number: string; street?: string }[];
+    };
+    const other = found.items.find((p) => p.number === '9' && p.street?.includes('Садова'));
+    expect(other, 'demo plot 9 in the limited list of the API').toBeDefined();
+    await page.goto(`/plots/${other?.id}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Plot 9' })).toBeVisible();
     await expect(page.getByRole('main')).not.toContainText("Кутова ділянка біля в'їзних воріт");
     await expect(page.getByRole('main')).not.toContainText('sotka');

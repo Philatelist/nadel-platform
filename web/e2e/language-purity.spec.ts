@@ -350,17 +350,17 @@ for (const locale of ['uk', 'en'] as const) {
       }
     });
 
-    test(`member: own account and plots (${locale})`, async ({ browser }) => {
+    test(`member: own account and plot card (${locale})`, async ({ browser }) => {
       const page = await openSession(browser, 'member@demo.local', locale);
       try {
         const findings: Finding[] = [];
-        for (const path of ['/account', '/plots']) findings.push(...(await auditScreen(page, path, locale)));
+        findings.push(...(await auditScreen(page, '/account', locale)));
 
-        // the card of a plot the member owns
-        await page.goto('/plots');
+        // the card of a plot the member owns (a member has no plots list: it opens from the account)
+        await page.goto('/account');
         await settle(page);
         const ownHref = (await hrefs(page, /^\/plots\/[0-9a-f-]{36}$/))[0];
-        expect(ownHref, 'an own plot link on the member plots list').toBeTruthy();
+        expect(ownHref, 'an own plot link on the account').toBeTruthy();
         findings.push(...(await auditScreen(page, ownHref ?? '', locale)));
 
         // "My charges" with a charge's calculation

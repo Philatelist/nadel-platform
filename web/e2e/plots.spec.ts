@@ -2,6 +2,7 @@
 // @spec: 006-plots-registry
 // @regression
 import { expect, test, type Page } from '@playwright/test';
+import { api } from './support/api';
 import { loginAs } from './support/login';
 
 const menuLink = (page: Page, name: string) =>
@@ -76,19 +77,30 @@ test.describe('plots registry', () => {
     await expect(page.getByRole('main')).toContainText("Кутова ділянка біля в'їзних воріт");
   });
 
-  test('member opens Plots from the menu and sees the restricted view only @smoke', async ({ page }) => {
+  test('member has no Plots list: the menu leads with My account, /plots lands there, and an own plot card opens from the account with the restricted view only @smoke', async ({
+    page,
+  }) => {
     await loginAs(page, 'member@demo.local');
 
-    await menuLink(page, 'Plots').click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Plots' })).toBeVisible();
-    await expect(rows(page).first()).toBeVisible();
+    await expect(menuLink(page, 'Plots')).toHaveCount(0);
+    await expect(page.locator('#app-menu nav').getByRole('link').first()).toHaveText('My account');
+    await page.goto('/plots');
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByRole('heading', { level: 2, name: 'My plots' })).toBeVisible();
 
-    const headers = await page.getByRole('main').locator('thead th').allTextContents();
-    expect(headers.join('|')).not.toMatch(/Area|Cadastral/);
-    expect(headers).toEqual(expect.arrayContaining(['Number', 'Street', 'Kind', 'Status']));
-    await expect(page.getByRole('main').getByLabel('Show archived')).toHaveCount(0);
+    // an own plot opens from the account and its way back leads to the account, not to a list the member does not have
+    await page.getByRole('link', { name: 'Plot 7', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Plot 7' })).toBeVisible();
+    await page.getByRole('main').getByRole('link', { name: 'To my account' }).click();
+    await expect(page).toHaveURL(/\/account$/);
 
-    await rows(page).first().getByRole('link').first().click();
+    // a plot of someone else, reached by address: the restricted view only
+    const found = JSON.parse((await api(page, 'GET', '/plots?q=9')).body) as {
+      items: { id: string; number: string; street?: string }[];
+    };
+    const other = found.items.find((p) => p.number === '9' && p.street?.includes('Садова'));
+    expect(other, 'demo plot 9 on the member plot list of the API').toBeDefined();
+    await page.goto(`/plots/${other?.id}`);
     const main = page.getByRole('main');
     await expect(page.getByRole('heading', { level: 1, name: /^Plot / })).toBeVisible();
     await expect(main.getByText('Number', { exact: true })).toBeVisible();
@@ -96,6 +108,10 @@ test.describe('plots registry', () => {
       await expect(main.getByText(hidden, { exact: true })).toHaveCount(0);
     }
     await expect(page.getByRole('button', { name: /^(Edit|Archive|Delete)$/ })).toHaveCount(0);
+
+    // the way back from the card leads to the account, not to a list the member does not have
+    await main.getByRole('link', { name: 'To my account' }).first().click();
+    await expect(page).toHaveURL(/\/account$/);
   });
 
   test('chairman creates, edits, archives, restores and deletes a plot; the audit log shows it', async ({

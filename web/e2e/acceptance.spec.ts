@@ -42,7 +42,7 @@ const ALL_PERMISSIONS = [
 const nav = (page: Page) => page.locator('#app-menu nav');
 const navLink = (page: Page, name: string) => nav(page).getByRole('link', { name, exact: true });
 // "My account" is no longer a menu item: the user's name in the page header bar links to /account.
-const accountLink = (page: Page) => page.getByRole('banner').locator('a[href="/account"]');
+const accountLink = (page: Page) => page.getByRole('banner').locator('a[href="/account"]').last();
 /** Rows of the first table in the main area, without the header row. */
 const tableRows = (page: Page) => page.getByRole('main').locator('tbody tr');
 
@@ -128,7 +128,8 @@ test.describe('§2.5 what an ordinary member sees', () => {
     await expect(page.getByText('Preferred channel', { exact: true })).toBeVisible();
     await expect(page.getByText('Notes', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /edit|archive|restore/i })).toHaveCount(0);
-    await expectNavigation(page, ['Plots', 'My account'], ['Members', 'Roles', 'Audit log']);
+    await expectNavigation(page, ['My account'], ['Plots', 'Members', 'Roles', 'Audit log']);
+    await expect(nav(page).getByRole('link').first()).toHaveText('My account');
 
     // someone else's card looks exactly like a card that does not exist
     await page.goto(`/members/${CHAIRMAN_ID}`);

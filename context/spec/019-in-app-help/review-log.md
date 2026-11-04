@@ -92,3 +92,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `014b702` | PASS | — | electrician and member paths unchanged. minor: typographic apostrophe; assumption should name the treasurer (also has MEMBERS_VIEW) |
+
+## Fix — owner review of PR #68, items 1 and 2
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `0dde5a4` | PASS | — | minor: help origin accepts `//host` (router state only, not exploitable); Esc closes the panel together with the mobile menu; a PLOTS_VIEW user reaches the account only via the header name |
