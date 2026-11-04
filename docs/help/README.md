@@ -57,3 +57,16 @@ A `screen` page has exactly these `##` headings, in this order. Extra `###` head
 
 Short sentences, no developer words. Describe the screen as the chairman sees it, and the member's view separately where
 it differs. Never mention other cooperatives or the platform operator.
+
+## Completeness check
+
+Every build checks the content (`web/help/check.ts`): a screen or menu item without a page, a page for a route that no
+longer exists, a missing screenshot file (`web/public/help/img/<lang>/<name>.png`) or a shot list that differs between
+languages, a missing translation, a `screen` page without its six parts, an unknown `{{ui:…}}` key, a bad front matter,
+a duplicate id, a link to a page that does not exist, a screen without shots, and an unknown permission.
+
+- `vite build` fails and lists all issues. While content or screenshots are still being written, set `HELP_CHECK=warn`
+  to downgrade them to warnings: `HELP_CHECK=warn pnpm --filter web build`.
+- `vite dev` prints the issues once per change as a warning.
+- The build cannot load the application's React routes in Node, so route and menu coverage (`ROUTE_WITHOUT_PAGE`,
+  `MENU_WITHOUT_PAGE`, `UNKNOWN_ROUTE`) is checked by the test `web/src/help/helpContent.test.ts`.

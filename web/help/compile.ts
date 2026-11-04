@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCALES, messages, type Locale } from '@nadel/shared';
+import { checkHelp, type CheckInput } from './check';
 import { parsePage } from './parse';
 import { serializeSearchIndex } from './searchIndex';
 import { HELP_SECTIONS, type HelpBundle, type HelpBundlePage, type HelpIssue, type HelpPage } from './types';
@@ -64,9 +65,9 @@ function readLocale(rootDir: string, locale: Locale, issues: HelpIssue[]): HelpP
 
 /**
  * Compiles `<rootDir>/<lang>/<id>.md` into the pages and the per-language bundles.
- * Runs in Node (the Vite plugin, the capture and PDF scripts, tests); never in the browser.
+ * With `facts` the completeness check runs too and its issues are appended. Runs in Node (the Vite plugin, the capture and PDF scripts, tests); never in the browser.
  */
-export function compileHelp(rootDir: string): CompileResult {
+export function compileHelp(rootDir: string, facts?: Omit<CheckInput, 'pages'>): CompileResult {
   const issues: HelpIssue[] = [];
   const pages = {} as Record<Locale, HelpPage[]>;
   const bundles = {} as Record<Locale, HelpBundle>;
@@ -78,5 +79,6 @@ export function compileHelp(rootDir: string): CompileResult {
       search: serializeSearchIndex(pages[locale]),
     };
   }
+  if (facts) issues.push(...checkHelp({ pages, ...facts }));
   return { pages, bundles, issues };
 }

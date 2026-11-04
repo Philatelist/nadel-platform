@@ -51,3 +51,5 @@
 - Slice 3 review round 2: PASS.
 - Slice 4 — committed below — tests not run (deferred); typecheck, lint, build green per builder; built shell `dist/help/payments-enter/index.html` carries title, description, canonical, og:*, robots index.
 - NOTE: `infra/stand/` is not tracked — it is excluded locally in `.git/info/exclude`. The stand changes (Caddyfile `NADEL_NOINDEX` matcher, `try_files`, compose, README) exist only in the owner's working copy and are not part of the branch. `web/.env.example` and `infra/stand/.env.example` are denied to agents by the permission settings; `VITE_SITE_URL` is documented in `web/README.md` instead. Both left for the owner.
+- Slice 4 — `dc7c798` — review round 1: PASS (minor notes in review-log).
+- Slice 5 — committed below — tests not run (deferred); typecheck, lint green; `vite build` now fails on help issues by default (60 issues while content and screenshots are incomplete; `HELP_CHECK=warn` downgrades). Route/menu coverage is checked by the vitest real-content test only (the Vite plugin cannot load `App.tsx` in Node).

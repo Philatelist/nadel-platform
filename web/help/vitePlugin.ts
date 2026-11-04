@@ -1,8 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport, type Plugin } from 'vite';
 import type { CompileResult } from './compile.ts';
+import { formatIssues } from './check.ts';
 import { buildHelpShells } from './shells.ts';
 
 // This file is bundled by Vite when it loads vite.config.ts and then run by plain Node, which cannot load the workspace
@@ -11,6 +12,18 @@ import { buildHelpShells } from './shells.ts';
 const here = dirname(fileURLToPath(import.meta.url));
 const compilerFile = resolve(here, 'compile.ts');
 const defaultHelpDir = resolve(here, '..', '..', 'docs', 'help');
+const permissionFile = resolve(
+  here,
+  '..',
+  '..',
+  'packages',
+  'api-client',
+  'src',
+  'generated',
+  'model',
+  'permission.ts',
+);
+const defaultImgDir = resolve(here, '..', 'public', 'help', 'img');
 const catalogsDir = resolve(here, '..', '..', 'packages', 'shared', 'src', 'i18n');
 
 const VIRTUAL_PREFIX = 'virtual:help/';
@@ -23,9 +36,19 @@ export interface HelpPluginOptions {
 }
 
 /** Loads and runs the compiler. Exported for the capture and PDF scripts and for tests. */
-export async function compileHelpFrom(helpDir: string): Promise<CompileResult> {
+export async function compileHelpFrom(helpDir: string, imgDir = defaultImgDir): Promise<CompileResult> {
   const { module } = await runnerImport<typeof import('./compile.ts')>(compilerFile, { configFile: false });
-  return module.compileHelp(helpDir);
+  const { module: permission } = await runnerImport<Record<string, unknown>>(permissionFile, {
+    configFile: false,
+  });
+  // Routes and menu are not loaded here: App.tsx pulls in React pages, CSS and the OIDC client, which Node cannot run.
+  // Their coverage is checked by web/src/help/helpContent.test.ts; everything else is checked at every build.
+  return module.compileHelp(helpDir, {
+    routes: null,
+    navItems: null,
+    permissions: Object.values(permission.Permission as Record<string, string>),
+    shotExists: (locale, name) => existsSync(resolve(imgDir, locale, `${name}.png`)),
+  });
 }
 
 function existsIndex(dir: string): boolean {
@@ -41,6 +64,8 @@ function existsIndex(dir: string): boolean {
 export function helpPlugin(options: HelpPluginOptions = {}): Plugin {
   const helpDir = options.helpDir ?? defaultHelpDir;
   let compiled: Promise<CompileResult> | null = null;
+  let reported: CompileResult | null = null;
+  let isBuild = false;
   const compile = (): Promise<CompileResult> => (compiled ??= compileHelpFrom(helpDir));
 
   let outDir = '';
@@ -61,15 +86,18 @@ export function helpPlugin(options: HelpPluginOptions = {}): Plugin {
       if (!id.startsWith(RESOLVED_PREFIX)) return null;
       const locale = id.slice(RESOLVED_PREFIX.length) as (typeof LOCALE_IDS)[number];
       const result = await compile();
-      for (const issue of result.issues) {
-        this.warn(
-          `help ${issue.code}${issue.pageId ? ` ${issue.locale ?? ''}/${issue.pageId}` : ''}: ${issue.detail}`,
-        );
+      // Once per compile, not once per language module.
+      if (reported !== result && result.issues.length > 0) {
+        reported = result;
+        const message = `help has ${result.issues.length} issue(s):\n${formatIssues(result.issues)}`;
+        if (isBuild && process.env.HELP_CHECK !== 'warn') this.error(message);
+        else this.warn(message);
       }
       this.addWatchFile(helpDir);
       return `export default ${JSON.stringify(result.bundles[locale])};`;
     },
     configResolved(config) {
+      isBuild = config.command === 'build';
       outDir = resolve(config.root, config.build.outDir);
       siteUrl = String(config.env.VITE_SITE_URL ?? 'http://localhost:5173').replace(/\/+$/, '');
     },

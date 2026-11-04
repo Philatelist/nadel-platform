@@ -23,3 +23,9 @@
 |---|---|---|---|---|
 | 1 | `2b6b5e1..a5dd1c3` | MAJOR_ISSUES | M1 typo test query is 2 edits away (fails with 1-edit fuzzy) | minor: misleading `processTerm` comment; JSON round-trip test does not round-trip; duplicate regex; `useMemo` on viewer identity |
 | 2 | + `59e3d86` | PASS | M1 resolved | remaining minor notes of round 1 stand |
+
+## Slice 4 — Public help and search-engine readiness
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `59e3d86..dc7c798` | PASS | — | static review. minor: `returnPathOf` allows `/\host` (not exploitable today, value is the app's own path); public help flashes for a signed-in user while OIDC loads; `useHelpMeta` restore when previous is null; `existsIndex` reads the whole file |
