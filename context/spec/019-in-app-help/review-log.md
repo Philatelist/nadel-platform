@@ -53,3 +53,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a753b52..a8308bb` | MAJOR_ISSUES | M1 electricity-by-reading rule and examples on a board-only page (`how-charges-months`), invisible to members | digits of sections 18–31 checked, none lost. minor: `member-bill` uses `audit.outcome.RESOLVED` key for «Нараховано»; "database" wording on member-visible pages; `how-meters-tree` permissions vs `meter-tree`; treasurer wording on `how-payments-allocate` |
+| 2 | + `7dbb8be` | PASS | M1 resolved | round 1 minor notes stand |

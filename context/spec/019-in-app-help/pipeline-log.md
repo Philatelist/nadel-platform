@@ -62,3 +62,5 @@
 - Slice 9 — committed below — 17 pages uk+en, only MISSING_SHOT per writer. Writer lists old sections 14/15/17 parts it did not place (invoices, member Telegram, reconciliation act) — to be verified in the Slice 10 completion step.
 - Slice 8 content finished by the writer (17 pages uk+en, only MISSING_SHOT); commit held at the review gate (Slices 10 and 9 reviews outstanding).
 - Slice 10 content review round 1: MAJOR_ISSUES (M1); fix sent to the writer.
+- Slice 10 content review round 2: PASS.
+- Slice 8 — committed below — 17 pages uk+en, only MISSING_SHOT per writer.
