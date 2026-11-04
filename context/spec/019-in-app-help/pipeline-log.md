@@ -80,3 +80,7 @@
 - Slice 11 task 1 committed below (`web/e2e/help.spec.ts`, chairman now expects every page).
 - Verify: screenshots captured from the running demo app — 70 per language in `web/public/help/img/`; capture fix (`/api/v1/me` in the demo guard) and `announcement-card` shot reduced to the list screen (the demo has no announcements and creating one would send it). `helpContent.test.ts` passes.
 - Verify: `make guide` built board-guide uk (~141 pages, 70 images) and en (~142 pages), owner manual uk/en and leaflet; no warnings. Layout not visually inspected (no PDF renderer available).
+- Phase 4 verify: 40 acceptance criteria `[x]` with evidence, 5 `[?]` (electrician e2e on a dirty local DB; stand flag not in the repository; demo guard against a non-demo DB; PDF layout and title-page version not visually inspected). Status `Implemented — pending manual check`.
+- Full suite: `make check` green (backend 4184 tests, coverage met; clients 166+8+2+1 files, 1044+130+56+9 tests); baseline had 0 failures → no regressions.
+- e2e: `help.spec.ts` 14/15 passed against the local dev stack (electrician: local DB precondition). Smoke set: 13/22 passed; the 9 failures are HTTP 500 from the locally running backend on writes such as `POST /plots` (that backend was not started by the pipeline, runs `main` backend code — this branch changes no backend code); not attributable to the feature; CI's smoke job on a clean stack is the gate.
+- Product docs: suggested follow-ups only (no `/awos:architecture` run; `context/product/architecture.md` already mentions the help).

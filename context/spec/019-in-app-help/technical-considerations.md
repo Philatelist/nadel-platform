@@ -1,7 +1,7 @@
 # Technical Specification: Help inside the application — per screen, per role, public
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author(s):** Alex Usov
 
 ---

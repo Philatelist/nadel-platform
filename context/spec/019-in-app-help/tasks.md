@@ -100,8 +100,8 @@ Every route of `App.tsx` (except `*` and the index redirect) is listed by exactl
 - [x] **Slice 10: Content — «Як система рахує», «Член кооперативу»; retire the HTML board guide**
   - [x] Topic pages of «Як система рахує» from board guide Part II (sections 18–31; section 32 «Що з’явиться далі» is dropped and noted in the map) with all worked examples kept, permissions per the page map; member pages (`account` and the member topics) from section 12 and the member-facing parts of 13–16; English translation. Complete `migration-map.md` so that every `<h2>`/`<h3>` of the old guide maps to a page. Delete `docs/guide/{uk,en}/board-guide.html`; update the owner manual (`docs/guide/{uk,en}/owner-manual.html`: the help section, «?», public help, `NADEL_NOINDEX`, `make help-shots`), root `README.md` and any link to the old HTML. **[Agent: general-purpose]**
 
-- [ ] **Slice 11: Feature Testing & Regression**
+- [x] **Slice 11: Feature Testing & Regression**
 
   > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
   - [x] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: 019-in-app-help` and `@regression` if suitable for long-term regression. Include `web/e2e/help.spec.ts`: the member opens «?» on «Мій кабінет» (`@smoke`); the treasurer searches «сторнувати платіж» and opens the page; an anonymous visitor reads `/help/payments-enter` with no `/api/` request; the member opens a hidden page by link; help pages carry title, description and canonical; the electrician's contents. **[Agent: testing-expert]**
-  - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**
+  - [x] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**

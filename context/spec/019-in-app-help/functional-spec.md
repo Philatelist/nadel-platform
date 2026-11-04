@@ -4,7 +4,7 @@
   worked example on the demo numbers and screenshots. The help opens from a «?» button on the screen, shows each person
   only the pages for the screens they can use, is also readable by anyone without signing in, and the board guide PDF
   is built from the same text.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/019-in-app-help.md`
 
@@ -88,14 +88,14 @@ The following traps get a «Важливо» box on the page that explains the s
 The help never mentions other cooperatives or the platform operator, and does not cover the operator's screens.
 
 - **Acceptance Criteria:**
-  - [ ] When the chairman opens the contents of the help, then every screen reachable from the menu and every other
-        screen of the application has its page, in both languages.
-  - [ ] When any help page is opened, then it shows the six parts in the order above and at least one screenshot.
-  - [ ] When a reader opens the page of a screen where one of the seven traps happens, then the trap is shown in a
-        «Важливо» box.
-  - [ ] When a reader compares the old board guide with the help, then every section of the old guide is found on a
-        help page (a checklist in the pull request maps each old section to its page).
-  - [ ] When a button is renamed in the interface and the help is rebuilt, then the help shows the new name.
+  - [x] When the chairman opens the contents of the help, then every screen reachable from the menu and every other
+        screen of the application has its page, in both languages. — _`helpContent.test.ts` passes: every route of `App.tsx` and every menu item has a page in uk and en_
+  - [x] When any help page is opened, then it shows the six parts in the order above and at least one screenshot. — _`helpContent.test.ts` (MISSING_SECTION, SCREEN_WITHOUT_SHOT, MISSING_SHOT: zero issues); 70 shots per language_
+  - [x] When a reader opens the page of a screen where one of the seven traps happens, then the trap is shown in a
+        «Важливо» box. — _traps 1–7 checked on their pages by the content reviews (review-log, slices 7–9)_
+  - [x] When a reader compares the old board guide with the help, then every section of the old guide is found on a
+        help page (a checklist in the pull request maps each old section to its page). — _`migration-map.md`: every heading of the old guide mapped, verified in the close-out review_
+  - [x] When a button is renamed in the interface and the help is rebuilt, then the help shows the new name. — _`{{ui:}}` placeholders resolved from the catalogs (`parse.test.ts`), UNKNOWN_UI_KEY fails the check (`check.test.ts`)_
 
 ### 2.2 Keeping the help complete
 
@@ -110,14 +110,14 @@ The build fails, naming the problem, when:
 - a page quotes a button or field name the interface does not have.
 
 - **Acceptance Criteria:**
-  - [ ] When every screen and menu item has a complete page in both languages, then the check passes.
-  - [ ] When a screen is added without a help page, then the check fails and names the screen.
-  - [ ] When a menu item has no help page, then the check fails and names the menu item.
-  - [ ] When a help page refers to a screen that was removed, then the check fails and names the page.
-  - [ ] When a help page refers to a missing screenshot, then the check fails and names the page and the screenshot.
-  - [ ] When a page exists only in Ukrainian, then the check fails and names the page and the missing language.
-  - [ ] When a page lacks the «Worked example» part, then the check fails and names the page and the part.
-  - [ ] When a page quotes a button name that no longer exists, then the check fails and names the page and the name.
+  - [x] When every screen and menu item has a complete page in both languages, then the check passes. — _`helpContent.test.ts` green_
+  - [x] When a screen is added without a help page, then the check fails and names the screen. — _`check.test.ts` ROUTE_WITHOUT_PAGE_
+  - [x] When a menu item has no help page, then the check fails and names the menu item. — _`check.test.ts` MENU_WITHOUT_PAGE_
+  - [x] When a help page refers to a screen that was removed, then the check fails and names the page. — _`check.test.ts` UNKNOWN_ROUTE_
+  - [x] When a help page refers to a missing screenshot, then the check fails and names the page and the screenshot. — _`check.test.ts` MISSING_SHOT_
+  - [x] When a page exists only in Ukrainian, then the check fails and names the page and the missing language. — _`check.test.ts` MISSING_TRANSLATION_
+  - [x] When a page lacks the «Worked example» part, then the check fails and names the page and the part. — _`check.test.ts` MISSING_SECTION_
+  - [x] When a page quotes a button name that no longer exists, then the check fails and names the page and the name. — _`parse.test.ts` / `check.test.ts` UNKNOWN_UI_KEY_
 
 ### 2.3 The «?» button and the side panel
 
@@ -126,12 +126,12 @@ the screen; the screen stays where it was. On a phone the panel opens over the w
 повністю», which opens the same page in the help section, and a button to close it.
 
 - **Acceptance Criteria:**
-  - [ ] Given the treasurer is on «Платежі», when they press «?», then a side panel opens with the help page about the
-        payments screen and the payments list stays visible behind it.
-  - [ ] Given the member is on «Мій рахунок», when they press «?», then the panel shows the page about «Мій рахунок».
-  - [ ] Given the panel is open, when the user presses «Відкрити повністю», then the same page opens in the help section.
-  - [ ] Given a phone-sized screen, when the user presses «?», then the help covers the whole screen and can be closed.
-  - [ ] When the user presses «?» on any screen of the application, then the page about that screen opens.
+  - [x] Given the treasurer is on «Платежі», when they press «?», then a side panel opens with the help page about the
+        payments screen and the payments list stays visible behind it. — _e2e `help.spec.ts` §2.3 #1 passed_
+  - [x] Given the member is on «Мій рахунок», when they press «?», then the panel shows the page about «Мій рахунок». — _e2e `help.spec.ts` §2.3 #2 (@smoke) passed_
+  - [x] Given the panel is open, when the user presses «Відкрити повністю», then the same page opens in the help section. — _e2e §2.3 #2 passed_
+  - [x] Given a phone-sized screen, when the user presses «?», then the help covers the whole screen and can be closed. — _e2e §2.3 #4 passed (390 px)_
+  - [x] When the user presses «?» on any screen of the application, then the page about that screen opens. — _`pageForPath.test.ts`, `appRoutePaths.test.ts`, `helpContent.test.ts` (every route has a page); e2e §2.3 #5 negative passed_
 
 ### 2.4 The help section
 
@@ -143,9 +143,9 @@ The help section shows:
   when clicked.
 
 - **Acceptance Criteria:**
-  - [ ] When the user opens the help section, then they see the contents grouped by section in the order of 2.1.
-  - [ ] When the user opens a long page and scrolls, then the list of its headings stays visible, and when they click a
-        heading, then the page jumps to it.
+  - [x] When the user opens the help section, then they see the contents grouped by section in the order of 2.1. — _e2e §2.4 #1 passed_
+  - [x] When the user opens a long page and scrolls, then the list of its headings stays visible, and when they click a
+        heading, then the page jumps to it. — _`HelpPageView.test.tsx` passed_
 
 ### 2.5 Search
 
@@ -154,13 +154,13 @@ letter missing, extra or wrong. It works without the internet once the applicati
 server. A search with no result shows «Нічого не знайдено».
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer searches «сторнувати платіж», then the page about a payment is among the results and opens on
-        click.
-  - [ ] When the user searches a word from a page's text with one wrong letter, then that page is among the results.
-  - [ ] When the user searches a button name, then the page explaining that button is among the results.
-  - [ ] Given the interface is in English, when the user searches an English word, then English pages are found.
-  - [ ] When the user searches a word that appears nowhere, then they see «Нічого не знайдено».
-  - [ ] When the user searches, then no request leaves the browser.
+  - [x] When the treasurer searches «сторнувати платіж», then the page about a payment is among the results and opens on
+        click. — _e2e §2.5 #1 passed_
+  - [x] When the user searches a word from a page's text with one wrong letter, then that page is among the results. — _e2e §2.5 #2 passed; `searchIndex.test.ts`_
+  - [x] When the user searches a button name, then the page explaining that button is among the results. — _e2e §2.5 #3 passed_
+  - [x] Given the interface is in English, when the user searches an English word, then English pages are found. — _e2e §2.5 #4 passed_
+  - [x] When the user searches a word that appears nowhere, then they see «Нічого не знайдено». — _e2e §2.5 #5 passed_
+  - [x] When the user searches, then no request leaves the browser. — _e2e §2.5 #6 passed (no `/api/` request)_
 
 ### 2.6 What each signed-in user sees
 
@@ -180,17 +180,17 @@ the user cannot see is shown as plain text, not a link. Opening the address of s
 This is a filter for clarity, not a secret: the same pages are public (2.7).
 
 - **Acceptance Criteria:**
-  - [ ] Given the chairman is signed in, when they open the contents, then every page is listed.
-  - [ ] Given the member is signed in, when they open the contents, then they see only the pages for everyone, the pages
-        of «Член кооперативу» and the bill pages of «Як система рахує».
-  - [ ] Given the electrician is signed in, when they open the contents, then of the board screens they see only the
-        pages about readings and meters.
-  - [ ] Given the member is signed in, when they search «сторнувати», then the page about a payment is not among the
-        results.
-  - [ ] Given the member reads a page that links to a board page, when they look at that link, then it is plain text and
-        cannot be clicked.
-  - [ ] Given the member is signed in, when they open the address of the payment-entry help page directly, then they see
-        «Цей розділ вам недоступний» with a link to the contents and no text of that page.
+  - [x] Given the chairman is signed in, when they open the contents, then every page is listed. — _e2e §2.6 #1 passed (64 pages) after verify fix `014b702`_
+  - [x] Given the member is signed in, when they open the contents, then they see only the pages for everyone, the pages
+        of «Член кооперативу» and the bill pages of «Як система рахує». — _e2e §2.6 #2 passed_
+  - [?] Given the electrician is signed in, when they open the contents, then of the board screens they see only the
+        pages about readings and meters. — _e2e §2.6 #3 written; on the local dev database the demo role «Електрик» carries extra permissions left by earlier runs, so the spec fails on its precondition; `helpVisibility.test.ts` covers the rule. Needs a run on a fresh database (CI full e2e or `make e2e`)_
+  - [x] Given the member is signed in, when they search «сторнувати», then the page about a payment is not among the
+        results. — _e2e §2.6 #4 passed_
+  - [x] Given the member reads a page that links to a board page, when they look at that link, then it is plain text and
+        cannot be clicked. — _`HelpPageView.test.tsx` hidden-link case passed_
+  - [x] Given the member is signed in, when they open the address of the payment-entry help page directly, then they see
+        «Цей розділ вам недоступний» with a link to the contents and no text of that page. — _e2e §2.6 #5 passed_
 
 ### 2.7 Public help
 
@@ -206,16 +206,16 @@ the application is not.
 A test stand sends "do not index" for everything, the help included, so it does not compete with the real site.
 
 - **Acceptance Criteria:**
-  - [ ] Given a visitor is not signed in, when they open the address of the payment-entry help page, then they read it
-        in full with its screenshots, without a sign-in screen.
-  - [ ] Given a visitor reads the public help, when they look at the page header, then they see «Увійти», and when they
-        press it, then the sign-in starts.
-  - [ ] When a visitor opens and searches the public help, then no request is made to the application's server.
-  - [ ] When a public help page is opened, then the browser tab shows its title, and the page carries a description, a
-        permanent address and a preview image.
-  - [ ] When a search engine reads a help page, then it is allowed to index it, and when it reads any other screen of
-        the application, then it is told not to index it.
-  - [ ] Given the test stand, when any page is opened there, then the reply says "do not index".
+  - [x] Given a visitor is not signed in, when they open the address of the payment-entry help page, then they read it
+        in full with its screenshots, without a sign-in screen. — _e2e §2.7 #1 passed_
+  - [x] Given a visitor reads the public help, when they look at the page header, then they see «Увійти», and when they
+        press it, then the sign-in starts. — _e2e §2.7 #2 passed (reaches the Keycloak sign-in)_
+  - [x] When a visitor opens and searches the public help, then no request is made to the application's server. — _e2e §2.7 #3 passed; `PublicHelpApp.test.tsx`_
+  - [x] When a public help page is opened, then the browser tab shows its title, and the page carries a description, a
+        permanent address and a preview image. — _e2e §2.7 #4 passed; `vitePlugin.test.ts` (shells)_
+  - [x] When a search engine reads a help page, then it is allowed to index it, and when it reads any other screen of
+        the application, then it is told not to index it. — _e2e §2.7 #5 passed (`index, follow` on help, `noindex` on `/payments`)_
+  - [?] Given the test stand, when any page is opened there, then the reply says "do not index". — _`infra/stand/` is not tracked in the repository (excluded locally); the `NADEL_NOINDEX` change exists only in the owner's working copy and was validated with `caddy validate` only_
 
 ### 2.8 Screenshots
 
@@ -226,12 +226,12 @@ the command and names the page. Screenshots are taken only from the demo coopera
 any other cooperative's data.
 
 - **Acceptance Criteria:**
-  - [ ] Given the application runs with the demo data, when the owner runs the screenshot command, then every listed
-        screenshot is taken in both languages, for the help and for the PDF.
-  - [ ] When the owner runs the command for one page, then only that page's screenshots are taken.
-  - [ ] When a listed screenshot cannot be taken, then the command stops and names the page.
-  - [ ] Given the application holds a cooperative other than the demo one, when the command runs, then it refuses with
-        a message and takes nothing.
+  - [x] Given the application runs with the demo data, when the owner runs the screenshot command, then every listed
+        screenshot is taken in both languages, for the help and for the PDF. — _`capture-screens.mjs` full run exit 0, 70 PNGs per language_
+  - [x] When the owner runs the command for one page, then only that page's screenshots are taken. — _`--page announcement-card` re-run took only that page_
+  - [x] When a listed screenshot cannot be taken, then the command stops and names the page. — _first run stopped with `announcement-card: … locator.click timeout` and exit 1_
+  - [?] Given the application holds a cooperative other than the demo one, when the command runs, then it refuses with
+        a message and takes nothing. — _demo guard reviewed in code (`capture-screens.mjs` guardDemo); not exercised against a non-demo database_
 
 ### 2.9 The board guide PDF
 
@@ -240,10 +240,10 @@ screenshots, a table of contents and page numbers. The title page shows the vers
 the last change). The owner manual PDF and the Telegram leaflet are built as now.
 
 - **Acceptance Criteria:**
-  - [ ] When the owner builds the guides, then the board guide PDF in both languages contains every help page in the
-        order of the contents, with screenshots, a table of contents and page numbers.
-  - [ ] When the owner opens the PDF, then the title page shows the version.
-  - [ ] When the owner builds the guides, then the owner manual PDF and the leaflet are still produced.
+  - [?] When the owner builds the guides, then the board guide PDF in both languages contains every help page in the
+        order of the contents, with screenshots, a table of contents and page numbers. — _`make guide` built `board-guide.uk.pdf` (~141 pages, 70 images) and `.en.pdf`; contents order, TOC and page numbers by code; layout not visually inspected (no PDF renderer here)_
+  - [?] When the owner opens the PDF, then the title page shows the version. — _version from `git describe`/commit date by code; not visually inspected_
+  - [x] When the owner builds the guides, then the owner manual PDF and the leaflet are still produced. — _`make guide` printed `built owner-manual.uk/en.pdf` and `telegram-leaflet.uk.pdf`_
 
 ---
 
