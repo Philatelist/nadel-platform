@@ -19,6 +19,9 @@ shots:
     path: /meters
     open: { css: 'main a[href^="/meters/"]', text: 'ЕЛ-9/2' }
     steps:
+      # Safe: every reading of this demo meter (installation point, 112.4 and 190.7) is an end of a charged interval
+      # (R__demo_data.sql, demo_interval -> charge + meter_value_use), so "Save" answers with the recalculation preview
+      # and nothing is stored (and 195 is out of order against the next reading if the oldest row is the first one).
       - { click: Виправити }
       - { fill: { label: 'Показ, кВт·год', value: '195' } }
       - { click: Зберегти виправлення }
@@ -82,7 +85,7 @@ shots:
 2. У історії знайдіть показ і натисніть «{{ui:readings.history.correct}}». Змініть значення на 195 і натисніть «{{ui:readings.history.correctSubmit}}».
 3. Обидва покази цього лічильника вже нараховано, тому з’являється крок перегляду перерахунку. Нічого не збережено, доки ви не введете причину й не натиснете «{{ui:recalculation.step.book}}».
 
-Заміна дає два нарахування за електроенергію: 65 кВт·год × 4,32 = 280,80 ₴ і 66 кВт·год × 4,32 = 285,12 ₴.
+Заміна розбиває споживання на окремі інтервали, і кожен нараховується за тарифом 4,32 ₴ за кВт·год. У демо: старий лічильник від останнього показу 3 250 до кінцевого 3 340 дає 90 кВт·год, тобто 90 × 4,32 = 388,80 ₴. Новий лічильник від 0 до показу 112,4 дає 112,4 × 4,32 = 485,57 ₴, а від 112,4 до 190,7 дає 78,3 кВт·год, тобто 78,3 × 4,32 = 338,26 ₴.
 
 ## Знімки екрана
 

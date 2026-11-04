@@ -19,6 +19,9 @@ shots:
     path: /meters
     open: { css: 'main a[href^="/meters/"]', text: 'ЕЛ-9/2' }
     steps:
+      # Safe: every reading of this demo meter (installation point, 112.4 and 190.7) is an end of a charged interval
+      # (R__demo_data.sql, demo_interval -> charge + meter_value_use), so "Save" answers with the recalculation preview
+      # and nothing is stored (and 195 is out of order against the next reading if the oldest row is the first one).
       - { click: Correct }
       - { fill: { label: 'Reading, kWh', value: '195' } }
       - { click: Save the correction }
@@ -82,7 +85,7 @@ Plot 9 in the demo: the old meter ЕЛ-9 was removed 30 days ago with a final re
 2. In the history find a reading and click "{{ui:readings.history.correct}}". Change the value to 195 and click "{{ui:readings.history.correctSubmit}}".
 3. Both readings of this meter are already charged, so the recalculation preview step appears. Nothing is saved until you enter a reason and click "{{ui:recalculation.step.book}}".
 
-A replacement gives two electricity charges: 65 kWh × 4.32 = 280.80 ₴ and 66 kWh × 4.32 = 285.12 ₴.
+A replacement splits the consumption into separate intervals, and each is charged at the tariff of 4.32 ₴ per kWh. In the demo: the old meter from its last reading of 3,250 to the final 3,340 gives 90 kWh, that is, 90 × 4.32 = 388.80 ₴. The new meter from 0 to the reading of 112.4 gives 112.4 × 4.32 = 485.57 ₴, and from 112.4 to 190.7 gives 78.3 kWh, that is, 78.3 × 4.32 = 338.26 ₴.
 
 ## Screenshots
 

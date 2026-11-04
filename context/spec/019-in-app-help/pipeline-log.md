@@ -64,3 +64,5 @@
 - Slice 10 content review round 1: MAJOR_ISSUES (M1); fix sent to the writer.
 - Slice 10 content review round 2: PASS.
 - Slice 8 — committed below — 17 pages uk+en, only MISSING_SHOT per writer.
+- Slice 9 — `2de1f4b` — review round 1: PASS.
+- Slice 8 — `90d32b6` — review round 1: MAJOR_ISSUES (M1); fix sent to the writer, together with the save-click shot safety check.

@@ -19,6 +19,9 @@ shots:
     path: /tariffs
     open: { css: 'main a[href^="/tariffs/"]:not([href$="/new"])' }
     steps:
+      # Safe: this is the first tariff on the page (membership, version valid from 2026-01-01); the demo books it for
+      # every plot in the closed, open and current month (R__demo_data.sql, demo_tariff_charge -> charge_part), so the
+      # version is in use and "Save" of a changed rate opens the recalculation preview and stores nothing.
       - { click: Редагувати }
       - { fill: { label: 'Ставка, ₴', value: '55', within: Редагувати версію } }
       - { click: Зберегти }

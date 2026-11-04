@@ -54,3 +54,15 @@
 |---|---|---|---|---|
 | 1 | `a753b52..a8308bb` | MAJOR_ISSUES | M1 electricity-by-reading rule and examples on a board-only page (`how-charges-months`), invisible to members | digits of sections 18–31 checked, none lost. minor: `member-bill` uses `audit.outcome.RESOLVED` key for «Нараховано»; "database" wording on member-visible pages; `how-meters-tree` permissions vs `meter-tree`; treasurer wording on `how-payments-allocate` |
 | 2 | + `7dbb8be` | PASS | M1 resolved | round 1 minor notes stand |
+
+## Slice 9 — Content: payments and cash, documents and delivery, reports
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a8308bb..2de1f4b` | PASS | — | all `{{ui:}}` keys resolve; shots read-only (`payment-reverse` opens the dialog, `announcement-form` previews). minor: "токен" wording in `deliveries`; en `payment-card` should say the receipt mark is Ukrainian «СТОРНОВАНО»; `payment-card` shots open the first payment row (works with today's demo; a `rowText` filter would be more robust) |
+
+## Slice 8 — Content: tariffs and charges, meters and readings
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7dbb8be..90d32b6` | MAJOR_ISSUES | M1 `meter-card` worked example ends with figures (65/66 kWh) not derivable from the demo meters | minor (sent along as a safety fix): `tariff-recalculation-step`/`reading-recalculation-step` click «Зберегти» — read-only only if the edited version/reading is in use. Other minor: hand-typed interface names in 3 places; "38 лічильників" unverified; `[!important]` boxes under «Хто бачить» in `tariff-form` |
