@@ -3,7 +3,8 @@
 ## Baseline failures
 
 - Base commit: `aacd2a4` (`main`), command: `make check`
-- Result: pending — deferred to Phase 4 (user instruction: no tests until the end)
+- Command: `cd backend && ./mvnw verify` and `pnpm -r test`
+- Result: 0 failing (backend verify exit 0; clients 155+8+1+2 files, 983+130+9+56 tests passed)
 
 ## Slice 1 — Help section with one real page, signed-in
 
@@ -79,3 +80,15 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `e05be47` | PASS | — | real test-setup bugs, no assertion weakened. minor: duplicate beforeEach; no Layout test of the «?» placement |
+
+## Fix — help module under vite dev (verify)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7e87b1f` | PASS | — | root cause confirmed; dev reload via watcher intact; build check unchanged |
+
+## Fix — the chairman sees every help page (FS 2.6, verify)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `014b702` | PASS | — | electrician and member paths unchanged. minor: typographic apostrophe; assumption should name the treasurer (also has MEMBERS_VIEW) |

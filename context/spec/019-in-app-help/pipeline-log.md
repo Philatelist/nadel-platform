@@ -77,3 +77,4 @@
 - Verify finding: FS 2.6 "chairman sees every page" unmet (demo chairman owns no plot; `member` pages hidden). AUTO: `member` is satisfied by owning a plot or holding `MEMBERS_VIEW`; fix sent to react-frontend; spec assumption amended.
 - Verify finding: public help language follows the stored choice, else the browser language (app-wide rule). AUTO: spec assumption amended to match the existing app behaviour instead of forcing Ukrainian.
 - Local env: the running dev DB (not started by the pipeline) has the demo role «Електрик» with extra permissions (REPORTS_VIEW, AUDIT_VIEW) left by earlier runs; the electrician e2e fails there on its precondition. Not reset (not the pipeline's environment).
+- Slice 11 task 1 committed below (`web/e2e/help.spec.ts`, chairman now expects every page).
