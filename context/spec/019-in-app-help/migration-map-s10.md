@@ -8,8 +8,8 @@ Source: `docs/guide/uk/board-guide.html`. Page ids are in `docs/help/{uk,en}/`.
 | 18 Основні принципи | `how-principles` |
 | 19 Тарифи та очікувана сума (+ Розібрані приклади, До яких ділянок, Виправлення версії) | `how-tariffs-expected` |
 | 20 Лічильники та дерево (+ Заміна лічильника; the tree diagram is described by its caption, the SVG is not carried over) | `how-meters-tree` |
-| 21 Покази та споживання (+ Статуси показу, Інтервал і значення на дату, Перевірки) | `how-readings-consumption` |
-| 22 Нарахування й закриття місяців (+ Звідки беруться нарахування, Світло за показом, Місяці та закриття, Сторно й черга «Не нараховано», Борг) | `how-charges-months` |
+| 21 Покази та споживання (+ Статуси показу, Інтервал і значення на дату, Перевірки); 22 «Світло за показом» (moved here: a bill topic for everyone) | `how-readings-consumption` |
+| 22 Нарахування й закриття місяців (+ Звідки беруться нарахування, Місяці та закриття, Сторно й черга «Не нараховано», Борг) | `how-charges-months` |
 | 22 «На екрані: Нарахування», «Не нараховано», Закриття місяця (screens and screenshots) | `how-charges-months` (text kept); screens also in `charges`, `not-charged`, `charges-month` |
 | 22 Рахунок ділянки, сторно та вхідне сальдо; Кольори ділянок на мапі й у списку; Казначей і член кооперативу | `how-charges-months` |
 | 23 Втрати в мережі та спільні споживачі (+ Втрати: два режими, Спільні споживачі, На екрані) | `how-losses-common` |

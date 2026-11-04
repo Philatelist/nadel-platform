@@ -39,3 +39,15 @@ Real readings (green) and values calculated at the range boundaries (dashed)
 - A date in the future or outside the meter's working period is refused.
 - Daily consumption three times the average of the last 180 days: the reading is accepted with the warning "Check the reading".
 - A reading can be corrected or deleted while no charge uses it; after that, through recalculation.
+
+## Electricity by reading
+
+The days of an interval run from the day after the previous reading to the day of the new one, both included. When the tariff changes inside the interval, the kWh are split by days, each part times its rate, and the total is rounded once.
+
+> **Examples**
+>
+> Readings 112.4 (22.09) and 205.7 (04.10): 93.3 kWh × 4.32 = **403.06 ₴** for 23.09–04.10 (12 days).
+>
+> Readings 1,000 (01.10) and 1,300 (31.10), tariff 4.32 until 16.10 and 5.00 from 17.10: 15 days each, 150 × 4.32 + 150 × 5.00 = 648.00 + 750.00 = **1,398.00 ₴**.
+>
+> A meter replacement gives two charges: 65 kWh = 280.80 and 66 kWh = 285.12.

@@ -60,3 +60,5 @@
 - Slice 7 — `a753b52` — review round 1: PASS.
 - Slice 10 content part — committed below (19 pages uk+en: how-* topics, account, member topics; no check issues except missing shot files per writer). The HTML board guide removal and doc updates of Slice 10 follow after Slices 8–9 (writers still read the old HTML). AUTO: Slice 10 split into two commits for that reason.
 - Slice 9 — committed below — 17 pages uk+en, only MISSING_SHOT per writer. Writer lists old sections 14/15/17 parts it did not place (invoices, member Telegram, reconciliation act) — to be verified in the Slice 10 completion step.
+- Slice 8 content finished by the writer (17 pages uk+en, only MISSING_SHOT); commit held at the review gate (Slices 10 and 9 reviews outstanding).
+- Slice 10 content review round 1: MAJOR_ISSUES (M1); fix sent to the writer.

@@ -47,3 +47,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `7d356a9..a753b52` | PASS | — | static review with read-only key/heading scripts. minor: "a copy of the database" wording in `member-form`; `getting-started` uk/en `{{ui:}}` sets differ (language wording); `plot-card` "no buttons" vs downloads elsewhere |
+
+## Slice 10 — Content: how the system calculates, member pages (content part)
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a753b52..a8308bb` | MAJOR_ISSUES | M1 electricity-by-reading rule and examples on a board-only page (`how-charges-months`), invisible to members | digits of sections 18–31 checked, none lost. minor: `member-bill` uses `audit.outcome.RESOLVED` key for «Нараховано»; "database" wording on member-visible pages; `how-meters-tree` permissions vs `meter-tree`; treasurer wording on `how-payments-allocate` |
