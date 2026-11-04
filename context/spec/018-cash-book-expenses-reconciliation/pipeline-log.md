@@ -1,11 +1,11 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: running
-- Phase: 5 — owner review changes pushed, waiting for checks
+- Status: finished
+- Phase: 6 — review run (done, after owner review changes)
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41837691400)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41851564632)
 - Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
@@ -205,3 +205,6 @@
 - Backend change done (spring-backend): BankComparison.balanced = statement present and closing difference 0.00 (used by GET and confirm); descriptions in api/openapi.yaml (+ gen, comments only), ProblemCodes Javadoc; tests BankComparisonTests, BankReconciliationTests (+ a characterization test of later reconciled months), CashBookExamplesTests example 7, TreasuryAcceptanceTests (+ a story where only the closing agrees); RED on the new tests; treasury README, money-rules §14, glossary, technical-considerations §2.5, acceptance-coverage (62 criteria), and docs/features/018 §2.5 aligned. Open question for the owner kept in the README: should a back-dated line also reopen later reconciled months (today they stay «Звірено» and show the shift as a closing difference)?
 - Orchestrator checks: treasury + acceptance + modularity 210 green; clients green (web 976); e2e tsc clean; prettier clean. New FS 2.7 criterion ticked (BankReconciliationPage.test + backend tests). Review run stopped for the e2e run of bank-reconciliation + smoke (testing-expert).
 - e2e (testing-expert, manual stack): bank-reconciliation 3 passed, smoke 21 passed. Review run restarted; guide shots re-captured (all), make guide built 5 PDFs; orchestrator looked at img/uk/bank-reconciliation.png (warning shown, «Звірено» disabled on the closing difference, new hint).
+- Owner review changes pushed (850e8cb); PR #66 body updated; checks run 41851564632: 6 of 6 green (Backend, Clients, Demo data by day, End-to-end, SAST, Security). No CI fixes.
+- Review run restarted on the PR branch (web http://localhost:5173, API :8080). Stop: `kill 84692 84717 84861 85028`, infra `make down`.
+- Left for the owner: review and merge; ci.yml demo-days list; CLAUDE.md NADEL_DB_PORT line; decide whether back-dated lines reopen later reconciled months; manual phone-camera check.
