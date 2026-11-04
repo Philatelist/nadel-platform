@@ -1,11 +1,11 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: running
-- Phase: 5 — reopen later months + viewer fix pushed, waiting for checks
+- Status: finished
+- Phase: 6 — review run (done, after the reopen and viewer changes)
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41858313283)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41870709690)
 - Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
@@ -230,3 +230,4 @@
 - Viewer: WebKit (desktop and iPhone profiles) does not reproduce the empty viewer with the old layout either; fix verified in WebKit (image fills the viewer; spec 2 passed in webkit). Cause still unproven → probing the owner's own expenses with real iPhone photos (old vs new component, Chromium and WebKit, decode errors, EXIF orientation).
 - Probe of the owner's real photos (IMG_0402.jpg 4032x3024, no EXIF Orientation stored): old and new viewer render in Chromium, WebKit desktop and iPhone; decode ok; cause not reproduced. Real gap found: the image data is fetched only when its thumbnail scrolls into view, so → to a file whose thumbnail has not loaded shows the toolbar only (matches «Фото 2 з 2»). Fix requested: the viewer fetches its own image (shared cache) with loading/error states and prefetch of neighbours; component test with a never-intersecting thumbnail.
 - Viewer follow-up (react-frontend): the viewer already fetched its own file; added a loading state («Завантаження…»), an error state with «Завантажити», and prefetch of neighbours; component tests (never-intersecting thumbnails, failed fetch; RED). Server keeps EXIF Orientation (JpegMetadataStripperTests.theOrientationIsKeptInAMinimalExifSegmentRightAfterJfif); IMG_0402.jpg had none. Orchestrator: clients green (web 983), prettier clean, make guide rebuilt PDFs. Root cause of the owner's empty viewer not reproduced in Chromium/WebKit with generated or real photos; the layout fix + loading/error states cover the plausible causes.
+- Reopen + viewer changes pushed (6ca68e0); checks run 41870709690: 6 of 6 green. Review run restarted on the PR branch: web http://localhost:5173. Stop: `kill 43925 43946 44089 44228`, infra `make down`.
