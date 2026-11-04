@@ -57,3 +57,5 @@
 - Slice 6 — committed below — not run against an app (deferred); `node --check` ok; `build-pdf.mjs` built all PDFs from partial content (PDFs restored, not committed). The old SHOTS array is removed (no owner-manual shots exist); content writers use `git show main:docs/guide/scripts/capture-screens.mjs` as the shot source.
 - Slice 6 — `7d356a9` — review round 1: PASS.
 - Slice 7 — committed below — 11 pages uk+en, no BAD_FRONT_MATTER/UNKNOWN_UI_KEY/MISSING_SECTION per writer (HELP_CHECK=warn build).
+- Slice 7 — `a753b52` — review round 1: PASS.
+- Slice 10 content part — committed below (19 pages uk+en: how-* topics, account, member topics; no check issues except missing shot files per writer). The HTML board guide removal and doc updates of Slice 10 follow after Slices 8–9 (writers still read the old HTML). AUTO: Slice 10 split into two commits for that reason.

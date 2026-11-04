@@ -41,3 +41,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `9aed130..7d356a9` | PASS | — | static review. minor: old `board-guide.html` still present (Slice 10 removes); refusal message prints the cooperative name; TOC without page numbers; a page with no shots is skipped silently. Read-only depends on front-matter `click` steps never pressing a save button — check in content slices |
+
+## Slice 7 — Content: getting started, plots and members, settings
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `7d356a9..a753b52` | PASS | — | static review with read-only key/heading scripts. minor: "a copy of the database" wording in `member-form`; `getting-started` uk/en `{{ui:}}` sets differ (language wording); `plot-card` "no buttons" vs downloads elsewhere |
