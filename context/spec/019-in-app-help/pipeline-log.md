@@ -72,3 +72,8 @@
 - Slice 10 close-out review round 1: PASS. All slice reviews PASS → Slice 11 (Feature Testing & Regression) starts; baseline suite running on main in a worktree.
 - Verify: first test run — help unit tests 8 failures + Layout.test 18 failures, all test-setup bugs (jsdom locale en-US, nested router, missing `useOptionalMe` mock); fixed by react-frontend, committed below. helpContent fails only on MISSING_SHOT (screenshots pending). Shared tests 130/130.
 - Verify fix: help virtual module failed under `vite dev` (directory passed to addWatchFile) — fixed, committed below.
+- Baseline (main @ aacd2a4): backend verify green, clients tests green — 0 failures.
+- Slice 11 task 1: `web/e2e/help.spec.ts` (15 specs, one `@smoke`) written by testing-expert; 14 pass against the local dev stack.
+- Verify finding: FS 2.6 "chairman sees every page" unmet (demo chairman owns no plot; `member` pages hidden). AUTO: `member` is satisfied by owning a plot or holding `MEMBERS_VIEW`; fix sent to react-frontend; spec assumption amended.
+- Verify finding: public help language follows the stored choice, else the browser language (app-wide rule). AUTO: spec assumption amended to match the existing app behaviour instead of forcing Ukrainian.
+- Local env: the running dev DB (not started by the pipeline) has the demo role «Електрик» with extra permissions (REPORTS_VIEW, AUDIT_VIEW) left by earlier runs; the electrician e2e fails there on its precondition. Not reset (not the pipeline's environment).

@@ -5,6 +5,8 @@ import type { HelpBundlePage } from '../../help/types';
 export type HelpViewer =
   { kind: 'anonymous' } | { kind: 'user'; permissions: readonly string[]; ownsPlot: boolean };
 
+const membersViewPermission = 'MEMBERS_VIEW';
+
 export const ANONYMOUS_VIEWER: HelpViewer = { kind: 'anonymous' };
 
 type VisibilityPage = Pick<HelpBundlePage, 'id' | 'permissions'>;
@@ -14,12 +16,18 @@ export function viewerFromMe(me: Pick<Me, 'permissions' | 'ownedPlots'>): HelpVi
   return { kind: 'user', permissions: me.permissions, ownsPlot: me.ownedPlots.length > 0 };
 }
 
-/** `member` in a page's permissions stands for "owns a plot now"; any other entry is a permission code. */
+/**
+ * `member` in a page's permissions stands for "owns a plot now, or holds MEMBERS_VIEW" (board people who look after
+ * members may read what members see, so the chairman sees every page). Any other entry is a permission code.
+ * Help is a filter for clarity, not a secret.
+ */
 export function isPageVisible(page: Pick<HelpBundlePage, 'permissions'>, viewer: HelpViewer): boolean {
   if (viewer.kind === 'anonymous') return true;
   if (page.permissions.length === 0) return true;
   return page.permissions.some((entry) =>
-    entry === 'member' ? viewer.ownsPlot : viewer.permissions.includes(entry),
+    entry === 'member'
+      ? viewer.ownsPlot || viewer.permissions.includes(membersViewPermission)
+      : viewer.permissions.includes(entry),
   );
 }
 

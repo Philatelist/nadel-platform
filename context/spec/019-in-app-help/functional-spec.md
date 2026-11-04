@@ -278,7 +278,8 @@ the last change). The owner manual PDF and the Telegram leaflet are built as now
 - **Tests deferred to the end** — the user's instruction for this run: every task is implemented first, with no test
   runs between tasks or slices; the whole feature is verified once at the end.
 - AUTO: **"Owns a plot"** means the person is a current owner of at least one plot of the cooperative; former owners do
-  not see the member pages.
+  not see the member pages. The member pages are also shown to anyone who may view the members (the chairman always
+  can), so the chairman sees every page as 2.6 requires even without a plot of their own (decided in verification).
 - AUTO: **The electrician** sees the pages for everyone signed in, the bill pages of «Як система рахує», the member
   pages if they own a plot, and, of the board screens, only the readings and meters pages. "Only the readings and meters
   pages" in the requirement is read as "of the board pages".
@@ -287,7 +288,8 @@ the last change). The owner manual PDF and the Telegram leaflet are built as now
 - AUTO: **A signed-in platform operator** has no cooperative and sees the same pages as any signed-in user with no
   rights (the pages for everyone and the bill pages).
 - AUTO: **A visitor who is not signed in** sees every help page (board and member pages). The help section shows the
-  language switch; the language follows the visitor's previous choice, Ukrainian by default.
+  language switch; the language follows the visitor’s previous choice, else the browser language, else Ukrainian — the
+  same rule as the rest of the application (amended in verification).
 - AUTO: **A screen without its own page** («Сторінку не знайдено») shows no «?» button.
 - AUTO: **Search ranking** puts title matches above heading matches above text matches; at most 20 results are shown.
 - AUTO: **The old board guide document** is replaced by the help pages once its content has moved; the board guide PDF

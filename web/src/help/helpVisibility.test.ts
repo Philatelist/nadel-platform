@@ -26,6 +26,16 @@ describe('helpVisibility', () => {
     expect([...visiblePageIds(pages, viewer)]).toEqual(['everyone', 'plots', 'my-account']);
   });
 
+  it('shows the chairman (MEMBERS_VIEW, no plot) the member pages too', () => {
+    const viewer = viewerFromMe({ permissions: ['MEMBERS_VIEW'], ownedPlots: [] });
+    expect([...visiblePageIds(pages, viewer)]).toEqual(['everyone', 'plots', 'my-account']);
+  });
+
+  it('hides the member pages from the electrician without a plot and without MEMBERS_VIEW', () => {
+    const viewer = viewerFromMe({ permissions: ['READINGS_ENTER', 'METERS_VIEW'], ownedPlots: [] });
+    expect([...visiblePageIds(pages, viewer)]).toEqual(['everyone', 'readings', 'meters']);
+  });
+
   it('hides the owner pages from a member who owns no plot', () => {
     const viewer = viewerFromMe({ permissions: [], ownedPlots: [] });
     expect([...visiblePageIds(pages, viewer)]).toEqual(['everyone']);
