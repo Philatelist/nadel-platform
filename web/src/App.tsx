@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import { RequirePermission } from './components/RequirePermission';
 import { HomeRedirect } from './components/HomeRedirect';
@@ -10,7 +10,8 @@ import { HelpPageView } from './help/HelpPageView';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
-const router = createBrowserRouter([
+/** The route tree; the help check reads it to prove every screen has a help page. */
+export const appRoutes: RouteObject[] = [
   {
     element: <Layout />,
     children: [
@@ -346,7 +347,9 @@ const router = createBrowserRouter([
       { path: '*', element: <NotFoundPage /> },
     ],
   },
-]);
+];
+
+const router = createBrowserRouter(appRoutes);
 
 export function App() {
   const auth = useAuth();

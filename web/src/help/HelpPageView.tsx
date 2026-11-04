@@ -6,10 +6,12 @@ import { useLocale, useT } from '../i18n';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import type { HelpBundlePage } from '../../help/types';
 import { HelpContent } from './HelpContent';
+import { useHelpViewer } from './helpViewer';
+import { isPageVisible, visiblePageIds } from './helpVisibility';
 import { useHelpBundle } from './useHelpBundle';
 import { useHelpMeta } from './useHelpMeta';
 
-function PageBody({ page }: { page: HelpBundlePage }) {
+function PageBody({ page, visibleIds }: { page: HelpBundlePage; visibleIds: ReadonlySet<string> }) {
   const t = useT();
   const { locale } = useLocale();
   const { hash } = useLocation();
@@ -70,9 +72,23 @@ function PageBody({ page }: { page: HelpBundlePage }) {
           </nav>
         )}
         <div className="min-w-0 flex-1 lg:order-1">
-          <HelpContent nodes={page.body} locale={locale} />
+          <HelpContent nodes={page.body} locale={locale} isPageVisible={(id) => visibleIds.has(id)} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function HiddenPage() {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader title={t.help.hidden} />
+      <p>
+        <Link to="/help" className="text-accent underline">
+          {t.help.toContents}
+        </Link>
+      </p>
     </div>
   );
 }
@@ -80,11 +96,14 @@ function PageBody({ page }: { page: HelpBundlePage }) {
 export function HelpPageView() {
   const { id } = useParams();
   const query = useHelpBundle();
+  const viewer = useHelpViewer();
   return (
     <QueryBoundary query={query}>
       {(bundle) => {
         const page = bundle.pages.find((candidate) => candidate.id === id);
-        return page ? <PageBody page={page} /> : <NotFoundPage />;
+        if (!page) return <NotFoundPage />;
+        if (!isPageVisible(page, viewer)) return <HiddenPage />;
+        return <PageBody page={page} visibleIds={visiblePageIds(bundle.pages, viewer)} />;
       }}
     </QueryBoundary>
   );

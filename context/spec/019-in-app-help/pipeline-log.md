@@ -39,3 +39,8 @@
 - AUTO: assumptions of the functional spec §4 and the technical considerations (runnerImport, one copy of help shots in
   `web/public/help/img`, uk-only pre-rendered SEO shells, `NADEL_NOINDEX`, `account` page visible to every signed-in user).
 - AUTO: slice reviews run statically (the reviewer reads the diff and may typecheck, but runs no tests) — user instruction.
+- Phase 3 start.
+- Slice 1 — `a8e2bcc` — tests not run (deferred); typecheck, lint, prettier, `vite build` green per builder; review round 1 running (static).
+- AUTO: content slices run in parallel with the code slices (content writers touch only `docs/help/**` and `migration-map.md`), to shorten the run; each slice is still committed separately by path.
+- Slice 1 review round 1: PASS (minor notes in review-log).
+- Slice 2 — committed below — tests not run (deferred); typecheck, lint, format green per builder.

@@ -7,6 +7,8 @@ import { useT } from '../i18n';
 interface HelpContentProps {
   nodes: readonly HelpNode[];
   locale: Locale;
+  /** Pages the viewer may open; a link to any other page is shown as plain text. Omitted: all. */
+  isPageVisible?: (pageId: string) => boolean;
 }
 
 const headingClass: Record<'h2' | 'h3' | 'h4', string> = {
@@ -25,11 +27,13 @@ function Callout({ children }: { children: ReactNode }) {
   );
 }
 
-function renderNodes(nodes: readonly HelpNode[], locale: Locale): ReactNode[] {
-  return nodes.map((node, index) => renderNode(node, locale, index));
+type Visible = ((pageId: string) => boolean) | undefined;
+
+function renderNodes(nodes: readonly HelpNode[], locale: Locale, visible: Visible): ReactNode[] {
+  return nodes.map((node, index) => renderNode(node, locale, index, visible));
 }
 
-function renderNode(node: HelpNode, locale: Locale, key: number): ReactNode {
+function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visible): ReactNode {
   switch (node.type) {
     case 'text':
       return node.text;
@@ -54,87 +58,89 @@ function renderNode(node: HelpNode, locale: Locale, key: number): ReactNode {
         </span>
       );
     case 'link':
+      if (visible && !visible(node.pageId))
+        return <span key={key}>{renderNodes(node.children, locale, visible)}</span>;
       return (
         <Link
           key={key}
           to={{ pathname: `/help/${node.pageId}`, hash: node.anchor ? `#${node.anchor}` : '' }}
           className="text-accent underline"
         >
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </Link>
       );
     case 'a':
       return (
         <a key={key} href={node.href} rel="noreferrer noopener" className="text-accent underline">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </a>
       );
     case 'callout':
-      return <Callout key={key}>{renderNodes(node.children, locale)}</Callout>;
+      return <Callout key={key}>{renderNodes(node.children, locale, visible)}</Callout>;
     case 'h2':
     case 'h3':
     case 'h4': {
       const Heading = node.type;
       return (
         <Heading key={key} id={node.id} className={headingClass[node.type]}>
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </Heading>
       );
     }
     case 'ul':
       return (
         <ul key={key} className="list-disc pl-6">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </ul>
       );
     case 'ol':
       return (
         <ol key={key} className="list-decimal pl-6">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </ol>
       );
     case 'li':
       return (
         <li key={key} className="my-1 [&>img]:mt-2">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </li>
       );
     case 'blockquote':
       return (
         <blockquote key={key} className="border-l-4 border-line-strong pl-4 text-ink-muted">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </blockquote>
       );
     case 'table':
       return (
         <div key={key} className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
-            {renderNodes(node.children, locale)}
+            {renderNodes(node.children, locale, visible)}
           </table>
         </div>
       );
     case 'th':
       return (
         <th key={key} className="border border-line bg-accent-soft px-3 py-2 font-semibold">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </th>
       );
     case 'td':
       return (
         <td key={key} className="border border-line px-3 py-2 align-top">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </td>
       );
     case 'pre':
       return (
         <pre key={key} className="overflow-x-auto rounded-control bg-accent-soft p-3 font-mono text-sm">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </pre>
       );
     case 'code':
       return (
         <code key={key} className="font-mono text-[0.9em]">
-          {renderNodes(node.children, locale)}
+          {renderNodes(node.children, locale, visible)}
         </code>
       );
     case 'p':
@@ -144,7 +150,7 @@ function renderNode(node: HelpNode, locale: Locale, key: number): ReactNode {
     case 'strong':
     case 'em': {
       const Tag = node.type;
-      return <Tag key={key}>{renderNodes(node.children, locale)}</Tag>;
+      return <Tag key={key}>{renderNodes(node.children, locale, visible)}</Tag>;
     }
     default: {
       const unreachable: never = node;
@@ -154,10 +160,10 @@ function renderNode(node: HelpNode, locale: Locale, key: number): ReactNode {
 }
 
 /** Renders the compiled node tree with React elements; no raw HTML is ever injected. */
-export function HelpContent({ nodes, locale }: HelpContentProps) {
+export function HelpContent({ nodes, locale, isPageVisible }: HelpContentProps) {
   return (
     <div className="flex flex-col gap-3 text-[15px] leading-relaxed text-ink">
-      {renderNodes(nodes, locale)}
+      {renderNodes(nodes, locale, isPageVisible)}
     </div>
   );
 }
