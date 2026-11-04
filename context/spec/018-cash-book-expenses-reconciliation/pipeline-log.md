@@ -1,11 +1,11 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: running
-- Phase: 5 — findings 4–5 pushed, waiting for checks
+- Status: finished
+- Phase: 6 — review run (done, after findings 4–5)
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41851564632)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41858313283)
 - Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
@@ -216,3 +216,5 @@
 - Findings 4–5 guides done (general-purpose): board guide ch. 16 attachments (new HEIC message + Safari hint, previews item), owner manual attachments (new message, thumbnails made in the browser) and troubleshooting row; uk/en identical; prettier clean.
 - Findings 4–5 web done (react-frontend): AttachmentPreview (thumbnails 160 px from the stored file via the authenticated download, cached; native <dialog> viewer with Esc/arrows/buttons; PDF tile opens a blob URL in a new tab), card keeps «Завантажити», form previews with «Прибрати», HEIC message + Safari hint; tests (+RED on Esc). Orchestrator: clients green (web 981), prettier clean, uk hint text checked. Review run stopped for the e2e run of cashbook-expense-handover + smoke (testing-expert).
 - e2e (testing-expert): cashbook-expense-handover 2 passed, smoke 21 passed. Review run restarted; guide shots: the expense-card shot first picked an expense the owner had entered while testing (real phone photo IMG_0402.jpg) — not committed; capture-screens.mjs gained a rowText filter so the shot opens the demo expense «Будмаркет «Демо»»; shots re-captured (all), make guide built 5 PDFs; orchestrator checked img/uk/expense-card.png (demo receipt thumbnail). FS 2.3 new criteria ticked (vitest card/form/HEIC + e2e + screenshot).
+- Findings 4–5 pushed (a7c4428); PR body updated; checks run 41858313283: 6 of 6 green. No CI fixes.
+- Review run on the PR branch: web http://localhost:5173 (200). Stop: `kill 1159 1180 1322 1489`, infra `make down`.
