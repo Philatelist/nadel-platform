@@ -93,3 +93,13 @@
 - A Prettier run reformatted ~120 help pages although `*.md` is in `.prettierignore`; the formatting-only changes were reverted before commit.
 - Full suite once: `make check` green (backend 4184, coverage met; clients 1059+130+56+9).
 - Still red in the full e2e set locally, outside the smoke set and outside this change: `acceptance.spec.ts:233,349` (expects 25 permissions, there are 31), `acceptance.spec.ts:151` (leftover local member without a role), `acceptance.spec.ts:507` (not investigated), `language-purity.spec.ts:353` (Latin "PDF" in «Завантажити PDF» on the account).
+
+## Owner review of PR #68, second round (2026-11-05)
+
+- «Мій кабінет» is in the menu only for a user who owns a plot (and has no plots list); the home screen is the first menu item (`menuItems` in `nav.ts`, `landingPath` derives from it; empty menu → `/account`); `/plots` without the right redirects home. The electrician without a plot: «Покази», «Лічильники», home «Покази».
+- Stale e2e specs, each run on a fresh database (`docker compose … down -v`, `make up`) on `main` @ aacd2a4 and on this branch:
+  - `acceptance.spec.ts` roles screen ×2 (25 permissions, there are 31): red on main and branch → list extended to 31.
+  - `acceptance.spec.ts` members list (paging): green on main and branch on a fresh database (the earlier red was a leftover local member).
+  - `acceptance.spec.ts` member creation to archive: red on main and branch (Telegram needs no username since feature 017) → the Telegram case removed.
+  - `language-purity.spec.ts`: red on main and branch ("PDF", "SMTP", "STARTTLS", "SSL", "@BotFather", "/newbot", the bot name, the saved token tail in uk; the certificate number «Д-2026-1» in en) → allowlist PDF/SMTP/STARTTLS/SSL, patterns for Telegram handles/commands and secret tails, and the certificate number marked `data-code` on the register.
+- Locally on the branch: those specs green, `help.spec.ts` + `meters.spec.ts` + electrician acceptance 28/28, smoke 22/22; clients typecheck, lint, 1061 web unit tests green.
