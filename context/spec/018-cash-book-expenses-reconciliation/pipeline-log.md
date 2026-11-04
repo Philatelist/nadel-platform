@@ -1,11 +1,11 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: running
-- Phase: 5 — charges-by-month fix pushed, waiting for checks
+- Status: finished
+- Phase: 6 — review run (done, after the charges-by-month fix)
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41870709690)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/66 · Checks: green (run 41875920469)
 - Review run: running at http://localhost:5173 (PIDs in scratchpad/review-run.pids)
 
 ## Project facts
@@ -236,3 +236,4 @@
 
 - «За період послуг» filters by service month instead of regrouping the first sheet's charges (Oct 2026: 36 178,59 vs 17 252,21; only 10.2026 rows). Expected per 013 §3.1: same charges as sheet 1 grouped by service_from month (08, 09, 10), equal «Усього» in every column incl. «Сплачено». Fix + test with a cross-month interval and a later adjustment; guide wording if needed; push, green CI; no .github, no merge. Sent to spring-backend.
 - Fix (spring-backend): cause LedgerReportQueries BY_SERVICE_MONTH (no join to billing_month; WHERE c.service_from between :from and :to; monthTotals to = end of month) applied the selected billing months to service dates. Fix: same join/filter as sheet 1 (bm.month between :from and :to), grouping by service_from; paid from the same allocations. New ChargesByMonthReportTests.theServiceSheetRegroupsExactlyTheChargesOfTheBillingMonthsAskedAndHasTheSameTotals (rows 08/09/10, equal totals in all six columns; RED reproduces the owner's symptom); LedgerReadModelTests rewritten; tests that encoded the old behaviour updated (listed in the report). Demo Oct 2026 check (read-only): 08 11431.57, 09 7494.81 and -5.00, 10 17252.21 and -410.00, total 36178.59. READMEs updated; guides and notes already said "the same charges". Orchestrator re-run: 582 green.
+- Charges-by-month fix pushed (bd8db94); checks run 41875920469: 6 of 6 green. Review run restarted on the PR branch: web http://localhost:5173. Stop: `kill 55598 55624 55766 55945`, infra `make down`.
