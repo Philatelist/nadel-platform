@@ -43,7 +43,11 @@ Filters are kept in the page address, so a link to a filtered log can be shared.
 | {{ui:audit.columns.record}} | The kind of record and the record itself. For members, plots, tariffs, meters, recalculations and others it is a link to their card. If the record was deleted, it says "{{ui:audit.unlabelled}}". |
 | {{ui:audit.columns.changes}} | The old and new value of every changed field, joined by an arrow. Only fields that really changed are shown. For a role you see the added ("+") and removed ("−") permissions. |
 
-The log records almost every action that changes data: adding and changing members, roles, plots, owners, settings, import, charge types and tariffs, meters and readings, charges, reversals, month closing, recalculations, payments, reports, invoices, certificates, delivery, the cash desk and the bank.
+The log records almost every action that changes data: adding and changing members, roles, plots, owners, settings, import, charge types and tariffs, meters and readings, charges, reversals, month closing, recalculations, payments, reports, invoices, certificates, delivery, the cash desk and the bank. In particular the log holds:
+
+- invoices: building the invoices of a month (the month, how many were built, how many skipped) and reissuing an invoice; certificates: an issued certificate and an annulled certificate with the reason. Downloads of documents are not recorded;
+- delivery: a change of the settings (which ones, without secrets), "Invoices sent" (the month and the counts by channel), "Announcement sent" (to whom and how many), connecting and disconnecting a member's Telegram. Single sends do not enter the log: they are on the [Delivery](help:deliveries) screen;
+- cash and bank: the opening balance, entering and reversing expenses, bank deposits and other income, cash counts and the booking of their differences, the statement figures, bank differences, "Reconciled" and the reopening of a month (by the system, with a line showing who reopened it), adding, renaming, moving and archiving items. The counterparty and the purpose are visible there only to those who see members' personal data.
 
 ## Worked example
 

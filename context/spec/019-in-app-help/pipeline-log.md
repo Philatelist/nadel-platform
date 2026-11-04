@@ -66,3 +66,6 @@
 - Slice 8 — committed below — 17 pages uk+en, only MISSING_SHOT per writer.
 - Slice 9 — `2de1f4b` — review round 1: PASS.
 - Slice 8 — `90d32b6` — review round 1: MAJOR_ISSUES (M1); fix sent to the writer, together with the save-click shot safety check.
+- NOTE: commit `f031138` (Slice 8 review fixes) also swept in deletions that the Slice 10 close-out agent had already staged with `git rm` (old `board-guide.html` uk/en, 150 files under `docs/guide/img/`, the split migration maps). Not rewritten (no reset); those deletions are reviewed with the Slice 10 close-out.
+- Slice 8 review round 2: PASS. Slice 10 close-out done by the writer (gaps filled in 6 pages, one migration map, HTML guide and docs/guide/img removed, owner manual/README/architecture updated); a backend test read the deleted HTML guide — spring-backend repoints it to the help pages (no test run, deferred).
+- Slice 10 close-out — committed below (with the backend test repointed to the help pages; not run, deferred).

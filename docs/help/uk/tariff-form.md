@@ -47,7 +47,7 @@ shots:
 | Поле | Що вказати |
 |---|---|
 | {{ui:tariffs.version.validFrom}} | Дата, з якої діє ставка. Обов’язкове. |
-| {{ui:tariffs.version.rate}} | Ставка до чотирьох знаків після коми, наприклад 4,32 або 1,4532. Сума до копійок округлюється лише в кінці, тому зайві знаки не псують результат. |
+| {{ui:tariffs.version.rate}} | Ставка до чотирьох знаків після коми, наприклад 4,32 або 1,4532. Сума до копійок округлюється лише в кінці, тому зайві знаки не псують результат. На екрані ставка показується без зайвих нулів: 50,00 ₴, а не 50,0000 ₴. |
 | {{ui:tariffs.version.basis}} | З чого складається сума. Див. таблицю нижче. |
 | {{ui:tariffs.version.frequency}} | {{ui:tariffs.frequency.MONTHLY}}, {{ui:tariffs.frequency.QUARTERLY}} або {{ui:tariffs.frequency.YEARLY}}. Для підстави «{{ui:tariffs.basis.FIXED_ONE_TIME}}» завжди «{{ui:tariffs.frequency.ONE_OFF}}». |
 | {{ui:tariffs.version.dueDate}} | З’являється лише для підстави «{{ui:tariffs.basis.FIXED_ONE_TIME}}» і тоді обов’язкове. |

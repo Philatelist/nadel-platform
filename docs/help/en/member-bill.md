@@ -25,10 +25,12 @@ The invoice for a month reaches you by e-mail, in Telegram or on paper. You can 
 - The invoice number, for example `2026-10/9`: year, month and plot number. If the board issued the invoice again, "(version 2)" is added to the number. The number stays the same.
 - Your plot, the street and the owners with their shares.
 - A table with one line for each charge type. It has the debt at the start of the month, charged, paid and the debt at the end.
-- The payments of the month: the date, the receipt or bank document number and the amount. You can check them against your bank.
-- The total: the debt at the end of the month, the prepayment and the "{{ui:invoices.due}}" amount. Next to it is a QR code if "{{ui:invoices.due}}" is above zero.
+- Under "{{ui:audit.outcome.RESOLVED}}" are the details people ask about most. Every electricity interval is written as one span of reading dates with both readings, the kWh and the price, for example "readings 10.08.2026 → 03.10.2026: 3 435,900 → 3 705,500 = 269,600 kWh × 4.32 ₴". Losses and common consumers stand separately, as do the basis of a fixed tariff and, for a correction, the month it corrects.
+- The payments of the month (the block "Payments for October 2026"): the date, the receipt number or the bank reference and the amount. You can check them against your bank. A reversed payment is shown as the payment itself and a line "payment reversal" with a negative amount.
+- Payments received after the month but before the invoice was built ("Received after October"). They reduce the "{{ui:invoices.due}}" amount.
+- The total: the debt at the end of the month, the prepayment and the "{{ui:invoices.due}}" amount. Next to it is a QR code if "{{ui:invoices.due}}" is above zero, with the line "Pay in your bank app": on a phone, a tap opens the transfer in the bank without scanning.
 
-Every invoice fits one page. A very long invoice continues on a second page.
+Every invoice fits one A4 page. A very long invoice continues on a second page, whose header repeats the invoice number and the plot. An invoice for a month that is not closed yet carries the mark "as of" a date. How the figures come about: [Invoice numbers](help:how-invoice-numbers).
 
 ## How to read the amounts
 
@@ -55,14 +57,14 @@ More cases with numbers: [The numbers of the invoice](help:how-invoice-numbers).
 
 ## The QR code
 
-A banking app reads the QR code and opens a filled-in transfer. Before you pay, check in the app:
+The code follows the rules of the National Bank of Ukraine. A banking app reads the QR code and opens a filled-in transfer. Before you pay, check in the app:
 
 1. The recipient is the name of your cooperative.
 2. The IBAN is the one in the invoice.
 3. The payment purpose starts with the word "{{ui:plot.kind.PLOT}}", then your plot number, the month and the invoice number.
 4. The amount equals "{{ui:invoices.due}}". You may change it: you can pay a part.
 
-The other fields are locked. If something does not match, do not pay and ask the board.
+The other fields (recipient, account, recipient code, purpose) are locked. Close the form without paying if something does not match. If something does not match, do not pay and ask the board.
 
 ## If the numbers look wrong
 

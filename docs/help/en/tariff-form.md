@@ -47,7 +47,7 @@ Block heading: "{{ui:tariffs.form.firstVersion}}".
 | Field | What to enter |
 |---|---|
 | {{ui:tariffs.version.validFrom}} | The date the rate takes effect. Required. |
-| {{ui:tariffs.version.rate}} | The rate with up to four decimal places, for example 4.32 or 1.4532. The amount is rounded to kopecks only at the end, so extra digits do no harm. |
+| {{ui:tariffs.version.rate}} | The rate with up to four decimal places, for example 4.32 or 1.4532. The amount is rounded to kopecks only at the end, so extra digits do no harm. On screen the rate is shown without extra zeros: 50.00 ₴, not 50.0000 ₴. |
 | {{ui:tariffs.version.basis}} | What the amount is made of. See the table below. |
 | {{ui:tariffs.version.frequency}} | {{ui:tariffs.frequency.MONTHLY}}, {{ui:tariffs.frequency.QUARTERLY}} or {{ui:tariffs.frequency.YEARLY}}. For the basis "{{ui:tariffs.basis.FIXED_ONE_TIME}}" always "{{ui:tariffs.frequency.ONE_OFF}}". |
 | {{ui:tariffs.version.dueDate}} | Appears only for the basis "{{ui:tariffs.basis.FIXED_ONE_TIME}}" and is then required. |

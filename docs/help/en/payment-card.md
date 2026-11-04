@@ -41,7 +41,7 @@ The title is "{{ui:payments.card.titleReceipt}}" for cash, or the bank document 
 
 | Button | When it is there | What it does |
 |---|---|---|
-| {{ui:receipts.print}} | Only for cash with a receipt number | Downloads the receipt PDF. For a payment split between plots the receipt is one, with all the plots. The receipt of a reversed payment carries the mark "REVERSED". It is an internal receipt, not a fiscal one. |
+| {{ui:receipts.print}} | Only for cash with a receipt number | Downloads the receipt PDF. For a payment split between plots the receipt is one, with all the plots. The receipt (A5, half of A4) holds the requisites of the cooperative, the number, the date, the plot, the payer, the amount in figures and in words, what the money was allocated to ("Allocation as of" the print date) and the name of the person who accepted the money, with a line for a signature. The note about the payer is printed only for users who may see member data. The receipt of a reversed payment carries the mark "REVERSED" with the date. It is an internal receipt, not a fiscal one. |
 | {{ui:payments.reallocate.action}} | The payment is not reversed and can be reallocated | Moves money from some charges to others. |
 | {{ui:charges.allocatePrepayment}} | Automatic allocation of the prepayment is off, the payment has a prepayment, and the plot has an open charge | Allocates the prepayment to open charges. |
 | {{ui:payments.reverse.action}} | The payment can be reversed | Opens the reversal window. |

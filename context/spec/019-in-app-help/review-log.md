@@ -66,3 +66,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `7dbb8be..90d32b6` | MAJOR_ISSUES | M1 `meter-card` worked example ends with figures (65/66 kWh) not derivable from the demo meters | minor (sent along as a safety fix): `tariff-recalculation-step`/`reading-recalculation-step` click «Зберегти» — read-only only if the edited version/reading is in use. Other minor: hand-typed interface names in 3 places; "38 лічильників" unverified; `[!important]` boxes under «Хто бачить» in `tariff-form` |
+| 2 | + `f031138` | PASS | M1 resolved; save-click shots confirmed read-only on demo data | minor: awkward YAML comment wording in `meter-card` |

@@ -64,7 +64,40 @@ The list does not stop you from closing: the person decides, seeing everything.
 
 ### Invoices of the month
 
-Below there is a block "Invoices of the month": here the invoices of the plots for a closed month are built and their sending is started. The sending itself and its results are described on the page [Delivery](help:deliveries), and certificates on the page [Certificates register](help:certificates).
+The block "{{ui:invoices.monthPanel.title}}" builds the invoices of the plots for this month and starts sending them. Invoices can be built for an open month too; the board usually does it right after the month's charges. The block is used by those who may build invoices (by default the chairman).
+
+> [!important]
+> Until the IBAN and the ЄДРПОУ code of the cooperative are filled in, invoices are not built. The message "{{ui:invoices.requisites.title}}" names what is missing and leads to the settings: the chairman enters the IBAN in Settings → Requisites ({{ui:invoices.requisites.ibanLink}}), the ЄДРПОУ code is set by the platform operator. Details: [Cooperative settings](help:settings).
+
+#### Build the invoices
+
+First the block shows the preview "{{ui:invoices.monthPanel.previewTitle}}": how many plots can get an invoice ("{{ui:invoices.monthPanel.invoiceable}}": active plots, not common land, with a current owner), how many of them already have an invoice for this month ("{{ui:invoices.monthPanel.existing}}") and what the build will do. The summary uses the same words as the result: "To be built: 18. New versions: 0. Unchanged: 1. Skipped: 6." A plot that already has an invoice gets a new version only when its figures changed. Plots with no debt are skipped. The switch "{{ui:invoices.monthPanel.includeNothingDue}}" adds plots with no debt; their invoice has no QR code.
+
+Press "{{ui:invoices.monthPanel.build}}" and wait: an indicator is shown while the build runs, then the result: how many invoices were built, how many got a new version, how many did not change and how many were skipped. If nobody entered anything between the preview and the build, the result equals the preview. The result stays in place of the preview until you change the month or the switch.
+
+Building again creates nothing while nothing has changed. If somebody else is already building the same month, you will see a message about it, and nothing is created twice.
+
+#### Invoice versions
+
+The system keeps every invoice as it was built: later it opens with the same figures and the same owners, even after a payment or a change of owner. After a payment, a correction or a recalculation the treasurer builds the month again. A plot whose figures changed gets a new version ("version 2") with the same invoice number; a plot where nothing changed gets no new version. Older versions stay available: the lists show the latest one, and pressing "{{ui:invoices.earlierVersions}}" unfolds the earlier ones. A member sees only the latest version. An invoice is never deleted.
+
+#### The list of the month's invoices
+
+Below is the list "{{ui:invoices.monthPanel.listTitle}}": one row per plot with the latest version (plot, version, "{{ui:invoices.due}}", build date and a link to the PDF). Older versions of a plot are folded under "{{ui:invoices.earlierVersions}}". With no invoices yet it says "{{ui:invoices.monthPanel.listEmpty}}". Each row has a "{{ui:invoices.send.invoice}}" button that sends this one invoice to the owners of the plot.
+
+"{{ui:invoices.monthPanel.print}}" downloads one PDF with the latest versions of the invoices, one per A4 sheet, in the order of streets and plots. It is for members who chose paper delivery. The switch "{{ui:invoices.monthPanel.scope}}" chooses between "{{ui:invoices.monthPanel.scopePAPER}}" and "{{ui:invoices.monthPanel.scopeALL}}".
+
+#### Check the QR code before handing out
+
+The code follows the rules of the National Bank of Ukraine. Before you hand out invoices, check one code with a phone: open the QR scanner in a banking app, point it at the code on the screen or on paper and check the recipient, the IBAN, the payment purpose and the amount as described on [How to read my invoice](help:member-bill#the-qr-code). The other fields in the bank are locked; close the form without paying.
+
+#### Send the invoices of the month
+
+The button "{{ui:invoices.monthPanel.send}}" does not send anything at once. First the window "{{ui:invoices.send.title}}" shows the preview "{{ui:invoices.send.previewTitle}}": how many members get the invoice in Telegram, how many by email and how many paper copies must be printed. The switch "{{ui:invoices.send.includeNothingDue}}" adds plots with nothing to pay: such a member gets "No debt, thank you!" and the PDF. If everything has been sent already, the window says "{{ui:invoices.send.nothingNew}}".
+
+"{{ui:invoices.send.confirm}}" puts the messages in the queue and returns you at once; the progress is on the [Delivery](help:deliveries) screen. In Telegram the member gets "Invoice for October 2026, plot 9: due 413.26 ₴", the PDF and a "Pay" button (it opens the banking app through the QR link of the invoice). The email has the same text, the PDF attached and the signature "The board …".
+
+Sending the same invoices of a month again duplicates nothing: the same version of an invoice is received by the same member through the same channel once. If an invoice was reissued as a new version, the new one goes out. Paper invoices are marked "to print": print the PDF for printing (every copy has its own QR code for connecting Telegram), then press "{{ui:deliveries.printDone}}" on the Delivery screen. Which channel an invoice takes is described on the [Delivery](help:deliveries) page, certificates on the [Certificates register](help:certificates) page.
 
 ### Charge the month
 

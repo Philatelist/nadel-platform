@@ -36,8 +36,7 @@ never skips a shot or writes a placeholder image (the help build fails on a miss
   The Ukrainian page's list is taken in the Ukrainian interface, the English page's list in the English one, so the
   `steps` texts (button, tab and field names) are in the language of the page.
 - Output: `web/public/help/img/<lang>/<name>.png`, served by the application and used by the PDF.
-  `docs/guide/img/` holds the older board-guide shots; the owner manual uses no screenshots, so nothing is written there
-  any more.
+  The retired HTML board guide and its shots (`docs/guide/img/`) are gone; the owner manual uses no screenshots.
 - Shots are taken with the demo users, in the light theme, at 1280×860 (`viewport: phone` gives 390×844).
 - Demo guard: before the first shot the script signs in as the chairman and reads `GET /api/me`. If the cooperative is
   not the demo cooperative of `backend/src/main/resources/db/demo/R__demo_data.sql`
