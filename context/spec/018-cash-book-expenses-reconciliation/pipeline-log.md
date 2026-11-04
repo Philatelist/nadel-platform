@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
 - Status: running
-- Phase: 4 — verify and full suite
+- Phase: 5 — publish
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -160,3 +160,20 @@
 - Slice 9 review round 2: PASS (M1 resolved). Every slice review PASS. Phase 4: waiting for make check.
 - Phase 4 full suite (make check on 30c24e5): gen, format, lint green; backend 4178 tests, 1 failure (not in the baseline): MembersAccessAcceptanceTests.noTaxPassportOrBirthDataExistsInTheContractOrOnTheCard — the contract now mentions payroll_taxes/taxes_fees in the expense category systemCode description. Stopped before coverage and client tests. Regression fix attempt 1 → spring-backend (reword the description; no test change, no code rename).
 - Regression fix attempt 1 (spring-backend): ExpenseCategory schema description no longer lists the seeded codes (TAXES_FEES matched the test's tax pattern); gen (doc comment only); MembersAccessAcceptanceTests 13 green.
+- Regression fix commit 9ee7842; fix review round 1 started; full suite re-run started.
+- Regression fix review round 1: PASS.
+- Full suite re-run (make check on 9ee7842): green — gen, format, lint, backend 4178 tests 0 failures, JaCoCo line coverage 0.97757 ≥ 0.977 (thin margin, ~5 lines), clients web 973, shared 130, api-client 9, ui-tokens 56. No regressions vs baseline (baseline fully green).
+- e2e re-run on 9ee7842 (testing-expert, manual stack with NADEL_DB_URL via the LAN address): own 4 specs 9 passed, smoke set 21 passed; 6 real-render screenshots in docs/screenshots/018-cash-book-expenses-reconciliation-*.png (orchestrator looked at bank-reconciliation and expense-card).
+- /awos:verify: 60 of 61 criteria [x] (acceptance-coverage.md maps each to tests; full suite green; e2e green; screenshots), 1 [?] (FS 2.11 #3, a real phone camera). Status: Implemented — pending manual check (FS and TC). Product docs: architecture.md already updated in Slice 8; no /awos:product or /awos:architecture command needed.
+- Clean-up: only the main worktree remains.
+
+## Final report (Phase 4)
+
+- Branch `018-cash-book-expenses-reconciliation` from main @ c7419a6. Commits: 2ad657e specs · 64b6fcf S1 · bcae29e S2 · cd1e699 S3 · d5ec2fc S4 · 8513268 S5 · 6439480 S6 · a070e08 S7 · 74c731d S8 · d3e77d8 S9 · 30c24e5 S9 review fix · 9ee7842 regression fix · (this commit) verify.
+- Acceptance criteria: 60 of 61 verified; [?] FS 2.11 #3 (taking a photo with a real phone camera; the camera input is tested).
+- Reviews: S1–S8 PASS round 1 · S9 MAJOR r1 (stale test names in acceptance-coverage.md) → PASS r2 · regression fix PASS. Minor notes in review-log.md.
+- Full suite: make check green on 9ee7842 (backend 4178 tests, JaCoCo 0.97757 ≥ 0.977 — thin margin; clients web 973, shared 130, api-client 9, ui-tokens 56); baseline was fully green; one regression found and fixed (the contract mentioned a `tax…` word).
+- New migrations: V32 (treasury), V33 (count booking reason), V34 (bank difference). New dependencies: none (heic-to rejected: LGPL-3.0).
+- Decided automatically: every `AUTO:` entry above (Phase 1, tech, licence, the «Звірено» rule, the act-period clamp).
+- Owner follow-ups: (1) .github/workflows/ci.yml demo-days job: add DemoTreasuryTests to `-Dtest`; (2) Makefile `e2e` hard-codes NADEL_DB_URL localhost — with the local Homebrew Postgres on 5432 it fails (stop it with `brew services stop postgresql`, or make the target honour an override); (3) decide: «Звірено» on all four differences vs closing only (known limit with past-month reversals); (4) decide: accept an LGPL HEIC library for Chrome/Android; (5) product check of the reopen notice wording «Після звірки додано рядок: …»; (6) optionally raise coverage.minimum later.
+- Staffing gap: guides ran under general-purpose (no guides specialist). Suggested: `/awos:hire cover 018-cash-book-expenses-reconciliation: need image metadata handling (JPEG/PNG), bilingual HTML guides`.

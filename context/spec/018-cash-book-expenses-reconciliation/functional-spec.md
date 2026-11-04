@@ -3,7 +3,7 @@
 - **Topic:** The cooperative keeps track of its own money: the cash the treasurer holds and the bank account, every
   receipt and spending of that money, the monthly check of the cash and of the bank statement, a report of income and
   expenses for the general meeting, and a reconciliation act that a member gets for their plot.
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author:** Alex Usov
 - **Source:** `docs/features/018-cash-book-expenses-reconciliation.md` (roadmap phase 3)
 
@@ -62,14 +62,14 @@ before the opening date stay in the journal marked «до вхідного за�
 opening date up to and including that day. A reversed entry and its reversal both stay in the journal.
 
 - **Acceptance Criteria:**
-  - [ ] Given the cash account has no opening balance, when the treasurer opens «Каса і банк», then the cash card shows
+  - [x] Given the cash account has no opening balance, when the treasurer opens «Каса і банк», then the cash card shows
         «Введіть вхідний залишок» and no balance.
-  - [ ] When the chairman enters a cash opening balance of 1 000,00 ₴ on 01.10.2026, then the cash card shows
+  - [x] When the chairman enters a cash opening balance of 1 000,00 ₴ on 01.10.2026, then the cash card shows
         1 000,00 ₴ and the change history shows «Вхідний залишок встановлено».
-  - [ ] Given an opening balance is saved, when the chairman opens the account, then there is no way to change it.
-  - [ ] Given the treasurer has no right to approve, when they open an account without an opening balance, then they
+  - [x] Given an opening balance is saved, when the chairman opens the account, then there is no way to change it.
+  - [x] Given the treasurer has no right to approve, when they open an account without an opening balance, then they
         see the prompt but no button to enter it.
-  - [ ] Given the bank account has no opening balance, when the treasurer tries to record a bank expense, then they see
+  - [x] Given the bank account has no opening balance, when the treasurer tries to record a bank expense, then they see
         «Спочатку введіть вхідний залишок рахунку».
 
 ### 2.2 The journal of an account (movements)
@@ -104,23 +104,23 @@ allowed. If the cash then shows a negative balance, the cash card shows «Зал
 not refuse.
 
 - **Acceptance Criteria:**
-  - [ ] Given the cash opening balance is 1 000,00 ₴ on 01.10.2026, when a cash payment of 500,00 ₴ dated 05.10 is
+  - [x] Given the cash opening balance is 1 000,00 ₴ on 01.10.2026, when a cash payment of 500,00 ₴ dated 05.10 is
         saved on the payments screen, then the cash journal shows a member payment line of +500,00 ₴ on 05.10 and the cash
         balance is 1 500,00 ₴.
-  - [ ] When the chairman reverses that cash payment on 12.10, then the cash journal shows a reversing line of −500,00 ₴
+  - [x] When the chairman reverses that cash payment on 12.10, then the cash journal shows a reversing line of −500,00 ₴
         dated 12.10.
-  - [ ] Given cash is 200,00 ₴ on 07.10, when the treasurer records a cash expense of 250,00 ₴ on 07.10, then it is
+  - [x] Given cash is 200,00 ₴ on 07.10, when the treasurer records a cash expense of 250,00 ₴ on 07.10, then it is
         refused with «Недостатньо готівки в касі: залишок 200,00 ₴ на 07.10.2026».
-  - [ ] Given cash was 1 200,00 ₴ on 06.10 and a handover of 1 000,00 ₴ was made on 07.10, when the treasurer enters an
+  - [x] Given cash was 1 200,00 ₴ on 06.10 and a handover of 1 000,00 ₴ was made on 07.10, when the treasurer enters an
         expense of 400,00 ₴ dated 06.10, then it is refused because 07.10 would become −200,00 ₴, and the message names
         the day and its balance.
-  - [ ] Given September is closed, when the treasurer records an expense dated 30.09, then the journal shows the date
+  - [x] Given September is closed, when the treasurer records an expense dated 30.09, then the journal shows the date
         30.09 and the billing month October.
-  - [ ] Given reversing a cash payment makes the cash negative, when the chairman reverses it, then the reversal is saved
+  - [x] Given reversing a cash payment makes the cash negative, when the chairman reverses it, then the reversal is saved
         and the cash card shows «Залишок каси від'ємний — проведіть перерахунок каси».
-  - [ ] Given the bank balance is 100,00 ₴, when the treasurer records a bank expense of 150,00 ₴, then it is saved and
+  - [x] Given the bank balance is 100,00 ₴, when the treasurer records a bank expense of 150,00 ₴, then it is saved and
         the bank card shows «Залишок банку від'ємний».
-  - [ ] Given two treasurers record cash expenses of 150,00 ₴ each at the same moment while cash is 200,00 ₴, when both
+  - [x] Given two treasurers record cash expenses of 150,00 ₴ each at the same moment while cash is 200,00 ₴, when both
         save, then exactly one is saved and the other sees the insufficient cash message.
 
 ### 2.3 Expenses («Витрати»)
@@ -160,20 +160,20 @@ The expense list shows date, account, category, counterparty, amount, number of 
 reversed, with filters by period, account and category.
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer records a cash expense of 300,00 ₴ «Матеріали» on 06.10 with a photo of the receipt, then the
+  - [x] When the treasurer records a cash expense of 300,00 ₴ «Матеріали» on 06.10 with a photo of the receipt, then the
         expense appears in the list, the cash balance goes down by 300,00 ₴, and the card shows the photo.
-  - [ ] Given a photo with a GPS position was attached, when it is downloaded from the expense card, then the downloaded
+  - [x] Given a photo with a GPS position was attached, when it is downloaded from the expense card, then the downloaded
         file contains no GPS position and no camera data.
-  - [ ] When the treasurer attaches a 6 MB file, then they see «Файл завеликий. Максимум 5 МБ.»
-  - [ ] When the treasurer attaches a text file renamed to `receipt.jpg`, then they see «Дозволені лише фото (JPEG, PNG) і
+  - [x] When the treasurer attaches a 6 MB file, then they see «Файл завеликий. Максимум 5 МБ.»
+  - [x] When the treasurer attaches a text file renamed to `receipt.jpg`, then they see «Дозволені лише фото (JPEG, PNG) і
         PDF.»
-  - [ ] When the treasurer attaches a sixth file, then they see «Не більше 5 файлів.»
-  - [ ] Given a user without the right to view the cash book, when they try to open an expense or its attachment, then
+  - [x] When the treasurer attaches a sixth file, then they see «Не більше 5 файлів.»
+  - [x] Given a user without the right to view the cash book, when they try to open an expense or its attachment, then
         they see the «no access» page.
-  - [ ] Given an expense of 300,00 ₴ was recorded with the wrong amount, when the chairman clicks «Сторнувати і внести
+  - [x] Given an expense of 300,00 ₴ was recorded with the wrong amount, when the chairman clicks «Сторнувати і внести
         заново» and gives a reason, then the expense is shown as reversed, the cash balance is restored, and the form
         opens with the old values to correct.
-  - [ ] Given the treasurer has no right to approve, when they open an expense card, then they see no «Сторнувати»
+  - [x] Given the treasurer has no right to approve, when they open an expense card, then they see no «Сторнувати»
         button.
 
 ### 2.4 Handover of cash to the bank («Здати в банк»)
@@ -183,10 +183,10 @@ It adds a spending line to the cash and a receipt line to the bank of the same d
 would make the cash negative (2.2).
 
 - **Acceptance Criteria:**
-  - [ ] Given cash is 1 200,00 ₴ and bank is 20 000,00 ₴, when the treasurer hands over 1 000,00 ₴ on 07.10 with the
+  - [x] Given cash is 1 200,00 ₴ and bank is 20 000,00 ₴, when the treasurer hands over 1 000,00 ₴ on 07.10 with the
         document number «КВ-123», then cash shows 200,00 ₴ and bank shows 21 000,00 ₴, and both journals show the
         handover with «КВ-123».
-  - [ ] When the chairman reverses that handover with a reason, then cash is back to 1 200,00 ₴ and bank to
+  - [x] When the chairman reverses that handover with a reason, then cash is back to 1 200,00 ₴ and bank to
         20 000,00 ₴.
 
 ### 2.5 Other income («Інший прихід»)
@@ -196,9 +196,9 @@ Income not from members: an account, a date, an amount above 0,00, a category fr
 account.
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer records 35,00 ₴ «Відсотки банку» to the bank on 31.10, then the bank balance goes up by
+  - [x] When the treasurer records 35,00 ₴ «Відсотки банку» to the bank on 31.10, then the bank balance goes up by
         35,00 ₴ and the bank journal shows the income with its category.
-  - [ ] Given the cash would go negative on a later day, when the chairman reverses a cash other income, then it is
+  - [x] Given the cash would go negative on a later day, when the chairman reverses a cash other income, then it is
         refused with the insufficient cash message.
 
 ### 2.6 Cash count («Перерахунок каси»)
@@ -218,17 +218,17 @@ earlier date does not change a saved count.
   signature lines for the treasurer and the chairman.
 
 - **Acceptance Criteria:**
-  - [ ] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 200,00 ₴, then the count is saved as
+  - [x] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 200,00 ₴, then the count is saved as
         «Збігається».
-  - [ ] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 180,00 ₴ without an explanation, then
+  - [x] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 180,00 ₴ without an explanation, then
         they see «Вкажіть пояснення різниці.»
-  - [ ] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 180,00 ₴ with an explanation, then the
+  - [x] Given cash in the books is 200,00 ₴, when the treasurer enters a count of 180,00 ₴ with an explanation, then the
         count shows the difference −20,00 ₴ and the cash card shows «Неврегульована різниця −20,00 ₴».
-  - [ ] Given that unresolved difference, when the chairman clicks «Оформити різницю» and gives a reason, then a
+  - [x] Given that unresolved difference, when the chairman clicks «Оформити різницю» and gives a reason, then a
         «Нестача» line of −20,00 ₴ is added, the cash shows 180,00 ₴ and the unresolved difference disappears.
-  - [ ] When the treasurer downloads the act of that count, then the PDF shows the book balance 200,00 ₴, the counted
+  - [x] When the treasurer downloads the act of that count, then the PDF shows the book balance 200,00 ₴, the counted
         balance 180,00 ₴, the difference −20,00 ₴ and signature lines for the treasurer and the chairman.
-  - [ ] Given the treasurer has no right to approve, when they open a count with a difference, then they see no
+  - [x] Given the treasurer has no right to approve, when they open a count with a difference, then they see no
         «Оформити різницю» button.
 
 ### 2.7 Bank reconciliation («Звірка з банком»), monthly
@@ -252,16 +252,16 @@ added later (for example a bank payment entered on 03.11 with the date 20.10), t
 status: «Не звірено», «Звірено», «Потребує повторної звірки».
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer enters a statement with opening 100,00, in 50,00, out 20,00 and closing 200,00, then they
+  - [x] When the treasurer enters a statement with opening 100,00, in 50,00, out 20,00 and closing 200,00, then they
         see «Цифри виписки не сходяться: 100,00 + 50,00 − 20,00 ≠ 200,00».
-  - [ ] Given the October books show in 3 000,00 ₴ and out 0,00 ₴, when the treasurer enters the statement 20 000,00 /
+  - [x] Given the October books show in 3 000,00 ₴ and out 0,00 ₴, when the treasurer enters the statement 20 000,00 /
         3 000,00 / 150,00 / 22 850,00, then the screen shows the «out» difference of 150,00 ₴ and the «closing»
         difference, and «Звірено» cannot be pressed.
-  - [ ] Given that difference, when the treasurer records a bank expense of 150,00 ₴ «Банківські комісії» in October,
+  - [x] Given that difference, when the treasurer records a bank expense of 150,00 ₴ «Банківські комісії» in October,
         then every difference is 0,00 and the treasurer can mark October «Звірено».
-  - [ ] Given October is «Звірено», when a bank payment dated 20.10 is entered on 03.11, then October shows «Потребує
+  - [x] Given October is «Звірено», when a bank payment dated 20.10 is entered on 03.11, then October shows «Потребує
         повторної звірки» with the reason.
-  - [ ] Given a difference no entry explains, when the chairman books a bank difference with a reason, then it appears
+  - [x] Given a difference no entry explains, when the chairman books a bank difference with a reason, then it appears
         in the bank journal and the difference becomes 0,00.
 
 ### 2.8 Reversals
@@ -271,8 +271,8 @@ reversal is a new journal line of the opposite amount, dated on the day of the r
 marked «Сторновано». An entry is reversed once. Member payments are reversed only on the payments screen (015).
 
 - **Acceptance Criteria:**
-  - [ ] When the chairman reverses an expense without a reason, then they see «Вкажіть причину сторнування.»
-  - [ ] Given an expense is already reversed, when the chairman opens it, then there is no «Сторнувати» button.
+  - [x] When the chairman reverses an expense without a reason, then they see «Вкажіть причину сторнування.»
+  - [x] Given an expense is already reversed, when the chairman opens it, then there is no «Сторнувати» button.
 
 ### 2.9 Expense and income categories (Settings → «Статті витрат»)
 
@@ -284,10 +284,10 @@ for new entries but stays on old ones. A category is never deleted. Two categori
 name.
 
 - **Acceptance Criteria:**
-  - [ ] When the chairman renames «Інше» to «Інші витрати», then existing expenses show the new name.
-  - [ ] When the chairman archives «Вивіз сміття», then it is not offered on the expense form, and old expenses still
+  - [x] When the chairman renames «Інше» to «Інші витрати», then existing expenses show the new name.
+  - [x] When the chairman archives «Вивіз сміття», then it is not offered on the expense form, and old expenses still
         show it.
-  - [ ] When the chairman adds a category named like an existing one, then they see «Така стаття вже є.»
+  - [x] When the chairman adds a category named like an existing one, then they see «Така стаття вже є.»
 
 ### 2.10 Reconciliation act with a member («Акт звірки»)
 
@@ -314,14 +314,14 @@ The board builds it from the plot card («Акт звірки», with a period).
 of their own plots; another plot's act is not available to them. The act can be sent like any document of 017.
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer opens plot 9 and downloads «Акт звірки» for 01.09.2026–31.10.2026, then the PDF shows the
+  - [x] When the treasurer opens plot 9 and downloads «Акт звірки» for 01.09.2026–31.10.2026, then the PDF shows the
         balance on 31.08 and on 31.10 equal to the plot balances report on those days, and every charge and payment of
         the period by date.
-  - [ ] When a member opens their account, then each of their plots has «Акт звірки», and the downloaded act shows
+  - [x] When a member opens their account, then each of their plots has «Акт звірки», and the downloaded act shows
         their plot.
-  - [ ] Given a member does not own plot 9, when they try to open plot 9's act, then they see «not found».
-  - [ ] When a user asks for a period that ends after today, then they see «Невірний період».
-  - [ ] Given the cooperative's requisites are not entered, when a user builds an act, then they see the same message
+  - [x] Given a member does not own plot 9, when they try to open plot 9's act, then they see «not found».
+  - [x] When a user asks for a period that ends after today, then they see «Невірний період».
+  - [x] Given the cooperative's requisites are not entered, when a user builds an act, then they see the same message
         as for invoices: the requisites must be entered first.
 
 ### 2.11 The «Каса і банк» screen
@@ -338,12 +338,12 @@ In the menu for users with the right to view the cash book. It shows:
 On a phone the expense form offers taking a photo with the camera.
 
 - **Acceptance Criteria:**
-  - [ ] Given a user without the right to view the cash book (for example a member), when they look at the menu, then
+  - [x] Given a user without the right to view the cash book (for example a member), when they look at the menu, then
         there is no «Каса і банк».
-  - [ ] Given a user with the right to view but not to enter, when they open «Каса і банк», then they see the balances
+  - [x] Given a user with the right to view but not to enter, when they open «Каса і банк», then they see the balances
         and no entry buttons.
-  - [ ] When the treasurer opens the expense form on a phone, then they can take a photo with the camera as an
-        attachment.
+  - [?] When the treasurer opens the expense form on a phone, then they can take a photo with the camera as an
+        attachment. (Manual check: the camera button is in place and tested; taking a photo with a real phone was not automated.)
 
 ### 2.12 Reports (on «Звіти»)
 
@@ -370,14 +370,14 @@ the cash book:
 A custom role (for example an audit committee) can be given these reports with the right to view the cash book alone.
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer previews «Касова книга» for October, then each day's closing balance equals the cash balance
+  - [x] When the treasurer previews «Касова книга» for October, then each day's closing balance equals the cash balance
         on «Каса і банк» for that day.
-  - [ ] When the chairman downloads «Доходи та витрати» for October on the demo data, then the result equals the change
+  - [x] When the chairman downloads «Доходи та витрати» for October on the demo data, then the result equals the change
         of cash plus bank between 01.10 and 31.10, and the member payments by charge type equal the allocations of the
         «Платежі» report for the same payments.
-  - [ ] Given a custom role with only the right to view the cash book, when its user opens «Звіти», then they see the
+  - [x] Given a custom role with only the right to view the cash book, when its user opens «Звіти», then they see the
         four cash book reports and none of the other reports.
-  - [ ] When the treasurer previews «Витрати» filtered by «Матеріали», then only expenses of that category are listed,
+  - [x] When the treasurer previews «Витрати» filtered by «Матеріали», then only expenses of that category are listed,
         each with links to its attachments.
 
 ### 2.13 Rights
@@ -393,11 +393,11 @@ A custom role (for example an audit committee) can be given these reports with t
 Custom roles can be given any of the three new rights.
 
 - **Acceptance Criteria:**
-  - [ ] When the chairman opens the roles screen, then the three new rights are listed, the treasurer role has the first
+  - [x] When the chairman opens the roles screen, then the three new rights are listed, the treasurer role has the first
         two, and the chairman has all three.
-  - [ ] Given the treasurer, when they try to book a count difference, then they are refused.
-  - [ ] Given a member, when they try to open «Каса і банк» by its address, then they see the «no access» page.
-  - [ ] Given a user of another cooperative, when they try to open an expense or a count of this cooperative, then they
+  - [x] Given the treasurer, when they try to book a count difference, then they are refused.
+  - [x] Given a member, when they try to open «Каса і банк» by its address, then they see the «no access» page.
+  - [x] Given a user of another cooperative, when they try to open an expense or a count of this cooperative, then they
         see «not found».
 
 ### 2.14 Change history
@@ -410,9 +410,9 @@ renamed, reordered and archived. Counterparty and description values appear in i
 members' personal data; others see «приховано».
 
 - **Acceptance Criteria:**
-  - [ ] When the treasurer records an expense, then the change history shows «Витрату внесено» with the amount,
+  - [x] When the treasurer records an expense, then the change history shows «Витрату внесено» with the amount,
         account and category.
-  - [ ] Given a user without the right to see members' personal data, when they open that history entry, then the
+  - [x] Given a user without the right to see members' personal data, when they open that history entry, then the
         counterparty and the description show «приховано».
 
 ### 2.15 Existing payments
@@ -421,7 +421,7 @@ When the feature is installed, every payment already entered (and every reversal
 so the cash and bank journals are complete from the first day. Each payment and each reversal has exactly one line.
 
 - **Acceptance Criteria:**
-  - [ ] Given a cooperative had payments before the feature was installed, when the treasurer opens the cash journal,
+  - [x] Given a cooperative had payments before the feature was installed, when the treasurer opens the cash journal,
         then every earlier cash payment and reversal is listed once.
 
 ### 2.16 Demo data
@@ -431,7 +431,7 @@ with a photo of a receipt; two handovers; one count with a booked shortage of 20
 the current month with a bank difference to find.
 
 - **Acceptance Criteria:**
-  - [ ] When the demo chairman opens «Каса і банк», then both balances, the last count with its booked shortage, the
+  - [x] When the demo chairman opens «Каса і банк», then both balances, the last count with its booked shortage, the
         previous month «Звірено» and the current month with a difference are shown.
 
 ### 2.17 Worked examples

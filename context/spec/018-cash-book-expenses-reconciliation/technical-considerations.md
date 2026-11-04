@@ -1,7 +1,7 @@
 # Technical Specification: Cash book, expenses and reconciliation
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author(s):** Alex Usov (design input: spring-backend, postgres-database, react-frontend agents)
 
 ---
