@@ -3900,6 +3900,77 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /plots/{id}/reconciliation-act.pdf:
+    get:
+      tags: [documents]
+      operationId: getPlotReconciliationActPdf
+      summary: The reconciliation act of a plot for a period as a PDF file
+      description: |
+        «Акт звірки взаєморозрахунків» (A4, Ukrainian, feature 018 §2.10): the cooperative's requisites, the plot and
+        its current owners, the period, the balance at the start of the period (the debt and the prepayment as of the
+        day before `from`), every charge, adjustment, charge reversal, payment and payment reversal dated in the period
+        in date order with the columns «Нараховано» and «Сплачено», the turnover totals of the period, the balance at
+        the end of the period (as of `to`), the sentence «За даними кооперативу заборгованість станом на {to}
+        становить …» (or «переплата … становить …», or «заборгованість відсутня») by the net balance (the debt minus
+        the prepayment), and the signature blocks «Від кооперативу» (the name of the first active holder of the
+        treasurer base role, or an empty line without one) and «Член кооперативу». The balances at both ends are those
+        of the plot balances report (`LedgerReadModel.debtsAsOf`, every charge type) on the day before `from` and on
+        `to`: a charge counts on its debt date (a reversal and an adjustment on the date of the charge they correct), a
+        payment on the day it was received (a payment reversal on the day of the payment it reverses). Made on request
+        and not stored; not written to the audit log; the same plot and period give the same bytes as long as the
+        ledger of the plot does not change.
+
+        The period must satisfy `first ≤ from ≤ to ≤ today` (Europe/Kyiv), where `first` is the earliest day in the
+        plot's ledger (its first charge or opening balance, or an earlier payment); otherwise 400 `VALIDATION_FAILED`
+        with `errors[{field: from, code: INVALID}]` (`from` after `to` or before `first`, or a plot without any ledger
+        row) or `errors[{field: to, code: INVALID}]` (`to` after today). 409 `PLOT_COMMON_LAND` for common land (an
+        archived plot gets its act: its history stays). 409 `REQUISITES_MISSING` with `missing` (`IBAN`, `EDRPOU`) as
+        for invoices.
+
+        No permission annotation: a caller with `CHARGES_VIEW` may ask for any plot of the cooperative, anyone else
+        only for a plot they currently own. Any other plot, an unknown id and a plot of another cooperative are the same
+        404 `PLOT_NOT_FOUND` (checked before the period and the requisites); the platform operator has no cooperative
+        data: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          description: The first day of the period, inclusive
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: The last day of the period, inclusive; not after today (Europe/Kyiv)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The act, sent as an attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /plots/{id}/invoices:
     post:
       tags: [documents]

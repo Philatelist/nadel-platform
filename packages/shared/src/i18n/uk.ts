@@ -292,6 +292,7 @@ export const uk: Messages = {
       account: 'Рахунок',
       invoices: 'Рахунки',
       certificates: 'Довідка',
+      reconciliationAct: 'Акт звірки',
     },
     back: 'До списку ділянок',
     fields: {
@@ -443,6 +444,8 @@ export const uk: Messages = {
     OWNERSHIP_NOT_FOUND: 'Запис про володіння не знайдено. Перезавантажте сторінку.',
     REQUIRED_reason: 'Вкажіть причину',
     INVALID_asOf: 'Дата не може бути в майбутньому.',
+    INVALID_from: 'Невірний період',
+    INVALID_to: 'Невірний період',
     INVALID_amount: 'Вкажіть суму, наприклад 1250,50',
     DUPLICATE_OWNER: 'Цей член уже вибраний.',
     REQUIRED_plotIds: 'Оберіть хоча б одну ділянку.',
@@ -2118,6 +2121,15 @@ export const uk: Messages = {
   receipts: {
     print: 'Друкувати квитанцію',
     printing: 'Формування квитанції…',
+  },
+  reconciliationAct: {
+    formTitle: 'Акт звірки взаєморозрахунків',
+    from: 'З',
+    to: 'По',
+    download: 'Завантажити акт звірки',
+    downloading: 'Формування акту…',
+    open: 'Акт звірки',
+    close: 'Закрити',
   },
   certificates: {
     title: 'Реєстр довідок',

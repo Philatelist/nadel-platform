@@ -23,6 +23,7 @@ import app.nadel.ledger.PaymentRef;
 import app.nadel.ledger.PaymentRow;
 import app.nadel.ledger.PaymentSource;
 import app.nadel.ledger.PlotDebts;
+import app.nadel.ledger.PlotStatement;
 import app.nadel.ledger.RunStatus;
 import app.nadel.meters.MeterKind;
 import app.nadel.meters.Quantity;
@@ -75,6 +76,10 @@ import org.springframework.transaction.annotation.Transactional;
  * charge they correct. The prepayment is a second query per chunk (payments received by the day minus allocations
  * counted as of the day, per plot, never below zero; {@code payment_plot_received_idx}, {@code allocation_plot_idx}).
  * Plots go 500 per {@code IN} list. {@link #prepaymentAsOf} is that query over every plot, summed.
+ * {@link #plotStatement}: {@link #debtsAsOf} on the day before the period and on its last day, and one {@code UNION ALL}
+ * of the plot's charge rows by {@code accrued_on} and payment rows by {@code received_on} in the period (a payment
+ * reversal joined to its payment for the receipt number and bank reference); {@link #firstDebtDate} the earlier of the
+ * plot's least {@code accrued_on} and least {@code received_on}.
  * <p>
  * {@link #paidByType}: the allocations counted as of {@code to} to the regular charges whose {@code service_from} lies
  * in the range, per charge type. {@link #payments}: the {@code PAYMENT} rows of the billing months or of the days
@@ -287,6 +292,35 @@ class LedgerReportQueries implements LedgerReadModel {
             where p.kind = 'PAYMENT'
               and p.id in (:ids)
             order by p.received_on, p.created_at, p.id
+            """;
+
+    /**
+     * The rows of one plot dated in a period, as {@link #DEBTS_AS_OF} and {@link #PREPAYMENT_AS_OF} date them: the
+     * charges (every kind) by {@code accrued_on}, the payments and their reversals by {@code received_on}, a reversal
+     * with the receipt number and bank reference of the payment it reverses. Charges before payments on a day.
+     */
+    private static final String PLOT_STATEMENT = """
+            select 0 as grp, c.id, c.kind, c.accrued_on as day, c.charge_type_id, c.service_from, c.service_to,
+                   c.amount, cast(null as text) as source, cast(null as bigint) as receipt_number,
+                   cast(null as text) as bank_reference, c.created_at
+            from charge c
+            where c.plot_id = :plotId
+              and c.accrued_on between :from and :to
+            union all
+            select 1, p.id, p.kind, p.received_on, cast(null as uuid), cast(null as date), cast(null as date),
+                   p.amount, p.source, coalesce(p.receipt_number, o.receipt_number),
+                   coalesce(p.bank_reference, o.bank_reference), p.created_at
+            from payment p
+            left join payment o on o.id = p.reverses_payment_id
+            where p.plot_id = :plotId
+              and p.received_on between :from and :to
+            order by day, grp, created_at, id
+            """;
+
+    /** The earliest debt date or day received of the plot's rows; null without any row. */
+    private static final String FIRST_DEBT_DATE = """
+            select least((select min(c.accrued_on) from charge c where c.plot_id = :plotId),
+                         (select min(p.received_on) from payment p where p.plot_id = :plotId))
             """;
 
     /** Bound to a date parameter that a flag switches off. */
@@ -594,6 +628,56 @@ class LedgerReportQueries implements LedgerReadModel {
         Map<UUID, PlotDebts> debts = new LinkedHashMap<>();
         byPlot.forEach((plotId, sum) -> debts.put(plotId, sum.debts(plotId, asOf)));
         return debts;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PlotStatement plotStatement(UUID plotId, LocalDate from, LocalDate to) {
+        Objects.requireNonNull(plotId, "plotId");
+        requireRange(from, to);
+        PlotDebts opening = debtsAsOf(from.minusDays(1), Set.of(), List.of(plotId)).get(plotId);
+        PlotDebts closing = debtsAsOf(to, Set.of(), List.of(plotId)).get(plotId);
+        List<PlotStatement.Line> lines = new ArrayList<>();
+        for (Object row : entityManager.createNativeQuery(PLOT_STATEMENT)
+                .setParameter("plotId", plotId)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList()) {
+            lines.add(statementLine((Object[]) row));
+        }
+        return new PlotStatement(plotId, from, to, opening, closing, lines);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<LocalDate> firstDebtDate(UUID plotId) {
+        Object first = entityManager.createNativeQuery(FIRST_DEBT_DATE)
+                .setParameter("plotId", Objects.requireNonNull(plotId, "plotId"))
+                .getSingleResult();
+        return Optional.ofNullable(date(first));
+    }
+
+    /** A row of {@link #PLOT_STATEMENT}: a charge row in «Нараховано», a payment row in «Сплачено». */
+    private static PlotStatement.Line statementLine(Object[] v) {
+        boolean charge = ((Number) v[0]).intValue() == 0;
+        String kind = (String) v[2];
+        Money amount = money(v[7]);
+        LocalDate day = Objects.requireNonNull(date(v[3]));
+        if (charge) {
+            PlotStatement.LineKind lineKind = switch (ChargeKind.valueOf(kind)) {
+                case OPENING -> PlotStatement.LineKind.OPENING;
+                case REGULAR -> PlotStatement.LineKind.CHARGE;
+                case ADJUSTMENT -> PlotStatement.LineKind.ADJUSTMENT;
+                case REVERSAL -> PlotStatement.LineKind.CHARGE_REVERSAL;
+            };
+            return new PlotStatement.Line(day, lineKind, (UUID) v[1], (UUID) v[4], date(v[5]), date(v[6]), amount,
+                    Money.ZERO, null, null, null);
+        }
+        PlotStatement.LineKind lineKind = PaymentKind.valueOf(kind) == PaymentKind.PAYMENT
+                ? PlotStatement.LineKind.PAYMENT : PlotStatement.LineKind.PAYMENT_REVERSAL;
+        return new PlotStatement.Line(day, lineKind, (UUID) v[1], null, null, null, Money.ZERO, amount,
+                PaymentSource.valueOf((String) v[8]), v[9] == null ? null : ((Number) v[9]).longValue(),
+                (String) v[10]);
     }
 
     @Override

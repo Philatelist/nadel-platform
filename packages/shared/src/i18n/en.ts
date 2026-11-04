@@ -277,6 +277,7 @@ export const en = {
       account: 'Account',
       invoices: 'Invoices',
       certificates: 'Certificate',
+      reconciliationAct: 'Reconciliation act',
     },
     back: 'Back to plots',
     fields: {
@@ -428,6 +429,8 @@ export const en = {
     OWNERSHIP_NOT_FOUND: 'This ownership record was not found. Reload the page.',
     REQUIRED_reason: 'Enter a reason',
     INVALID_asOf: 'The date cannot be in the future.',
+    INVALID_from: 'Invalid period',
+    INVALID_to: 'Invalid period',
     INVALID_amount: 'Enter an amount like 1250.50',
     DUPLICATE_OWNER: 'This member is already chosen.',
     REQUIRED_plotIds: 'Choose at least one plot.',
@@ -2093,6 +2096,15 @@ export const en = {
   receipts: {
     print: 'Print receipt',
     printing: 'Preparing the receipt…',
+  },
+  reconciliationAct: {
+    formTitle: 'Reconciliation act',
+    from: 'From',
+    to: 'To',
+    download: 'Download the reconciliation act',
+    downloading: 'Preparing the act…',
+    open: 'Reconciliation act',
+    close: 'Close',
   },
   certificates: {
     title: 'Certificate register',

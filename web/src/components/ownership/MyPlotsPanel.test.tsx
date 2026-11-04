@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { OwnedPlot, PlotOwnerships } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
@@ -53,7 +54,14 @@ describe('MyPlotsPanel', () => {
     expect(screen.getByRole('link', { name: 'Plot 7' })).toHaveAttribute('href', '/plots/p7');
     expect(screen.getByText('My share: 1/2')).toBeInTheDocument();
     expect(screen.getByText('Moroz Halyna')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('opens the reconciliation act form for an own plot', async () => {
+    renderWithApp(<MyPlotsPanel />);
+    expect(screen.queryByLabelText('From')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Reconciliation act' }));
+    expect(screen.getByLabelText('From')).toBeInTheDocument();
   });
 
   it('says so when the member owns no plots', () => {

@@ -8,6 +8,7 @@ import app.nadel.identity.AccessProfile;
 import app.nadel.money.Money;
 import app.nadel.tenancy.TenantContext;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
@@ -21,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Serves the public {@link DocumentsFacade} with the services of the endpoints: the stored versions
  * ({@link InvoiceRepository}, {@link InvoiceSnapshots}, {@link InvoiceLayout}), the on-request build
- * ({@link InvoiceBuilder#forPlot}, {@link InvoiceBuilder#forDay}), the cash receipt ({@link CashReceipts}) and the
- * print set ({@link PrintBundle}).
+ * ({@link InvoiceBuilder#forPlot}, {@link InvoiceBuilder#forDay}), the cash receipt ({@link CashReceipts}), the
+ * reconciliation act ({@link ReconciliationActs}) and the print set ({@link PrintBundle}).
  * It acts as the system: no member, subject {@value #SYSTEM}, no permission check (the facade's comment says what the
  * caller keeps). Nothing it reads is logged.
  */
@@ -37,14 +38,16 @@ class DocumentsFacadeService implements DocumentsFacade {
     private final InvoiceBuilder builder;
     private final CashReceipts receipts;
     private final PrintBundle printBundle;
+    private final ReconciliationActs reconciliationActs;
 
     DocumentsFacadeService(InvoiceRepository invoices, InvoiceSnapshots snapshots, InvoiceBuilder builder,
-            CashReceipts receipts, PrintBundle printBundle) {
+            CashReceipts receipts, PrintBundle printBundle, ReconciliationActs reconciliationActs) {
         this.invoices = invoices;
         this.snapshots = snapshots;
         this.builder = builder;
         this.receipts = receipts;
         this.printBundle = printBundle;
+        this.reconciliationActs = reconciliationActs;
     }
 
     @Override
@@ -109,6 +112,13 @@ class DocumentsFacadeService implements DocumentsFacade {
         UUID tenantId = tenant();
         return receipts.receipt(Objects.requireNonNull(paymentId, "paymentId"), tenantId)
                 .map(CashReceipts.ReceiptFile::content);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] reconciliationActPdf(UUID plotId, LocalDate from, LocalDate to) {
+        tenant();
+        return reconciliationActs.act(Objects.requireNonNull(plotId, "plotId"), from, to).content();
     }
 
     /** Read-write: the paper recipients may create their link codes ({@link PrintBundle}). */

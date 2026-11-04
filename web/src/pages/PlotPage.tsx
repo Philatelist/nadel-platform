@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UserContent, formatUser } from '../components/UserContent';
 import { PlotTabs } from '../components/PlotTabs';
 import { PlotInvoices } from '../components/invoices/PlotInvoices';
+import { ReconciliationActForm } from '../components/reconciliation/ReconciliationActForm';
 import { CertificateForm } from '../components/certificates/CertificateForm';
 import { PlotAccountPanel } from '../components/charges/PlotAccountPanel';
 import { PlotTariffsPanel } from '../components/tariffs/PlotTariffsPanel';
@@ -222,6 +223,12 @@ function PlotView({ plot }: { plot: PlotDetails }) {
               id: 'invoices',
               label: t.plot.tabs.invoices,
               content: <PlotInvoices plotId={plot.id} />,
+            },
+          plot.kind !== 'COMMON' &&
+            canViewCharges && {
+              id: 'reconciliation-act',
+              label: t.plot.tabs.reconciliationAct,
+              content: <ReconciliationActForm plotId={plot.id} />,
             },
           plot.kind !== 'COMMON' &&
             canIssueCertificates && {

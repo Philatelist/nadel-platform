@@ -58,7 +58,8 @@ cooperative that is not reversed, and a reversal never target an adjustment or a
 | `BookingMonths.bookFor(date)` | Feature 018: the billing month a money entry of another module dated `date` belongs to (`MANDATORY`; `BillingMonths.openForBooking` for the bound cooperative: the month of the day while open, else the earliest open month; leaves it `FOR SHARE`), implemented by `internal.LedgerBookingMonths` |
 | `PaymentSource` (`CASH`, `BANK`) | Where the money of a payment came from (feature 015; column `payment.source`, V27); the bank statement import is a later feature (after 016-018) |
 | `PaymentNotes` | The payer notes of payments for the payments report (feature 015 §6), implemented by `internal.PaymentNotesReader`: `@PreAuthorize(MEMBERS_VIEW)`, `Propagation.MANDATORY`, opened with `PaymentNoteCipher`. The one documented way personal data leaves the ledger for the reports |
-| `LedgerReadModel` (with `PaymentRef`, `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013), of the documents (feature 016: `cashReceipt`, `invoiceLedgers`, `firstBillingMonth`) of the payment messages (feature 017: `paymentsByIds`, `debtsAsOf`) and of the treasury's journal (feature 018: `paymentRefs`, the plot, receipt number, bank reference, kind and reversal reason of payment rows, reversal rows included, with their payment's receipt number and bank reference), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
+| `LedgerReadModel` (with `PaymentRef`, `MonthTypeTotals`, `MonthGrouping`, `MonthStatus`, `PlotDebts`, `PaymentRow`, `PaymentFilter`, `CorrectionRow`, `CorrectionKind`, `CorrectionSource`, `CorrectionCause`, `ChargedRow`, `ChargedRowKind`, `ChargedSource` (with `TARIFF` for the water rows), `ChargedPart`, `LossesRunNodeRow`, `LossesRunNodeOutcome`, `CommonConsumerRunLineRow`, `CommonConsumerRunLineOutcome`, `RunStatus`, `CashReceiptData`, `InvoiceLedger`) | The read facade of the reports (feature 013), of the documents (feature 016: `cashReceipt`, `invoiceLedgers`, `firstBillingMonth`) of the payment messages (feature 017: `paymentsByIds`, `debtsAsOf`), of the reconciliation act (feature 018:
+`plotStatement` with `PlotStatement`, `firstDebtDate`) and of the treasury's journal (feature 018: `paymentRefs`, the plot, receipt number, bank reference, kind and reversal reason of payment rows, reversal rows included, with their payment's receipt number and bank reference), implemented by `internal.LedgerReportQueries`; see The read model of the reports |
 
 Everything else is in `internal`.
 
@@ -453,6 +454,21 @@ Methods:
   (`charge_plot_type_idx`). Test: `LedgerDebtsAsOfTests` (a worked ledger with a reversal, an opening balance,
   later-month adjustments, a fully adjusted and a reversed oldest charge, past days, the type filter, reconciliation
   with `GET /plots/{id}/account` and the status cache, another cooperative, the caller's transaction).
+- `plotStatement(plotId, from, to)` (the reconciliation act, feature 018 §2.10, read by `documents`): one
+  `PlotStatement` with `opening` = `debtsAsOf(from − 1 day)` and `closing` = `debtsAsOf(to)` of the plot (every charge
+  type) and `lines`: every charge row of the plot (`OPENING`, `CHARGE`, `ADJUSTMENT`, `CHARGE_REVERSAL`, the amount
+  signed in `charged`, with its type and service period) whose `accrued_on` lies in the period, and every payment row
+  (`PAYMENT`, `PAYMENT_REVERSAL`, the amount signed in `paid`, with the source, the receipt number and the bank
+  reference, a reversal those of its payment) whose `received_on` lies in it: exactly the dating of `debtsAsOf` (a
+  correction shares its charge's debt date, a payment reversal its payment's day), so `openingNet + charged − paid =
+  closingNet` (net = debt − prepayment) for every period, and the ends equal the plot balances report on those days.
+  A split payment gives the plot only its own part. Lines by date, charges before payments, then `created_at`, id; one
+  `UNION ALL` read over `charge_plot_type_idx` and `payment_plot_received_idx`, no limit (one plot's rows of a period).
+  `to` before `from` is an `IllegalArgumentException`. `firstDebtDate(plotId)`: the earlier of the plot's least
+  `accrued_on` and least `received_on` (the lower bound of an act's period), empty without rows, for an unknown id and
+  under another cooperative. Test: `PlotStatementTests` (an opening balance, charges of three types, an adjustment, a
+  charge reversal, a split payment, a bank payment reversed today, a prepayment; six periods against `debtsAsOf`, the
+  lines by date, the plot balances report on both ends, the first day, the caller's transaction).
 - `corrections(fromMonth, toMonth, chargeTypeIds, kinds, limit)` (corrections, 013 §3.8): one `CorrectionRow` per
   `REVERSAL` or `ADJUSTMENT` row booked in the billing months from–to (`kinds` empty = both, `chargeTypeIds` empty =
   every type), joined to the charge it corrects (`reverses_charge_id` or `adjusts_charge_id`: `originalChargeId`, its

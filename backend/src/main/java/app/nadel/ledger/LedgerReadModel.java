@@ -91,6 +91,31 @@ public interface LedgerReadModel {
     Map<UUID, PlotDebts> debtsAsOf(LocalDate asOf, Set<UUID> chargeTypeIds, Collection<UUID> plotIds);
 
     /**
+     * The statement of one plot for a period (the reconciliation act, feature 018 §2.10): the opening balance
+     * {@link #debtsAsOf} on {@code from − 1 day}, the closing balance {@link #debtsAsOf} on {@code to} (every charge
+     * type), and every row of the plot's ledger dated in the period, by the dating {@code debtsAsOf} uses: the charges,
+     * opening balances, adjustments and charge reversals on their debt date ({@code accrued_on}, which a correction
+     * shares with its charge), the payments and payment reversals on {@code received_on} (which a reversal shares with
+     * its payment). So the net balance (debt minus prepayment) at the end is the one at the start plus the charged
+     * minus the paid amounts of the lines. Lines come by date, then charges before payments, then the time booked, then
+     * id; bounded by the rows of one plot in the period, so no limit applies. Two indexed reads
+     * ({@code charge_plot_type_idx}, {@code payment_plot_received_idx}) besides the two {@code debtsAsOf}.
+     *
+     * @param plotId the plot; an unknown id or one of another cooperative (RLS) gives empty balances and no lines
+     * @param from   the first day, inclusive
+     * @param to     the last day, inclusive; not before {@code from}
+     * @throws IllegalArgumentException when {@code to} is before {@code from}
+     */
+    PlotStatement plotStatement(UUID plotId, LocalDate from, LocalDate to);
+
+    /**
+     * The earliest day in the plot's ledger: the earliest debt date of its charges (an opening balance included) or
+     * day received of its payments, whichever comes first (the lower bound of a reconciliation act's period). Empty
+     * for a plot without any charge or payment, an unknown id and one of another cooperative (RLS).
+     */
+    Optional<LocalDate> firstDebtDate(UUID plotId);
+
+    /**
      * Every reversal and adjustment booked in the billing months from {@code fromMonth} to {@code toMonth} (the
      * corrections report, feature 013 §3.8), one {@link CorrectionRow} per row, with the service period and the booked
      * amount of the charge it corrects, its source ({@link CorrectionSource}: manual reversal, recalculation or run

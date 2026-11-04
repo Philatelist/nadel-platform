@@ -28,3 +28,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `cd1e699..d5ec2fc` | PASS | — | minor: over-long Javadoc lines in treasury package-info and TreasuryController; CashCounts:323 future check could note that the clock zone is Kyiv |
+
+## Slice 5 — Monthly bank reconciliation
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `d5ec2fc..8513268` | PASS | — | minor: a line dated in month M shifts the opening of later reconciled months, which stay «Звірено» (FS reopens only the month of the line; same family as the past-month reversal limit — add to the treasury README note for the owner); `reopened` stays on a re-reconciled month — the UI must show it only for NEEDS_RECHECK |

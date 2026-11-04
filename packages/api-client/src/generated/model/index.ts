@@ -142,6 +142,7 @@ export * from './getMeterConsumptionParams';
 export * from './getMeterTreeParams';
 export * from './getMonthInvoicesPrintPdfParams';
 export * from './getPlotAccountParams';
+export * from './getPlotReconciliationActPdfParams';
 export * from './getPlotTariffsParams';
 export * from './getReadingRoundParams';
 export * from './getReportParams';
