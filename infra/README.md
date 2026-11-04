@@ -5,7 +5,7 @@
 
 | Service         | Port(s)      | What it is                                                           |
 | --------------- | ------------ | -------------------------------------------------------------------- |
-| `postgres`      | 5432         | PostgreSQL 17 + PostGIS                                              |
+| `postgres`      | 5432 (`NADEL_DB_PORT`) | PostgreSQL 17 + PostGIS                                              |
 | `keycloak`      | 8180         | Keycloak, realm `nadel`                                              |
 | `mailpit`       | 1025, 8025   | Test mail server: SMTP on 1025, web UI and API on 8025 (in memory)   |
 | `fake-telegram` | 8091         | Fake Telegram Bot API (`fake-telegram/server.mjs`), no real network  |
@@ -78,6 +78,21 @@ database, creates a fresh one in the same Postgres (owner `nadel_owner`, PostGIS
 pointing at it (Flyway migrates it and loads the demo data of the `dev` profile), and drops it in the cleanup
 trap after the backend stops, also when the run fails or is interrupted. Keycloak keeps its own database and users.
 Override the name with `make e2e E2E_DB=other_name`.
+
+## Another Postgres port (`NADEL_DB_PORT`)
+
+If another Postgres (for example Homebrew) already listens on `127.0.0.1:5432`, it shadows the Docker database.
+Publish the Docker Postgres on another host port with `NADEL_DB_PORT` (shell environment or `infra/.env`; default 5432):
+
+```bash
+NADEL_DB_PORT=5433 make infra
+NADEL_DB_PORT=5433 make e2e
+NADEL_DB_PORT=5433 NADEL_DB_URL=jdbc:postgresql://localhost:5433/nadel make up
+```
+
+`make e2e` builds its backend URL from the variable. The default `NADEL_DB_URL` of the backend `dev` profile stays on
+5432, so `make up` and `make backend` need `NADEL_DB_URL` as shown. Use the same value for every command, or the
+containers are recreated with the other port.
 
 ## Local master key (`infra/.env`)
 

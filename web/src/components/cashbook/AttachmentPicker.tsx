@@ -51,8 +51,14 @@ export function AttachmentPicker({
     try {
       for (const original of chosen) {
         let file: File | undefined = original;
-        if (isHeicFile(original)) file = await heicToJpeg(original);
-        if (file === undefined || !ALLOWED.includes(file.type)) {
+        if (isHeicFile(original)) {
+          file = await heicToJpeg(original);
+          if (file === undefined) {
+            message = a.heicFailed;
+            continue;
+          }
+        }
+        if (!ALLOWED.includes(file.type)) {
           message = a.typeNotAllowed;
         } else if (file.size > MAX_FILE_BYTES) {
           message = a.tooLarge;

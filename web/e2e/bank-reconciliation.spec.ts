@@ -80,7 +80,9 @@ test.describe('bank reconciliation of a month', () => {
       await expect(treasurer.getByTestId('figure-outgoing')).toContainText(money(fee));
       await expect(treasurer.getByTestId('figure-closing')).toContainText(money(fee));
       await expect(main(treasurer).getByRole('button', { name: 'Reconciled', exact: true })).toBeDisabled();
-      await expect(main(treasurer).getByText('Available when every difference is 0.00.')).toBeVisible();
+      await expect(
+        main(treasurer).getByText('Available when the closing balance difference is 0.00.'),
+      ).toBeVisible();
       // the treasurer may not book a difference
       await expect(main(treasurer).getByRole('button', { name: 'Bank difference', exact: true })).toHaveCount(
         0,
@@ -172,7 +174,7 @@ test.describe('bank reconciliation of a month', () => {
             .getByText('Needs a new check'),
         ).toBeVisible();
         await chairman.goto(`/cashbook/bank/${month}`);
-        await expect(main(chairman).getByText(/A line was added after the reconciliation/)).toBeVisible();
+        await expect(main(chairman).getByText(/Reconcile this month again: /)).toBeVisible();
       } finally {
         const id = payment.payments[0]?.id;
         if (id)

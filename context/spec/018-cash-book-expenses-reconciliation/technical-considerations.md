@@ -131,7 +131,8 @@ with the `tenant_isolation` policy (as existing tables), index leading with `ten
   `CashGuard`.
 - **Bank reconciliation:** calendar months by `moved_on`. `StatementRules`: opening + in − out = closing else 400
   `STATEMENT_INCONSISTENT`. `BankComparison`: books opening (balance at the start of the 1st), Σ positive, Σ negative,
-  closing, and four differences. `confirm` needs every difference 0.00 (409 `BANK_MONTH_NOT_BALANCED`). A bank
+  closing, and four differences. `confirm` needs the closing difference 0.00 (409 `BANK_MONTH_NOT_BALANCED`; owner
+  decision on PR #66, the opening, in and out differences are a warning and `balanced` follows the same rule). A bank
   difference (`CASHBOOK_APPROVE`) is dated the month's last day, or today if earlier. Any bank movement dated in a
   `RECONCILED` month (payments included, also via the listener) sets `NEEDS_RECHECK` with the movement and time.
 

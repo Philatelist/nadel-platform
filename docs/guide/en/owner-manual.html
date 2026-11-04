@@ -1386,7 +1386,8 @@ END $$;</pre>
             <td>A month on the bank card → the "Bank reconciliation" screen</td>
             <td>
               The four statement figures, the comparison with the books, the bank lines of the month; "Save
-              the statement", "Reconciled" (only when every difference is 0.00), "Bank difference"
+              the statement", "Reconciled" (only when the closing balance difference is 0.00), "Bank
+              difference"
             </td>
             <td>Enter cash book entries ("Bank difference" - Approve cash book operations)</td>
           </tr>
@@ -2021,10 +2022,11 @@ END $$;</pre>
           changed), not on disk. At most 5 files of 5 MB per expense; the type is checked by content (JPEG,
           PNG, PDF), not by name; location (GPS) and camera data are removed from photos. A file can be
           downloaded only by someone who has "View cash and bank" in their own cooperative. HEIC files from an
-          iPhone are converted to JPEG by the phone or Safari itself; in desktop Chrome, picking a HEIC file
-          gives the file type message. The counterparty and the purpose of an expense are personal data:
-          stored protected, visible in the audit log only with "View members". Attachments make the database
-          and its backups grow: plan the space (see chapter 10).
+          iPhone are converted to JPEG only by the phone or browser (the server does not convert HEIC); if
+          that fails the user sees "This HEIC photo could not be converted. Save it as JPEG and add it again."
+          The counterparty and the purpose of an expense are personal data: stored protected, visible in the
+          audit log only with "View members". Attachments make the database and its backups grow: plan the
+          space (see chapter 10).
         </dd>
         <dt>Report templates are data</dt>
         <dd>
@@ -2508,16 +2510,20 @@ END $$;</pre>
             <td>A bank month is "Needs a new check" again</td>
             <td>
               After "Reconciled", a bank line dated in that month appeared (a payment, an expense, an other
-              income or a difference entered later). The screen says what was added and when; the audit log
-              has a "month reopened" entry. Check the statement and press "Reconciled" again. If the line was
-              back-dated, check the later months too: they stay "Reconciled".
+              income or a difference entered later). The screen says "Reconcile this month again: {kind} of
+              {date} for {amount} was entered on {at}."; the audit log has a "month reopened" entry. Check the
+              statement and press "Reconciled" again. If the line was back-dated, check the later months too:
+              they stay "Reconciled", and the next check of such a month shows the shift of its opening
+              balance.
             </td>
           </tr>
           <tr>
             <td>"Reconciled" stays disabled although the mistake was fixed</td>
             <td>
-              All four differences must be zero. A reversal made today is dated today and does not fall into
-              the old month; close the remainder with a "Bank difference" for the month (the chairman).
+              The closing balance difference must be zero; differences in the total in or out only warn. If
+              the closing difference is not zero, enter the missing entry or close the remainder with a "Bank
+              difference" for the month (the chairman). A reversal made today is dated today and does not fall
+              into the old month: it gives only a warning.
             </td>
           </tr>
           <tr>
@@ -2530,9 +2536,10 @@ END $$;</pre>
           <tr>
             <td>A photo is not attached to an expense</td>
             <td>
-              The file is over 5 MB, it is the sixth file, or it is not JPEG/PNG/PDF by content. A HEIC file
-              from an iPhone is not accepted in desktop Chrome: save it as JPEG or take the photo on the
-              phone. A request over 27 MB is rejected by a proxy or the server.
+              The file is over 5 MB, it is the sixth file, or it is not JPEG/PNG/PDF by content. A HEIC photo
+              that the phone or browser could not convert is not attached: the form says "This HEIC photo
+              could not be converted. Save it as JPEG and add it again." A request over 27 MB is rejected by a
+              proxy or the server.
             </td>
           </tr>
           <tr>

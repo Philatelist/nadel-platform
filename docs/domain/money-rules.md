@@ -916,17 +916,28 @@ are the bank balance at the start of the 1st, the month's receipts and spendings
 them; a reversal counts against the direction of the line it reverses, so a mistake and its reversal in one month
 cancel), and the balance at the end of the last day. Each difference is statement − books. A difference is closed by
 the missing entry (a payment, an expense, an other income) or by a bank difference the chairman books (dated the
-month's last day, or today if earlier). «Звірено» needs **all four differences 0.00**. A bank line dated in a reconciled
-month added later (payments included) puts that month back to «Потребує повторної звірки» with the line and the time.
+month's last day, or today if earlier). «Звірено» needs a statement and **the closing difference 0.00** (owner decision
+on PR #66). A difference in the opening, `in` or `out` while the closing agrees does not block: the screen shows it as a
+warning with a short explanation. A bank line dated in a reconciled month added later (payments included) puts that
+month back to «Потребує повторної звірки» with the line and the time.
 
-Known limits of the four-figure rule (open with the owner):
+Why `in` and `out` can differ while the closing agrees: a line moves between two months while the money is the same.
 
-- A wrong bank line in a past month that is reversed today lowers today's month, not the past one, so that past month's
-  `in` or `out` stays off for good; its closing difference can be booked away, the other one cannot (a booked bank
-  difference moves `in` or `out` as well as the closing). Such a month balances only if the statement figures match.
-- A line dated in month M changes the opening (and closing) of every later month. Only month M is reopened: a later
-  month already «Звірено» keeps its status although its books opening no longer equals its statement. The owner may
-  prefer that «Звірено» need only the closing difference, or that a line reopen the later reconciled months too.
+- **A mistaken line reversed in a later month.** The reversal is dated on its own day, so the line stays in its month
+  and the reversal lowers `in` (or `out`) of the later month. In the later month the opening and that flow differ by
+  the same amount and the closing agrees (a warning); the month of the line keeps a closing difference.
+- **A line the bank books in another month** than the books date it (a payment entered as 31.10 that the bank credited
+  on 01.11). The later of the two months closes with a warning; the earlier keeps a closing difference.
+
+The earlier month of such a pair closes when the chairman books a bank difference of the amount in it (it counts in
+`in` or `out` as well as in the closing) and reverses it in the later month, where the reversal lands while that month
+is the current one. Both months then show `in` and `out` off by the same amount, a closing difference of 0.00, and can
+be marked «Звірено».
+
+Known limit (open with the owner): a line dated in month M changes the opening and closing of every later month by its
+amount, but only month M is reopened. A later month already «Звірено» keeps its status, and its comparison now shows the
+shift as an opening and a closing difference until something dated in it reopens it. The owner may prefer that a line
+reopen the later reconciled months too.
 
 **Reconciliation act** («Акт звірки», a PDF per plot and period) follows the **ledger's dates**, not the cash book's:
 the opening balance is the plot's balance (2) at the end of the day before the period, the closing balance at the end of

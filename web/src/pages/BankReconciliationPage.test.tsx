@@ -150,7 +150,32 @@ describe('BankReconciliationPage', () => {
     );
     renderPage();
     expect(screen.getByText('Потребує повторної звірки')).toBeInTheDocument();
-    expect(screen.getByText(/Після звірки додано рядок: Витрата/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Місяць потрібно звірити знову: .* внесено витрату від 20\.10\.2026/),
+    ).toBeInTheDocument();
+  });
+
+  it('warns when the statement in or out differs, yet «Звірено» works while the closing difference is 0', () => {
+    useGetBankReconciliation.mockReturnValue(
+      queryResult({
+        ...unbalanced,
+        differences: figures('0.00', '5.00', '0.00', '0.00'),
+        balanced: true,
+      }),
+    );
+    renderPage();
+    expect(
+      screen.getByText(/Надходження або списання за випискою відрізняються від книги/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Звірено' })).toBeEnabled();
+  });
+
+  it('shows no flow warning when every difference is zero', () => {
+    useGetBankReconciliation.mockReturnValue(
+      queryResult({ ...unbalanced, differences: figures('0.00', '0.00', '0.00', '0.00'), balanced: true }),
+    );
+    renderPage();
+    expect(screen.queryByText(/Надходження або списання за випискою/)).not.toBeInTheDocument();
   });
 
   it('books a bank difference with a reason for those who approve', async () => {

@@ -1,6 +1,6 @@
 # Acceptance coverage: 018 Cash book, expenses and reconciliation
 
-Every acceptance criterion of `functional-spec.md` (2.1 to 2.16, 61 criteria, and the 12 worked examples of 2.17) mapped
+Every acceptance criterion of `functional-spec.md` (2.1 to 2.16, 62 criteria, and the 12 worked examples of 2.17) mapped
 to the tests that check it. Criteria are numbered `#n` in the order of the spec.
 
 - `ACC` = `backend/src/test/java/app/nadel/treasury/TreasuryAcceptanceTests` (Slice 9, integration: the public HTTP API,
@@ -9,8 +9,9 @@ to the tests that check it. Criteria are numbered `#n` in the order of the spec.
   `theWholeCashBookStoryOfTheWorkedExamplesOnOneCooperative`, `roles` =
   `theRolesScreenListsTheThreeRightsTheTreasurerHasTwoAndTheChairmanAllThree`, `rights` =
   `everyEndpointFamilyHonoursTheThreeRightsForACustomRoleAMemberTheOperatorAndNoToken`, `isolation` =
-  `aChairmanOfAnotherCooperativeFindsNothingOfThisOneAndChangesNothing`. It sits in the package of the slice tests
-  because their fixtures are package-private.
+  `aChairmanOfAnotherCooperativeFindsNothingOfThisOneAndChangesNothing`, `closing` =
+  `aMonthIsReconciledWhenOnlyItsClosingAgreesAndTheIncomingAndOutgoingDifferencesAreAWarning`. It sits in the package of
+  the slice tests because their fixtures are package-private.
 - `E2E` = the Playwright specs of Slice 9 in `web/e2e`: `cashbook-expense-handover.spec.ts` (HAND, `@smoke`),
   `cash-count.spec.ts` (COUNT), `bank-reconciliation.spec.ts` (BANK), `reconciliation-act.spec.ts` (ACT). They run on the
   demo cooperative against the real stack, take months and amounts from the server at run time and assert deltas.
@@ -55,7 +56,8 @@ to the tests that check it. Criteria are numbered `#n` in the order of the spec.
 | 2.7 #2 | Statement 20 000/3 000/150/22 850: «out» and closing differ, «Звірено» disabled | T `BankReconciliationTests.example7…`; TI `BankComparisonTests`; V `BankReconciliationPage.test` (disabled while unbalanced); ACC story; E2E BANK |
 | 2.7 #3 | Bank expense 150,00 «Банківські комісії»: differences 0,00, month can be reconciled | T `BankReconciliationTests.example7…`, CBX row 7; ACC story (to `RECONCILED`) |
 | 2.7 #4 | Bank payment dated 20.10 entered later: «Потребує повторної звірки» | T `BankReconciliationTests.example8…`, `aCashLineAndALineOfAnotherMonthDoNotReopen…`; CBX row 8; V `BankReconciliationPage.test` (shows what reopened); ACC story; E2E BANK (payment dated in the month, status on the bank card and the page) |
-| 2.7 #5 | Chairman books a bank difference with a reason: in the journal, difference 0,00 | T `BankReconciliationTests.theChairmanBooksABankDifference…`; V `BankReconciliationPage.test`; E2E BANK (chairman books, treasurer then marks «Reconciled») |
+| 2.7 #5 | Chairman books a bank difference with a reason: in the journal, closing difference 0,00 | T `BankReconciliationTests.theChairmanBooksABankDifference…`; V `BankReconciliationPage.test`; E2E BANK (chairman books, treasurer then marks «Reconciled») |
+| 2.7 #6 | Closing difference 0,00 while the total in and out each differ: a warning, and «Звірено» can be pressed (owner decision on PR #66) | T `BankReconciliationTests.aMonthWhoseClosingAgreesIsReconciled…`, `confirmIsRefusedWithoutAStatementAndWhileTheClosingDifferenceIsNot0`; TI `BankComparisonTests.incomingOutgoingAndOpeningDifferencesDoNotBlock…`; ACC closing (a line the bank books in the next month, both months reconciled); the on-screen warning: the web tests (`BankReconciliationPage.test`) |
 | 2.8 #1 | Reversal without a reason: «Вкажіть причину» | T `ExpensesTests.aReversedExpense…`, `HandoversTests.theReversalRestores…`, `OtherIncomesTests`; V `ExpenseCardPage.test`; ACC story |
 | 2.8 #2 | Already reversed: no «Сторнувати» | V `ExpenseCardPage.test` (hides the reverse button on a reversed expense); T `ExpensesTests` (`ENTRY_ALREADY_REVERSED`); ACC story (409) |
 | 2.9 #1 | Rename «Інше»: old expenses show the new name | T `CategoriesTests.aRenamedCategoryShowsItsNewNameOnOldExpensesToo`; V `ExpenseCategoriesPanel.test` |
@@ -101,11 +103,11 @@ to the tests that check it. Criteria are numbered `#n` in the order of the spec.
 
 ## Summary
 
-- Criteria in the spec: **61** (2.1: 5, 2.2: 8, 2.3: 8, 2.4: 2, 2.5: 2, 2.6: 6, 2.7: 5, 2.8: 2, 2.9: 3, 2.10: 5,
+- Criteria in the spec: **62** (2.1: 5, 2.2: 8, 2.3: 8, 2.4: 2, 2.5: 2, 2.6: 6, 2.7: 6, 2.8: 2, 2.9: 3, 2.10: 5,
   2.11: 3, 2.12: 4, 2.13: 4, 2.14: 2, 2.15: 1, 2.16: 1) and 12 worked examples.
-- Covered by automated tests: **61 of 61** (all 12 examples too). Of them 2.11 #3 is covered only down to the markup
+- Covered by automated tests: **62 of 62** (all 12 examples too). Of them 2.11 #3 is covered only down to the markup
   (a camera input with `capture="environment"` and the form test); it is also **manual** (take a photo with a phone).
-- Documentation only: none of the 61. The documentation items of the feature document §12 (money rules, glossary, ADR
+- Documentation only: none of the 62. The documentation items of the feature document §12 (money rules, glossary, ADR
   0019, both guides in two languages, screenshots list) are checked by review, `pnpm exec prettier --check docs/guide` and
   `make guide`, not by tests.
 - Manual: 1 (2.11 #3, real phone camera).

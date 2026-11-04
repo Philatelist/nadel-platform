@@ -204,6 +204,62 @@ class TreasuryAcceptanceTests extends TreasuryReportsSupport {
                 .contains(plotNumber(otherPlot));
     }
 
+    /**
+     * FS 2.7 #6 (owner decision on PR #66): «Звірено» needs only the closing difference to be 0,00. A member's bank
+     * payment entered on the month's last day that the bank books on the 1st of the next month: the chairman books a
+     * bank difference in the first month and reverses it in the next; each month then closes with its incoming and
+     * outgoing off by the same amount (a warning on the screen, not a block), while a closing difference still blocks.
+     */
+    @Test
+    void aMonthIsReconciledWhenOnlyItsClosingAgreesAndTheIncomingAndOutgoingDifferencesAreAWarning()
+            throws Exception {
+        setOpening(chairman, cash, "1000.00", opened).andExpect(status().isOk());
+        setOpening(chairman, bank, "20000.00", opened).andExpect(status().isOk());
+        pay(treasurer, otherPlot, "BANK", "500.00", month.atEndOfMonth());
+
+        // the bank's statement of the month does not have the payment yet: the closing differs and blocks
+        JsonNode first = body(enterStatement(treasurer, month, "20000.00", "0.00", "0.00", "20000.00")
+                .andExpect(status().isOk()));
+        assertThat(first.get("differences").get("incoming").asString()).isEqualTo("-500.00");
+        assertThat(first.get("differences").get("closing").asString()).isEqualTo("-500.00");
+        assertThat(first.get("balanced").asBoolean()).isFalse();
+        confirmMonth(treasurer, month).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BANK_MONTH_NOT_BALANCED"));
+
+        // the chairman books the timing as a bank difference: the closing agrees, in and out each differ by 500,00
+        JsonNode booked = body(bookBankDifference(chairman, month, "-500.00", "Банк зарахував платіж 1-го числа")
+                .andExpect(status().isOk()));
+        assertThat(booked.get("differences").get("incoming").asString()).isEqualTo("-500.00");
+        assertThat(booked.get("differences").get("outgoing").asString()).isEqualTo("-500.00");
+        assertThat(booked.get("differences").get("closing").asString()).isEqualTo("0.00");
+        assertThat(booked.get("balanced").asBoolean()).isTrue();
+        assertThat(body(confirmMonth(treasurer, month).andExpect(status().isOk())).get("status").asString())
+                .isEqualTo("RECONCILED");
+        assertThat(monthStatus()).isEqualTo("RECONCILED");
+
+        // the next month's statement has the payment; the reversal of the difference, dated today, closes it too
+        YearMonth current = YearMonth.from(today());
+        enterStatement(treasurer, current, "20000.00", "500.00", "0.00", "20500.00").andExpect(status().isOk());
+        UUID difference = null;
+        for (JsonNode line : booked.get("movements")) {
+            if (line.get("kind").asString().equals("BANK_DIFFERENCE")) {
+                difference = UUID.fromString(line.get("id").asString());
+            }
+        }
+        assertThat(difference).isNotNull();
+        reverseMovement(chairman, bank, difference, "Платіж зараховано в наступному місяці")
+                .andExpect(status().isOk());
+        JsonNode next = body(reconciliation(treasurer, current).andExpect(status().isOk()));
+        assertThat(next.get("differences").get("incoming").asString()).isEqualTo("500.00");
+        assertThat(next.get("differences").get("outgoing").asString()).isEqualTo("500.00");
+        assertThat(next.get("differences").get("closing").asString()).isEqualTo("0.00");
+        assertThat(next.get("balanced").asBoolean()).isTrue();
+        assertThat(body(confirmMonth(treasurer, current).andExpect(status().isOk())).get("status").asString())
+                .isEqualTo("RECONCILED");
+        assertThat(balance("BANK")).isEqualTo("20500.00");
+        assertThat(monthStatus()).as("the reversal is dated in the next month").isEqualTo("RECONCILED");
+    }
+
     // ---- FS 2.13 rights, every endpoint family
 
     /** FS 2.13 #1: the roles screen lists the three rights; the treasurer has the first two, the chairman all three. */

@@ -6607,10 +6607,12 @@ paths:
       description: |
         «Звірка з банком» (feature 018 §2.7): the month's status, the four figures of the bank statement as entered
         (absent until entered), the same four figures from the books, their differences (statement − books, absent
-        without a statement), whether every difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
+        without a statement), whether the closing difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
         journal lines dated in the month, the latest reopening and who confirmed it. Every amount comes from the
         server; the client never computes them. A month is a calendar month by the date of the lines (not the billing
-        month).
+        month). A difference in the opening, the total in or the total out does not block «Звірено» while the closing
+        difference is 0.00; the client shows it as a warning (typically a line the bank books in another month, or a
+        mistaken line reversed in a later month).
 
         The books (`books`): `opening` is the bank balance at the start of the month's first day (for the month that
         contains the bank's opening date: the opening amount, the balance at the start of the opening date);
@@ -6735,13 +6737,13 @@ paths:
       summary: Mark the month reconciled («Звірено»)
       description: |
         Marks the month `RECONCILED` (feature 018 §2.7) from `NOT_RECONCILED` or `NEEDS_RECHECK`, with who did it and
-        when, after the server computes the books again: the statement must be entered and every difference 0.00, else
-        409 `BANK_MONTH_NOT_BALANCED`. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any
-        bank line later dated in the month (a payment, an expense, other income, a handover, a bank difference or a
-        reversal, whoever enters it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and
-        the time (`reopened`), written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening
-        balance and future checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires
-        `CASHBOOK_ENTER`.
+        when, after the server computes the books again: the statement must be entered and the closing difference
+        0.00, else 409 `BANK_MONTH_NOT_BALANCED`; differences in the opening, the total in or the total out do not
+        block. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any bank line later dated
+        in the month (a payment, an expense, other income, a handover, a bank difference or a reversal, whoever enters
+        it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and the time (`reopened`),
+        written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening balance and future checks
+        are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires `CASHBOOK_ENTER`.
       parameters:
         - $ref: '#/components/parameters/BankMonth'
       responses:
@@ -7671,9 +7673,9 @@ components:
         `errors[{field: name}]`), or the difference of a cash count is booked again (code `DIFFERENCE_ALREADY_BOOKED`)
         or a count without a difference is booked (code `NO_DIFFERENCE`), or a journal line that is not a booked
         difference, or a reversal line, is reversed directly (code `MOVEMENT_NOT_REVERSIBLE`), or a bank month is
-        marked reconciled without its statement or with a difference (code `BANK_MONTH_NOT_BALANCED`), the statement
-        of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a bank
-        difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
+        marked reconciled without its statement or with a closing difference (code `BANK_MONTH_NOT_BALANCED`), the
+        statement of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a
+        bank difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
         entered (code `BANK_STATEMENT_MISSING`)
       content:
         application/problem+json:
@@ -11665,7 +11667,9 @@ components:
           $ref: '#/components/schemas/BankFigures'
         balanced:
           type: boolean
-          description: The statement is entered and every difference is 0.00
+          description: >-
+            The statement is entered and the closing difference is 0.00 («Звірено» can be pressed); differences in the
+            opening, the total in or the total out do not count
         movements:
           type: array
           description: The bank journal lines dated in the month, oldest first, at most 1000

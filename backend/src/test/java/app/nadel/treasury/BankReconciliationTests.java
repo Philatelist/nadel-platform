@@ -14,8 +14,9 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The monthly bank reconciliation (feature 018 §2.7, §2.11, §2.14; worked examples 2.17 #7 and #8): the server
- * computes the books of a calendar month and the differences from the statement; «Звірено» needs every difference
- * 0.00; a bank difference no entry explains is booked by the chairman; a bank line entered later with a date in a
+ * computes the books of a calendar month and the differences from the statement; «Звірено» needs the closing
+ * difference 0.00 (an incoming or outgoing difference alone is only a warning on the screen); a bank difference no entry
+ * explains is booked by the chairman; a bank line entered later with a date in a
  * reconciled month (a payment through the payments screen, an expense, a reversal) sets the month back to «Потребує
  * повторної звірки» with that line; the bank card lists the months with their status. The examples run in the
  * previous month (its 1st is the opening date of both accounts), so a later entry with an earlier date is real.
@@ -271,7 +272,7 @@ class BankReconciliationTests extends TreasuryApiSupport {
     }
 
     @Test
-    void confirmIsRefusedWithoutAStatementAndWhileADifferenceIsNot0() throws Exception {
+    void confirmIsRefusedWithoutAStatementAndWhileTheClosingDifferenceIsNot0() throws Exception {
         confirmMonth(treasurer, month).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("BANK_MONTH_NOT_BALANCED"));
 
@@ -281,6 +282,43 @@ class BankReconciliationTests extends TreasuryApiSupport {
                 .andExpect(jsonPath("$.code").value("BANK_MONTH_NOT_BALANCED"));
         assertThat(ownerJdbc().queryForObject("select status from bank_reconciliation where id = ?", String.class,
                 reconciliationId(month))).isEqualTo("NOT_RECONCILED");
+    }
+
+    @Test
+    void aMonthWhoseClosingAgreesIsReconciledAlthoughItsIncomingAndOutgoingEachDifferByTheSameAmount()
+            throws Exception {
+        // the bank shows a receipt of 100,00 and its refund in the month; the books have neither
+        JsonNode entered = body(enterStatement(treasurer, month, "20000.00", "100.00", "100.00", "20000.00")
+                .andExpect(status().isOk()));
+        assertFigures(entered.get("books"), "20000.00", "0.00", "0.00", "20000.00");
+        assertFigures(entered.get("differences"), "0.00", "100.00", "100.00", "0.00");
+        assertThat(entered.get("balanced").asBoolean()).as("only the closing difference counts").isTrue();
+
+        JsonNode reconciled = body(confirmMonth(treasurer, month).andExpect(status().isOk()));
+        assertThat(reconciled.get("status").asString()).isEqualTo("RECONCILED");
+        assertFigures(reconciled.get("differences"), "0.00", "100.00", "100.00", "0.00");
+        assertThat(ownerJdbc().queryForObject("select status from bank_reconciliation where id = ?", String.class,
+                reconciliationId(month))).isEqualTo("RECONCILED");
+    }
+
+    @Test
+    void aLineDatedInAnEarlierMonthLeavesALaterReconciledMonthReconciledWithTheShiftAsItsClosingDifference()
+            throws Exception {
+        YearMonth current = YearMonth.from(today());
+        enterStatement(treasurer, current, "20000.00", "0.00", "0.00", "20000.00").andExpect(status().isOk());
+        confirmMonth(treasurer, current).andExpect(status().isOk());
+
+        // a bank fee dated in the previous month, entered today: only that month is the month of the line
+        recordExpense(treasurer, expense("BANK", opened.plusDays(9), "15.00",
+                category(tenantA, "EXPENSE", "BANK_FEES")));
+
+        JsonNode later = body(reconciliation(treasurer, current).andExpect(status().isOk()));
+        assertThat(later.get("status").asString()).as("not reopened").isEqualTo("RECONCILED");
+        assertFigures(later.get("books"), "19985.00", "0.00", "0.00", "19985.00");
+        assertFigures(later.get("differences"), "15.00", "0.00", "0.00", "15.00");
+        assertThat(later.get("balanced").asBoolean()).isFalse();
+        confirmMonth(treasurer, current).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BANK_MONTH_RECONCILED"));
     }
 
     @Test

@@ -150,7 +150,9 @@ Error messages:
 - a sixth file: «Не більше 5 файлів.»;
 - a file that is not a JPEG, PNG or PDF (by content): «Дозволені лише фото (JPEG, PNG) і PDF.»;
 - amount 0,00 or less: «Сума має бути більшою за 0,00.»;
-- a date after today: «Дата не може бути пізнішою за сьогодні.»
+- a date after today: «Дата не може бути пізнішою за сьогодні.»;
+- a HEIC photo the device or browser cannot turn into JPEG: «Не вдалося перетворити фото HEIC. Збережіть його як JPEG
+  і додайте ще раз.»
 
 An expense is never edited. The expense card offers «Сторнувати і внести заново»: it reverses the expense with a reason
 and opens the form with the old values filled in (attachments included), ready to be corrected and saved as a new
@@ -246,9 +248,12 @@ A difference is closed by:
   updates;
 - **otherwise:** the chairman books «Банківська різниця» for the month with an amount and a reason.
 
-When every difference is 0,00, the treasurer marks the month «Звірено». If a bank line dated in a reconciled month is
-added later (for example a bank payment entered on 03.11 with the date 20.10), the month goes back to «Потребує
-повторної звірки», and the screen says what was added and when. The month list on the bank card shows each month's
+When the closing difference is 0,00, the treasurer marks the month «Звірено». A difference in the total in or the total
+out does not block it: the screen shows it as a warning with a short explanation (for example, a mistaken line reversed
+in a later month, or a line the bank shows in a different month), so the treasurer can still check it. If a bank line
+dated in a reconciled month is added later (for example a bank payment entered on 03.11 with the date 20.10), the month
+goes back to «Потребує повторної звірки», and the screen says what was added and when: «Місяць потрібно звірити знову:
+04.11.2026, 10:15 внесено платіж члена від 20.10.2026 на 500,00 ₴.» The month list on the bank card shows each month's
 status: «Не звірено», «Звірено», «Потребує повторної звірки».
 
 - **Acceptance Criteria:**
@@ -256,13 +261,16 @@ status: «Не звірено», «Звірено», «Потребує повт
         see «Цифри виписки не сходяться: 100,00 + 50,00 − 20,00 ≠ 200,00».
   - [x] Given the October books show in 3 000,00 ₴ and out 0,00 ₴, when the treasurer enters the statement 20 000,00 /
         3 000,00 / 150,00 / 22 850,00, then the screen shows the «out» difference of 150,00 ₴ and the «closing»
-        difference, and «Звірено» cannot be pressed.
+        difference, and «Звірено» cannot be pressed while the closing difference is not 0,00.
   - [x] Given that difference, when the treasurer records a bank expense of 150,00 ₴ «Банківські комісії» in October,
         then every difference is 0,00 and the treasurer can mark October «Звірено».
   - [x] Given October is «Звірено», when a bank payment dated 20.10 is entered on 03.11, then October shows «Потребує
         повторної звірки» with the reason.
   - [x] Given a difference no entry explains, when the chairman books a bank difference with a reason, then it appears
-        in the bank journal and the difference becomes 0,00.
+        in the bank journal and the closing difference becomes 0,00.
+  - [x] Given the closing difference is 0,00 but the total in and the total out each differ (a line the statement shows
+        in another month), when the treasurer opens the month, then they see a warning with a short explanation and can
+        mark the month «Звірено».
 
 ### 2.8 Reversals
 
@@ -501,7 +509,8 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
    payments dated before it are refused; member payments before it stay in the journal but do not count.
 5. **No negative cash** applies to cash expenses, handovers, reversals of cash income and booked shortages, on the date
    and every later day; only member payment reversals are exempt (warning).
-6. **HEIC photos** are turned into JPEG on the user's device before upload; only JPEG, PNG and PDF are accepted.
+6. **HEIC photos** are turned into JPEG on the user's device before upload; only JPEG, PNG and PDF are accepted. Where
+   the browser cannot convert a HEIC photo, the user is asked for a JPEG (owner decision, 2026-11-04).
 7. **Other income has its own category list**, seeded «Відсотки банку», «Гранти та пожертви», «Продаж матеріалів»,
    «Інше», managed like expense categories.
 8. **The four cash book reports need only the right to view the cash book**, so an audit committee role works without
@@ -521,6 +530,11 @@ Decided by the pipeline (no blocking questions; recommended answers taken, see `
 ## Change Log
 
 _Dated amendments made after the spec was first written. Leave empty until the first amendment._
+
+- 2026-11-04 — owner decisions on PR #66 — (1) «Звірено» needs only the closing difference to be 0,00; differences in the
+  total in or total out are a warning with a short explanation and do not block (FS 2.7); (2) HEIC stays browser-only; on
+  failure the user is asked for a JPEG (FS 2.3); (3) the reopen notice reads «Місяць потрібно звірити знову: {at}
+  внесено {kind} від {date} на {amount}.» (FS 2.7).
 
 - 2026-11-04 — Slice 9 acceptance testing (GAP on FS 2.10) — a reconciliation act period that starts before the plot's
   first charge or payment now starts on that first day instead of being refused, because the form's default start

@@ -1,7 +1,7 @@
 # Pipeline log — 018 cash book, expenses and reconciliation
 
-- Status: finished
-- Phase: 6 — review run (done)
+- Status: running
+- Phase: 5 — owner review changes pushed, waiting for checks
 - Branch: 018-cash-book-expenses-reconciliation (planned) · Base: main @ c7419a6
 - Requirement: docs/features/018-cash-book-expenses-reconciliation.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -194,3 +194,14 @@
 - Try this: chairman → «Каса і банк» (cash and bank cards, journal, last count with the booked 20,00 shortage, bank months: previous «Звірено», current with a 35,00 difference) → «Витрати» (the materials expense with a receipt photo, «Сторнувати і внести заново») → «Перерахунок каси» (live book balance and difference) → bank month (book the 35,00 fee or enter it as an expense, then «Звірено») → «Звіти» (four new reports) → plot card «Акт звірки»; treasurer: no «Оформити різницю»/reversals; member: «Акт звірки» on own plots, no «Каса і банк».
 - Logs: scratchpad/review-run.log. Stop: `kill 51472 51570 51712 51854` (scratchpad/review-run.pids), infra `make down`.
 - Reminder: this is the PR branch, not main.
+
+## Owner review of PR #66 (2026-11-04)
+
+- Owner decisions: (1) «Звірено» needs only the closing difference 0.00; in/out differences are a warning with a short explanation and do not block — update FS 2.7, treasury README, money-rules, guides, tests; (2) HEIC: browser decoder only, no LGPL library; on failure ask for a JPEG; (3) reopen notice: uk «Місяць потрібно звірити знову: {at} внесено {kind} від {date} на {amount}.», en «Reconcile this month again: {kind} of {date} for {amount} was entered on {at}.»; (4) the Makefile e2e target reads NADEL_DB_PORT (default 5432) instead of hard-coding localhost:5432. Run the affected tests, push, wait for green CI; no .github/ changes, no merge.
+- FS amended (2.3, 2.7, Assumptions 6, Change Log); one new acceptance criterion (warning, not blocking).
+- Makefile change done (devops-infra): NADEL_DB_PORT ?= 5432 used in the e2e NADEL_DB_URL; docker-compose publishes Postgres on ${NADEL_DB_PORT:-5432}; infra/README section; make help text. Verified with make -n e2e and docker compose config (5432 default, 5433 override). Proposed CLAUDE.md sentence for the owner (protected): append to the make e2e line '; set NADEL_DB_PORT=5433 (and, for make up, NADEL_DB_URL=jdbc:postgresql://localhost:5433/nadel) when another Postgres already uses port 5432'.
+- Guides change done (general-purpose): board guide uk/en ch. 16 (Звірено rule, warning, HEIC message, reopen notice, known limits rewritten), ch. 30 (rules, examples 26–27, limits box); owner manual uk/en (screen table, attachments, 3 troubleshooting rows). Prettier clean. To check against the final web catalog texts: the English reopen example and the HEIC strings.
+- Web change done (react-frontend): warning on in/out differences (regex on server strings), new confirm hint, reopen notice with a dedicated reopenedKind set (uk accusative, en with article), HEIC failure message, tests (+RED on the warning), e2e bank-reconciliation hint/regex updated; web 976 green. Orchestrator aligned the en guide quote with the catalog ('a member payment').
+- Backend change done (spring-backend): BankComparison.balanced = statement present and closing difference 0.00 (used by GET and confirm); descriptions in api/openapi.yaml (+ gen, comments only), ProblemCodes Javadoc; tests BankComparisonTests, BankReconciliationTests (+ a characterization test of later reconciled months), CashBookExamplesTests example 7, TreasuryAcceptanceTests (+ a story where only the closing agrees); RED on the new tests; treasury README, money-rules §14, glossary, technical-considerations §2.5, acceptance-coverage (62 criteria), and docs/features/018 §2.5 aligned. Open question for the owner kept in the README: should a back-dated line also reopen later reconciled months (today they stay «Звірено» and show the shift as a closing difference)?
+- Orchestrator checks: treasury + acceptance + modularity 210 green; clients green (web 976); e2e tsc clean; prettier clean. New FS 2.7 criterion ticked (BankReconciliationPage.test + backend tests). Review run stopped for the e2e run of bank-reconciliation + smoke (testing-expert).
+- e2e (testing-expert, manual stack): bank-reconciliation 3 passed, smoke 21 passed. Review run restarted; guide shots re-captured (all), make guide built 5 PDFs; orchestrator looked at img/uk/bank-reconciliation.png (warning shown, «Звірено» disabled on the closing difference, new hint).

@@ -1928,10 +1928,12 @@ export const useBookCashCountDifference = <TError = BadRequestResponse | Unautho
 /**
  * «Звірка з банком» (feature 018 §2.7): the month's status, the four figures of the bank statement as entered
  * (absent until entered), the same four figures from the books, their differences (statement − books, absent
- * without a statement), whether every difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
+ * without a statement), whether the closing difference is 0.00 (`balanced`: «Звірено» can be pressed), the bank
  * journal lines dated in the month, the latest reopening and who confirmed it. Every amount comes from the
  * server; the client never computes them. A month is a calendar month by the date of the lines (not the billing
- * month).
+ * month). A difference in the opening, the total in or the total out does not block «Звірено» while the closing
+ * difference is 0.00; the client shows it as a warning (typically a line the bank books in another month, or a
+ * mistaken line reversed in a later month).
  *
  * The books (`books`): `opening` is the bank balance at the start of the month's first day (for the month that
  * contains the bank's opening date: the opening amount, the balance at the start of the opening date);
@@ -2250,13 +2252,13 @@ export const useBookBankDifference = <TError = BadRequestResponse | Unauthorized
 
 /**
  * Marks the month `RECONCILED` (feature 018 §2.7) from `NOT_RECONCILED` or `NEEDS_RECHECK`, with who did it and
- * when, after the server computes the books again: the statement must be entered and every difference 0.00, else
- * 409 `BANK_MONTH_NOT_BALANCED`. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any
- * bank line later dated in the month (a payment, an expense, other income, a handover, a bank difference or a
- * reversal, whoever enters it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and
- * the time (`reopened`), written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening
- * balance and future checks are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires
- * `CASHBOOK_ENTER`.
+ * when, after the server computes the books again: the statement must be entered and the closing difference
+ * 0.00, else 409 `BANK_MONTH_NOT_BALANCED`; differences in the opening, the total in or the total out do not
+ * block. A month already `RECONCILED`: 409 `BANK_MONTH_RECONCILED`. Once reconciled, any bank line later dated
+ * in the month (a payment, an expense, other income, a handover, a bank difference or a reversal, whoever enters
+ * it) sets it back to `NEEDS_RECHECK` («Потребує повторної звірки») with that line and the time (`reopened`),
+ * written to the audit log as `BANK_MONTH_REOPENED` by the system. The month, opening balance and future checks
+ * are those of `GET`. Written to the audit log as `BANK_MONTH_RECONCILED`. Requires `CASHBOOK_ENTER`.
  * @summary Mark the month reconciled («Звірено»)
  */
 export const confirmBankReconciliation = async (month: string, options?: Parameters<typeof nadelFetch>[1]): Promise<BankReconciliation> => {

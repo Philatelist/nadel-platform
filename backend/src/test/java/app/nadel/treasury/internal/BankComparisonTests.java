@@ -80,7 +80,7 @@ class BankComparisonTests {
     }
 
     @Test
-    void theDifferencesAreStatementMinusBooksAndTheMonthBalancesOnlyWhenEachIs0() {
+    void theDifferencesAreStatementMinusBooksAndTheMonthBalancesOnlyWhenTheClosingOneIs0() {
         Figures statement = figures("20000.00", "3000.00", "150.00", "22850.00");
         Figures books = figures("20000.00", "3000.00", "0.00", "23000.00");
 
@@ -90,9 +90,23 @@ class BankComparisonTests {
         assertThat(BankComparison.balanced(differences)).isFalse();
         assertThat(BankComparison.balanced(BankComparison.differences(statement, statement))).isTrue();
         assertThat(BankComparison.balanced(null)).as("no statement").isFalse();
-        assertThat(BankComparison.balanced(figures("0.01", "0.00", "0.00", "0.00"))).isFalse();
-        assertThat(BankComparison.balanced(figures("0.00", "0.01", "0.00", "0.00"))).isFalse();
         assertThat(BankComparison.balanced(figures("0.00", "0.00", "0.00", "0.01"))).isFalse();
+        assertThat(BankComparison.balanced(figures("0.00", "0.01", "0.00", "0.01"))).isFalse();
+        assertThat(BankComparison.balanced(figures("-0.01", "0.00", "0.00", "-0.01"))).isFalse();
+    }
+
+    @Test
+    void incomingOutgoingAndOpeningDifferencesDoNotBlockWhileTheClosingDifferenceIs0() {
+        // a receipt the bank books in the next month, closed by a bank difference: in and out each off by 500.00
+        Figures statement = figures("20000.00", "0.00", "0.00", "20000.00");
+        Figures books = figures("20000.00", "500.00", "500.00", "20000.00");
+
+        Figures differences = BankComparison.differences(statement, books);
+
+        assertThat(differences).isEqualTo(figures("0.00", "-500.00", "-500.00", "0.00"));
+        assertThat(BankComparison.balanced(differences)).isTrue();
+        // the later month of a mistaken receipt reversed in it: the opening and the incoming differ
+        assertThat(BankComparison.balanced(figures("-300.00", "300.00", "0.00", "0.00"))).isTrue();
     }
 
     @Test

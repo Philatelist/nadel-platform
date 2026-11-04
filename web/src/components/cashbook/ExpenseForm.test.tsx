@@ -73,6 +73,16 @@ describe('ExpenseForm', () => {
     expect(await screen.findByText('IMG.jpg')).toBeInTheDocument();
   });
 
+  it('says so when a HEIC photo cannot be converted', async () => {
+    heicToJpeg.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderForm();
+    await user.upload(screen.getByTestId('file-input'), new File(['h'], 'IMG.heic', { type: 'image/heic' }));
+    expect(
+      await screen.findByText('Не вдалося перетворити фото HEIC. Збережіть його як JPEG і додайте ще раз.'),
+    ).toBeInTheDocument();
+  });
+
   it('refuses a file of a wrong type and has a camera input', async () => {
     const user = userEvent.setup({ applyAccept: false });
     renderForm();

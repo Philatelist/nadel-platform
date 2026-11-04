@@ -22,8 +22,9 @@ import org.jspecify.annotations.Nullable;
  *       amount) lowers {@code outgoing}, so a mistaken entry and its reversal in one month cancel out.</li>
  *   <li>{@code closing}: {@code opening + incoming − outgoing}, the balance at the end of the month's last day.</li>
  * </ul>
- * The differences are statement − books, figure by figure; the month balances when every one is 0.00. Nothing is
- * rounded: movements are exact {@code Money}.
+ * The differences are statement − books, figure by figure; the month balances when the closing difference is 0.00
+ * (owner decision on PR #66, FS 2.7): an opening, incoming or outgoing difference alone does not block «Звірено», the
+ * client shows it as a warning. Nothing is rounded: movements are exact {@code Money}.
  */
 final class BankComparison {
 
@@ -91,9 +92,12 @@ final class BankComparison {
                 statement.closing().minus(books.closing()));
     }
 
-    /** Whether there are differences and every one is 0.00 (false without a statement). */
+    /**
+     * Whether there are differences and the closing one is 0.00 (false without a statement). The other three may
+     * differ: a line the bank books in another month, or a mistaken line reversed in a later month, moves money
+     * between the incoming, outgoing and opening figures of two months while the month's closing balance agrees.
+     */
     static boolean balanced(@Nullable Figures differences) {
-        return differences != null && differences.opening().signum() == 0 && differences.incoming().signum() == 0
-                && differences.outgoing().signum() == 0 && differences.closing().signum() == 0;
+        return differences != null && differences.closing().signum() == 0;
     }
 }

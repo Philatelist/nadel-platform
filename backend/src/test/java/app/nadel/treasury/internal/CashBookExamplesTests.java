@@ -113,12 +113,14 @@ class CashBookExamplesTests {
         Figures differences = BankComparison.differences(statement, before);
         assertThat(differences.outgoing()).isEqualTo(money("150.00"));
         assertThat(differences.closing()).isEqualTo(money("-150.00"));
-        assertThat(BankComparison.balanced(differences)).as("«Звірено» cannot be pressed").isFalse();
+        assertThat(BankComparison.balanced(differences)).as("«Звірено» cannot be pressed: the closing differs")
+                .isFalse();
 
         // the treasurer enters the bank expense of 150,00 «Банківські комісії» in October
         books.add(new Flow(day("2026-10-31"), false, money("-150.00")));
-        assertThat(BankComparison.balanced(BankComparison.differences(statement,
-                BankComparison.books(BANK, OCTOBER, books)))).isTrue();
+        Figures explained = BankComparison.differences(statement, BankComparison.books(BANK, OCTOBER, books));
+        assertThat(explained).isEqualTo(new Figures(Money.ZERO, Money.ZERO, Money.ZERO, Money.ZERO));
+        assertThat(BankComparison.balanced(explained)).isTrue();
     }
 
     @Test

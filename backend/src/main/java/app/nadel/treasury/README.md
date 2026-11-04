@@ -235,11 +235,11 @@ opening balance; 400 `BEFORE_OPENING_BALANCE` (`errors[{field: month}]`) for a m
 and by whether they are reversals): `opening` the balance at the start of the 1st (for the month of the opening date:
 the opening amount), `incoming` and `outgoing` the month's receipts and spendings from the opening date on, **both
 positive** (as a statement shows them), `closing` = opening + incoming − outgoing. A reversal counts against the
-direction of the line it reverses (the reversal of a receipt lowers `incoming`, of a spending `outgoing`), so a
-mistaken entry and its reversal in one month cancel out; lines before the opening date count in nothing. The
-differences are statement − books per figure; `balanced` when there is a statement and all four are 0.00. `GET` also
-lists the month's bank lines (`JournalLines`, at most 1000, with `movementsTotal`), the last reopening (the line's id,
-kind, date, amount and when) and who reconciled it.
+direction of the line it reverses (the reversal of a receipt lowers `incoming`, of a spending `outgoing`), so a mistaken
+entry and its reversal in one month cancel out; lines before the opening date count in nothing. The differences are
+statement − books per figure; `balanced` when there is a statement and the **closing** difference is 0.00 (the other
+three may differ, see below). `GET` also lists the month's bank lines (`JournalLines`, at most 1000, with
+`movementsTotal`), the last reopening (the line's id, kind, date, amount and when) and who reconciled it.
 
 **The statement** (`StatementRules`, pure): `incoming`, `outgoing` ≥ 0, every figure at most 12 integer digits (400
 `INVALID`), and opening + incoming − outgoing = closing (400 `STATEMENT_INCONSISTENT`, field `closing`). The first
@@ -254,8 +254,9 @@ on the bank (source `BANK_RECONCILIATION`, the month's row), its reason in `bank
 `BANK_DIFFERENCE_BOOKED`.
 
 **«Звірено»** (`confirm`, `CASHBOOK_ENTER`): under the bank lock the books are computed again; 409
-`BANK_MONTH_NOT_BALANCED` without a statement or with a difference, `BANK_MONTH_RECONCILED` when already reconciled;
-`NOT_RECONCILED` or `NEEDS_RECHECK` → `RECONCILED` with `reconciled_by/at`. Audit `BANK_MONTH_RECONCILED`.
+`BANK_MONTH_NOT_BALANCED` without a statement or with a closing difference (`BankComparison.balanced`, the same rule as
+`balanced`), `BANK_MONTH_RECONCILED` when already reconciled; `NOT_RECONCILED` or `NEEDS_RECHECK` → `RECONCILED` with
+`reconciled_by/at`. Audit `BANK_MONTH_RECONCILED`.
 
 **Reopening** (in `MovementWriter`, the one writer, so it covers every writer: member payments through
 `PaymentMovementListener`, expenses, other income, handovers, bank differences and every reversal): right after a
@@ -271,18 +272,31 @@ date to the month of `asOf`: the months with a reconciliation, the months with b
 always the month of `asOf`; a month without a row is `NOT_RECONCILED`. Empty for the cash and without an opening
 balance.
 
-**Known limits of the four-figure rule** (money rules §14; open with the owner).
+**Only the closing difference blocks** (owner decision on PR #66, FS 2.7, money rules §14). A difference in the
+opening, `incoming` or `outgoing` while the closing difference is 0.00 does not block «Звірено»: the response is
+unchanged (`differences` as they are, `balanced` true) and the web shows a warning with a short explanation, derived
+from the `incoming` and `outgoing` difference strings (an opening difference with a closing of 0.00 always comes with
+one of them). The typical causes, both of which move a line between two months while the money is the same:
 
-- A wrong line in a past month that is reversed today lowers today's month, not the past one, so that past month's
-  `incoming`/`outgoing` stay off (its closing difference can be booked away, the other two cannot); and a booked bank
-  difference adds to `incoming` or `outgoing` as well as to `closing`. Such a month balances only if the statement
-  figures match.
-- A line dated in month M (a back-dated entry, a bank difference of M) shifts the books' opening and closing of every
-  later month, but only M is reopened (FS 2.7 reopens the month of the line): a later month that is already «Звірено»
-  stays «Звірено» although its books no longer equal its statement. The month list shows it as reconciled until
-  something dated in that month reopens it.
-- Whether «Звірено» should need only the closing difference to be 0.00, and whether a line should reopen the later
-  reconciled months too, are the owner's questions for the PR.
+- **A mistaken line reversed in a later month.** A reversal is dated on its own day, so the line stays in its month M
+  and the reversal lowers `incoming` (or `outgoing`) of the later month T. In T the opening and the flow differ by the
+  same amount and the closing agrees: a warning. M keeps the line and so a closing difference.
+- **A line the bank books in another month** than the books date it (a payment entered as 31.10 that the bank credited
+  on 01.11). The later of the two months closes with a warning (its opening and its `incoming` or `outgoing` differ by
+  the same amount); the earlier keeps a closing difference.
+
+The earlier month of such a pair closes when the chairman books a bank difference of the amount in it and reverses
+that difference in the later month (the reversal is dated on its day, so it lands there while the later month is the
+current one): each month then shows `incoming` and `outgoing` off by the same amount, a closing difference of 0.00,
+and can be confirmed (`TreasuryAcceptanceTests`). A booked bank difference counts in `incoming` or `outgoing` as well
+as in `closing`.
+
+**Known limit: later reconciled months are not reopened.** A line dated in month M (a back-dated entry, a bank
+difference of M) shifts the books' opening and closing of every later month by its amount, but only M is reopened
+(FS 2.7 reopens the month of the line). A later month already «Звірено» stays «Звірено» in the month list and refuses a
+new statement or confirmation (`BANK_MONTH_RECONCILED`), but its `GET` shows the shift: an opening and a closing
+difference of the line's amount, `balanced` false (`BankReconciliationTests`). It is checked again once something dated
+in it reopens it. Whether a line should reopen the later reconciled months too stays a question for the owner.
 
 The web shows the reopening notice only while the month is `NEEDS_RECHECK` (`BankReconciliationPage`): `reopened`
 stays on a month that was reconciled again.
@@ -414,12 +428,14 @@ after a back-dated entry and the next count lists it, surplus booked and its lin
 cash rule, refusals, list order), `CashCountActTests` (the PDF text: balances, difference, result, booking, signers),
 `CashCountsAccessTests`, `CashBookExamplesTests` row 6, `TreasuryGuardsTests` (the V33 booking reason). Slice 5:
 `StatementRulesTests` (FS 2.17 #9, field rules), `BankComparisonTests` (books of the opening month and later months,
-reversals against their original, opening inside a month, differences, `balanced`), `BankReconciliationTests` (FS 2.17
-#7 and #8 end to end — #8 through a real bank payment entered later with an earlier date —, a cash line and a line of
-another month reopen nothing, bank difference booked, listed with its reason and reversed today, a reversal reopens the
-reconciled current month, the status machine, not balanced, month and opening refusals, the bank card's months),
-`BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests` and
-`TreasuryGuardsTests` (`bank_difference`, V34). Slice 7: `IncomeExpenseCalculatorTests` (FS 2.17 #12 identity), the
+reversals against their original, opening inside a month, differences, `balanced` on the closing difference only),
+`BankReconciliationTests` (FS 2.17 #7 and #8 end to end — #8 through a real bank payment entered later with an earlier
+date —, a cash line and a line of another month reopen nothing, bank difference booked, listed with its reason and
+reversed today, a reversal reopens the reconciled current month, the status machine, not balanced, a month confirmed
+with in and out each off by the same amount, a later reconciled month showing the shift of an earlier line, month and
+opening refusals, the bank card's months), `TreasuryAcceptanceTests` (also the two-month story of a line the bank books
+in the next month), `BankReconciliationsAccessTests`, `CashBookExamplesTests` rows 7–9, `TreasuryTenantIsolationTests`
+and `TreasuryGuardsTests` (`bank_difference`, V34). Slice 7: `IncomeExpenseCalculatorTests` (FS 2.17 #12 identity), the
 report tests `CashBookReportTests`, `BankMovementsReportTests`, `ExpensesReportTests`, `IncomeExpenseReportTests`,
 `TreasuryReportsAccessTests`. Slice 8: `DemoTreasuryTests` (once per `DemoDay`: every demo payment row has one line, a
 demo payment is reversed through the API, the runner's content and a second run writing nothing, the demo block

@@ -1922,9 +1922,9 @@
         </li>
         <li>
           On a phone there is a <strong>"Take a photo"</strong> button: the picture is attached to the
-          expense. A HEIC photo from an iPhone is converted to JPEG by the phone itself ("Converting the
-          photo…"). If you pick a HEIC file on a computer in Chrome, the form shows the file type message:
-          save the file as JPEG or attach the photo from the phone.
+          expense. A HEIC photo from an iPhone is converted to JPEG by the phone or browser itself
+          ("Converting the photo…"). If it cannot be converted, the form says: "This HEIC photo could not be
+          converted. Save it as JPEG and add it again."
         </li>
         <li>A cash expense that the cash cannot cover is refused (the rule is in chapter 30).</li>
       </ul>
@@ -2034,8 +2034,11 @@
           reversed.
         </li>
         <li>
-          When all four differences are 0.00 the treasurer presses <strong>"Reconciled"</strong>. The button
-          works only then. A reconciled month cannot be changed.
+          When the closing balance difference (statement closing minus book closing) is 0.00 the treasurer
+          presses <strong>"Reconciled"</strong>. The button works only then. A difference in the total in or
+          the total out does not block it: the screen shows it as a warning with a short explanation (typical
+          causes: a mistaken line reversed in a later month; a line the bank booked in another month). A
+          reconciled month cannot be changed.
         </li>
       </ol>
       <div class="warn">
@@ -2043,22 +2046,24 @@
         <p>
           If a bank line dated in a reconciled month appears later (for example a bank payment dated 20
           October is entered on 3 November), the month goes to "Needs a new check" and the screen says what
-          was added and when. Check the month and press "Reconciled" again; the audit log keeps the line that
-          reopened it.
+          was added and when: "Reconcile this month again: a member payment of 20.10.2026 for 500.00 ₴ was
+          entered on 04.11.2026, 10:15." Check the month and press "Reconciled" again; the audit log keeps the
+          line that reopened it.
         </p>
       </div>
       <div class="warn">
         <span class="callout-title">Known limits</span>
         <ul>
           <li>
-            "Reconciled" needs all four differences at 0.00. So a mistake of a past month that you reverse
-            <em>today</em> cannot be reconciled for that month: the reversal is dated today and falls into the
-            current one. That difference stays until it is closed by a "Bank difference" for the month.
+            "Reconciled" needs only a zero closing balance difference. A mistake of a past month that you
+            reverse <em>today</em> is reversed with today's date and falls into the current month: for the
+            past month this gives a difference in the total in or out, which only warns and does not block.
           </li>
           <li>
             A back-dated line changes the opening balance of every later month. Months that are already
-            "Reconciled" stay so (the system reopens only the month the line is dated in), so after such a
-            line the board should check the later months themselves and, if needed, enter a correction.
+            "Reconciled" stay so (the system reopens only the month the line is dated in); the next check of
+            such a month shows the shift of its opening balance. So after such a line the board should check
+            the later months.
           </li>
         </ul>
       </div>
@@ -3930,9 +3935,10 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
           The statement figures must agree: opening + in − out = closing. Four pairs of figures are compared:
           the opening balance, the total in, the total out and the closing balance (from the books: the bank
           balance at the start of the month, the sum of receipts, the sum of spendings, the balance at the end
-          of the last day). "Reconciled" is available only when <strong>all four</strong> differences are
-          0.00. Months are calendar months by the date of the line. Any bank line dated in a reconciled month
-          (a payment too) sends it to "Needs a new check".
+          of the last day). "Reconciled" is available only when the
+          <strong>closing balance</strong> difference is 0.00; a difference in the total in or out only warns.
+          Months are calendar months by the date of the line. Any bank line dated in a reconciled month (a
+          payment too) sends it to "Needs a new check".
         </dd>
       </dl>
 
@@ -3982,7 +3988,7 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
           The statement: opening 20,000.00, in 3,000.00, out 150.00, closing 22,850.00 (20,000.00 + 3,000.00 −
           150.00 = 22,850.00, the figures agree). The books: in 3,000.00 (2,000.00 member bank payments plus
           the 1,000.00 handover), out 0.00. The "out" differs by 150.00 (and the closing balance too). It is a
-          bank fee nobody entered: the treasurer enters an expense of 150.00 "Bank fees" in October, all
+          bank fee nobody entered: the treasurer enters an expense of 150.00 "Bank fees" in October, the
           differences become 0.00 and October can be marked "Reconciled".
         </p>
       </div>
@@ -3990,7 +3996,8 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
         <span class="callout-title">Example 27. A reconciled month is reopened</span>
         <p>
           October is "Reconciled". On 03.11 a bank payment dated 20.10 is entered. October goes to "Needs a
-          new check" and the screen says what was added and when.
+          new check" and the screen says: "Reconcile this month again: a member payment of 20.10.2026 for
+          500.00 ₴ was entered on 04.11.2026, 10:15."
         </p>
       </div>
       <div class="example">
@@ -4010,10 +4017,11 @@ prepayment             = Σ payments (net of reversals) − Σ allocated</pre>
       <div class="warn">
         <span class="callout-title">Limits of reconciliation</span>
         <p>
-          "Reconciled" needs zero in all four differences. A mistake made in a past month and reversed today
-          cannot be accounted for in that month: the reversal is dated today. A back-dated entry changes the
-          opening balance of all later months, and those already "Reconciled" stay so: after such an entry the
-          board should check the later months and, if needed, enter a correction.
+          "Reconciled" needs only a zero closing balance difference. A mistake made in a past month and
+          reversed today cannot be accounted for in that month (the reversal is dated today), but this is only
+          a warning about a difference in the total in or out and does not block. A back-dated entry changes
+          the opening balance of all later months; those already "Reconciled" stay so, and the next check of
+          such a month shows the shift. After such an entry the board should check the later months.
         </p>
       </div>
     </section>

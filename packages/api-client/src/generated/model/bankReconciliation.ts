@@ -29,7 +29,7 @@ export interface BankReconciliation {
   statement?: BankFigures;
   books: BankFigures;
   differences?: BankFigures;
-  /** The statement is entered and every difference is 0.00 */
+  /** The statement is entered and the closing difference is 0.00 («Звірено» can be pressed); differences in the opening, the total in or the total out do not count */
   balanced: boolean;
   /** The bank journal lines dated in the month, oldest first, at most 1000 */
   movements: AccountMovement[];

@@ -74,7 +74,8 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code BANK_DIFFERENCE_BOOKED}. A booked line is reversed through the journal ({@link CashCounts#reverseMovement}).
  * <p>
  * <b>Confirmation</b> ({@link #confirm}): the books computed under the lock; 409 {@code BANK_MONTH_NOT_BALANCED}
- * without a statement or while a difference is not 0.00, {@code BANK_MONTH_RECONCILED} when already reconciled;
+ * without a statement or while the closing difference is not 0.00 (the opening, incoming and outgoing differences do
+ * not block, {@link BankComparison#balanced}), {@code BANK_MONTH_RECONCILED} when already reconciled;
  * {@code NOT_RECONCILED} or {@code NEEDS_RECHECK} → {@code RECONCILED} with who and when (the reopening stays as the
  * month's last one). Audit {@code BANK_MONTH_RECONCILED}. Logs ids only.
  */
@@ -185,7 +186,7 @@ class BankReconciliations {
         return view(month, bank, opening);
     }
 
-    /** Marks the month reconciled when the statement agrees with the books. */
+    /** Marks the month reconciled when the statement's closing balance agrees with the books. */
     @Transactional
     BankReconciliation confirm(String monthText, AccessProfile actor) {
         UUID memberId = Objects.requireNonNull(actor.memberId(), "memberId");
@@ -309,7 +310,7 @@ class BankReconciliations {
 
     private static ApiProblemException notBalanced() {
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.BANK_MONTH_NOT_BALANCED,
-                "The bank statement of the month is missing or differs from the books.");
+                "The bank statement of the month is missing or its closing balance differs from the books.");
     }
 
     private static BankFigures contract(Figures figures) {

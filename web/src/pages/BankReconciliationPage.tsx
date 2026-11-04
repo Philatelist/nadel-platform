@@ -94,6 +94,10 @@ function StatementPanel({ month, data }: { month: string; data: BankReconciliati
 
   const parsed = parseFigures(texts);
   const readOnly = locked || !canEnter;
+  // The server's difference strings only: any non-zero digit means the statement's flow differs from the books.
+  const flowDiffers =
+    data.differences !== undefined &&
+    (/[1-9]/.test(data.differences.incoming) || /[1-9]/.test(data.differences.outgoing));
 
   function onError(error: unknown) {
     if (problemCode(error) === 'STATEMENT_INCONSISTENT' && sent !== undefined) {
@@ -190,6 +194,9 @@ function StatementPanel({ month, data }: { month: string; data: BankReconciliati
             </tbody>
           </table>
         </div>
+        {data.statement !== undefined && data.differences !== undefined && flowDiffers && (
+          <Notice tone="warning">{b.flowDiffers}</Notice>
+        )}
         {locked && <p className="text-ink-muted">{b.lockedHint}</p>}
         {canEnter && !locked && (
           <div className="flex flex-wrap items-center gap-2">
@@ -391,7 +398,7 @@ function ReconciliationCard({ month, data }: { month: string; data: BankReconcil
           {data.status === 'NEEDS_RECHECK' && data.reopened !== undefined && (
             <Notice tone="warning">
               {format(b.reopened, {
-                kind: t.cashbook.kind[data.reopened.kind],
+                kind: b.reopenedKind[data.reopened.kind],
                 date: formatDay(data.reopened.date, locale),
                 amount: formatMoney(data.reopened.amount, locale),
                 at: formatDateTime(data.reopened.at, locale),

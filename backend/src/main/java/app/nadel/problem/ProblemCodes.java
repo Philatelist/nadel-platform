@@ -195,8 +195,8 @@ public final class ProblemCodes {
      */
     public static final String STATEMENT_INCONSISTENT = "STATEMENT_INCONSISTENT";
     /**
-     * 409: a bank month is marked reconciled without its statement or while a difference between the statement and
-     * the books is not 0.00 (feature 018 §2.7).
+     * 409: a bank month is marked reconciled without its statement or while the closing difference between the
+     * statement and the books is not 0.00 (feature 018 §2.7; the other differences do not block).
      */
     public static final String BANK_MONTH_NOT_BALANCED = "BANK_MONTH_NOT_BALANCED";
     /**
