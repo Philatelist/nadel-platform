@@ -37,6 +37,12 @@ const ALL_PERMISSIONS = [
   'View payments',
   'Enter payments',
   'Reverse payments',
+  'Issue invoices',
+  'Issue certificates',
+  'Send announcements',
+  'View cash and bank',
+  'Enter cash book entries',
+  'Approve cash book operations',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');
@@ -230,7 +236,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all twenty-five permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all thirty-one permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -346,7 +352,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: twenty-five permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: thirty-one permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -533,8 +539,8 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Enter a phone number like +380671234567 or 0671234567.')).toBeVisible();
     await expect(page).toHaveURL(/\/members\/new$/);
+    // Telegram needs no contact since feature 017 (the member links the bot themselves)
     for (const [channel, message] of [
-      ['Telegram', 'Telegram needs a Telegram username.'],
       ['Email', 'Email needs an email.'],
       ['Viber', 'Viber needs a Viber phone.'],
     ] as const) {

@@ -8,11 +8,13 @@
 //     real data, and is shown as entered).
 // What is checked: text nodes of visible elements, plus the attribute values `aria-label`, `placeholder`, `title`
 // and `alt`, and the document title. What is skipped: `[data-user-content]` subtrees, real code elements
-// (CODE/KBD/SAMP/PRE/TT) and `[data-code]`, the third-party map attribution, and in attributes any value that is a
+// (CODE/KBD/SAMP/PRE/TT) and `[data-code]` (also the number of an issued certificate, «Д-2026-1», the same in
+// every language), the third-party map attribution, and in attributes any value that is a
 // user-content text present on the page (an aria-label such as "Edit <member name>" is fine, the name is stripped
 // before the check). Font family is deliberately not a skip criterion: tables set monospace on numeric headers.
 // Deliberate exceptions in Ukrainian, besides the allowlist: e-mail addresses, URLs and IBANs (patterns), file
-// extensions such as ".xlsx" (FILE_EXTENSION), and the digit mask letter "N" in input hints (MASK).
+// extensions such as ".xlsx" (FILE_EXTENSION), the digit mask letter "N" in input hints (MASK), Telegram handles and
+// bot commands such as "@BotFather" and "/newbot" (TELEGRAM_ID) and the visible tail of a saved secret (SECRET_TAIL).
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
 import { kyivDay, pastRange } from './support/api';
@@ -26,8 +28,11 @@ interface Finding {
   context: string;
 }
 
-/** Words that may stay in Latin script in the Ukrainian UI: product and format names, as they are written everywhere. */
-const LATIN_ALLOWLIST = ['Excel', 'Telegram', 'Viber', 'QR', 'IBAN'];
+/**
+ * Words that may stay in Latin script in the Ukrainian UI: product, format and protocol names and abbreviations, as they
+ * are written everywhere.
+ */
+const LATIN_ALLOWLIST = ['Excel', 'Telegram', 'Viber', 'QR', 'IBAN', 'PDF', 'SMTP', 'STARTTLS', 'SSL'];
 
 /**
  * Language names written in their own language on the language switcher ("ENG"/"English", "УКР"/"Українська"):
@@ -143,6 +148,10 @@ const IBAN = /\bUA\d{2}[\dA-Z]{10,}\b/g;
 const FILE_EXTENSION = /\.(xlsx|xls|csv|pdf|png|jpe?g|json|txt)\b/gi;
 /** Input masks such as "NNNNNNNNNN:NN:NNN:NNNN" or "N" in an address hint stand for digits, they are not words. */
 const MASK = /\bN+\b/g;
+/** Telegram handles and bot commands ("@BotFather", "@nadel_demo_bot", "/newbot") are identifiers, typed as is. */
+const TELEGRAM_ID = /(^|\s)[@/]\w+/g;
+/** The visible tail of a saved secret ("••••oken" for a saved bot token) is data, not a word. */
+const SECRET_TAIL = /•+\w*/g;
 const LATIN_WORD = /[A-Za-z]+(?:['’][A-Za-z]+)*/g;
 const CYRILLIC_WORD = /[\u0400-\u04FF]+(?:['’][\u0400-\u04FF]+)*/g;
 
@@ -159,7 +168,9 @@ function check(locale: Locale, items: { text: string; where: string }[]): Findin
         .replace(URL_LIKE, ' ')
         .replace(IBAN, ' ')
         .replace(FILE_EXTENSION, ' ')
-        .replace(MASK, ' ');
+        .replace(MASK, ' ')
+        .replace(TELEGRAM_ID, ' ')
+        .replace(SECRET_TAIL, ' ');
       for (const word of stripped.match(LATIN_WORD) ?? []) {
         if (!LATIN_ALLOWLIST.includes(word) && !isAutonym(word, where, locale))
           findings.push({ where, word, context: text.slice(0, 80) });

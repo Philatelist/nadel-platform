@@ -75,7 +75,16 @@ export function CertificatesPage() {
 
   const col = c.columns;
   const columns: Column<CertificateRow>[] = [
-    { key: 'number', header: col.number, cell: (r) => <span className="font-mono">{r.number}</span> },
+    {
+      key: 'number',
+      header: col.number,
+      cell: (r) => (
+        // the number of an issued document is the same in every language (it is printed on the certificate)
+        <span data-code className="font-mono">
+          {r.number}
+        </span>
+      ),
+    },
     {
       key: 'plot',
       header: col.plot,
