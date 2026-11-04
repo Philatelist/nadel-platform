@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCALES, messages, type Locale } from '@nadel/shared';
 import { parsePage } from './parse';
+import { serializeSearchIndex } from './searchIndex';
 import { HELP_SECTIONS, type HelpBundle, type HelpBundlePage, type HelpIssue, type HelpPage } from './types';
 
 export interface CompileResult {
@@ -74,7 +75,7 @@ export function compileHelp(rootDir: string): CompileResult {
     bundles[locale] = {
       locale,
       pages: pages[locale].map(toBundlePage),
-      search: null,
+      search: serializeSearchIndex(pages[locale]),
     };
   }
   return { pages, bundles, issues };

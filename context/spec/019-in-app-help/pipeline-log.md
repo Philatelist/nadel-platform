@@ -44,3 +44,5 @@
 - AUTO: content slices run in parallel with the code slices (content writers touch only `docs/help/**` and `migration-map.md`), to shorten the run; each slice is still committed separately by path.
 - Slice 1 review round 1: PASS (minor notes in review-log).
 - Slice 2 — committed below — tests not run (deferred); typecheck, lint, format green per builder.
+- Slice 2 — `2b6b5e1` — review round 1: PASS (minor notes in review-log).
+- Slice 3 — committed below — tests not run (deferred); typecheck, lint, format, build green per builder.

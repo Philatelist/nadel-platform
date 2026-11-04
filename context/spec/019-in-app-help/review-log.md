@@ -10,3 +10,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `14451ea..a8e2bcc` | PASS | — | static review (no tests, per user). minor: issues warned twice (uk+en load) — rework in Slice 5; `DUPLICATE_ID` unreachable (kept as safeguard); redundant template literal in `Layout.tsx`; `useHelpMeta` skipped on not-found |
+
+## Slice 2 — «?» button, side panel and what each user sees
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a8e2bcc..2b6b5e1` | PASS | — | static review. minor: focus-restore cleanup runs twice under StrictMode; inline ref callback; no click-outside close. Note: a chairman without a plot does not see `member`-only pages (spec definition; demo chairman owns plot 1) |
