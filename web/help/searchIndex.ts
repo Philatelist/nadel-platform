@@ -13,7 +13,7 @@ export function tokenize(text: string): string[] {
     .filter((part) => part !== '');
 }
 
-/** Lowercases, removes apostrophes and folds «ё/ґ/є»-style variants only where it is lossless for search. */
+/** Lowercases and removes apostrophes and any other non-letter, non-digit characters. */
 export function processTerm(term: string): string | null {
   const folded = term.replace(APOSTROPHES, '').replace(NON_TERM, '').toLowerCase();
   return folded === '' ? null : folded;

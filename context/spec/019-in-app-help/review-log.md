@@ -16,3 +16,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a8e2bcc..2b6b5e1` | PASS | — | static review. minor: focus-restore cleanup runs twice under StrictMode; inline ref callback; no click-outside close. Note: a chairman without a plot does not see `member`-only pages (spec definition; demo chairman owns plot 1) |
+
+## Slice 3 — Search
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `2b6b5e1..a5dd1c3` | MAJOR_ISSUES | M1 typo test query is 2 edits away (fails with 1-edit fuzzy) | minor: misleading `processTerm` comment; JSON round-trip test does not round-trip; duplicate regex; `useMemo` on viewer identity |

@@ -46,3 +46,5 @@
 - Slice 2 — committed below — tests not run (deferred); typecheck, lint, format green per builder.
 - Slice 2 — `2b6b5e1` — review round 1: PASS (minor notes in review-log).
 - Slice 3 — committed below — tests not run (deferred); typecheck, lint, format, build green per builder.
+- Slice 3 — `a5dd1c3` — review round 1: MAJOR_ISSUES (M1 typo test); fix sent to the builder.
+- Slice 4 infra task done (Caddy `NADEL_NOINDEX` matcher, `try_files {path}/index.html`, compose, README; `caddy validate` → Valid configuration). `infra/stand/.env.example` was NOT updated: the permission settings deny the agent access to it — left for the owner (line to add in the final report).

@@ -63,7 +63,7 @@ describe('help search', () => {
   });
 
   it('finds a word with one wrong letter', () => {
-    expect(ids(bundle, 'лічильнкі')).toContain('meters');
+    expect(ids(bundle, 'лічильнки')).toContain('meters');
   });
 
   it('finds English pages', () => {
