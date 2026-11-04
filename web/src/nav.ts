@@ -56,3 +56,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     visible: (me) => me.permissions.includes('SETTINGS_MANAGE') || me.permissions.includes('METERS_MANAGE'),
   },
 ];
+
+/** The menu of the signed-in person, in menu order. */
+export function menuItems(me: Me): NavItem[] {
+  return NAV_ITEMS.filter(
+    (item) => (!item.permission || me.permissions.includes(item.permission)) && (item.visible?.(me) ?? true),
+  );
+}

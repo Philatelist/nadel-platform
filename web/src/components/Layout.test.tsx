@@ -51,7 +51,8 @@ describe('Layout', () => {
     expect(screen.getAllByText('Nadel')).toHaveLength(1);
   });
 
-  it('gives a member without permissions only My account: no Plots, no Help in the menu', () => {
+  it('gives a plot owner without permissions only My account: no Plots, no Help in the menu', () => {
+    me = { ...meWith([]), ownedPlots: [{ plotId: 'p1', number: '7' }] } as unknown as Me;
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
     const links = nav.querySelectorAll('a');
@@ -168,7 +169,7 @@ describe('Layout', () => {
     const user = userEvent.setup();
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
-    expect(nav.querySelectorAll('a')).toHaveLength(4);
+    expect(nav.querySelectorAll('a')).toHaveLength(3);
 
     const button = screen.getByRole('button', { name: 'Menu' });
     expect(button).toHaveAttribute('aria-controls', 'app-menu');
@@ -222,15 +223,21 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'To approve' })).toHaveAttribute('href', '/readings/approvals');
   });
 
-  it('gives the electrician My account, Readings and Meters, without Plots', () => {
+  it('gives the electrician without a plot Readings and Meters only, and makes Readings their home', () => {
     me = meWith(['READINGS_ENTER', 'METERS_VIEW']);
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
     expect(Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
-      '/account',
       '/readings',
       '/meters',
     ]);
+    expect(screen.getByRole('link', { name: 'Coop' })).toHaveAttribute('href', '/readings');
+  });
+
+  it('gives a person with no plot and no permission an empty menu', () => {
+    renderWithApp(<Layout />);
+    const nav = screen.getByRole('navigation', { name: 'Main menu' });
+    expect(nav.querySelectorAll('a')).toHaveLength(0);
   });
 
   it('hides Plots from a meter reader who owns a plot (the plots are on the account) and keeps it with PLOTS_VIEW', () => {

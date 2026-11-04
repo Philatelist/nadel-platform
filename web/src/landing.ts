@@ -1,15 +1,11 @@
-import type { Me, Permission } from '@nadel/api-client';
-
-type LandingMe = Pick<Me, 'permissions' | 'ownedPlots'>;
+import type { Me } from '@nadel/api-client';
+import { menuItems } from './nav';
 
 /**
- * The home screen of a signed-in person: plot people start on the plots list, a meter reader on the round or the
- * register, everyone else (including owners and plain members) on their account.
+ * The home screen of a signed-in person: the first item of their menu (the account for an owner without the plots
+ * list, the plots list for plot people, the readings round or the register for a meter reader). A person whose menu
+ * is empty (no plot, no permission) lands on the account, which says they have no plots yet.
  */
-export function landingPath({ permissions, ownedPlots }: LandingMe): string {
-  const has = (permission: Permission): boolean => permissions.includes(permission);
-  if (has('PLOTS_VIEW')) return '/plots';
-  if (ownedPlots.length === 0 && has('READINGS_ENTER')) return '/readings';
-  if (ownedPlots.length === 0 && has('METERS_VIEW')) return '/meters';
-  return '/account';
+export function landingPath(me: Me): string {
+  return menuItems(me)[0]?.to ?? '/account';
 }

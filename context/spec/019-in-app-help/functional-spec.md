@@ -134,9 +134,12 @@ the header always leads to the user's home screen.
 
 **The member's menu (owner decision in the review of PR #68).** A user without the right to view plots (a member) sees
 «Мій кабінет» first in the menu and no «Ділянки»; opening the plots list leads them to «Мій кабінет»; their own plot
-cards are opened from «Мій кабінет». «Довідка» is in the menu only for users with at least one right (the board); a
-member reaches the help through «?». The setting «Хто бачить кольори ділянок» keeps its meaning for the plot map that
-comes later; the settings screen says so.
+cards are opened from «Мій кабінет». «Мій кабінет» is in the menu only for a user who owns a plot now, and the home
+screen (where sign-in, the application's name and the plots list address lead) is the first item of the user's menu:
+the electrician without a plot sees «Покази» and «Лічильники» and starts on «Покази»; a user with no plot and no right
+lands on «Мій кабінет» by address (second owner decision, 2026-11-05). «Довідка» is in the menu only for users with at
+least one right (the board); a member reaches the help through «?». The setting «Хто бачить кольори ділянок» keeps its
+meaning for the plot map that comes later; the settings screen says so.
 
 - **Acceptance Criteria:**
   - [x] Given the treasurer is on «Платежі», when they press «?», then a side panel opens with the help page about the
@@ -149,6 +152,8 @@ comes later; the settings screen says so.
         кабінет»; and when they press the application's name, then «Мій кабінет» opens.
   - [ ] Given the member is signed in, when they look at the menu, then «Мій кабінет» is first and there is neither
         «Ділянки» nor «Довідка», and when they open the plots list address, then «Мій кабінет» opens.
+  - [ ] Given the electrician owns no plot, when they sign in, then the menu is «Покази», «Лічильники» without «Мій
+        кабінет», and «Покази» (the first item) opens.
   - [x] Given a phone-sized screen, when the user presses «?», then the help covers the whole screen and can be closed. — _e2e §2.3 #4 passed (390 px)_
   - [x] When the user presses «?» on any screen of the application, then the page about that screen opens. — _`pageForPath.test.ts`, `appRoutePaths.test.ts`, `helpContent.test.ts` (every route has a page); e2e §2.3 #5 negative passed_
 
@@ -326,3 +331,4 @@ the last change). The owner manual PDF and the Telegram leaflet are built as now
 
 - 2026-11-04 — created by `/feature-pipeline` from `docs/features/019-in-app-help.md`.
 - 2026-11-04 — owner review of PR #68 — the «?» panel is non-modal and follows the screen; every help page has «← Назад до …»; the application's name leads home; the member's menu starts with «Мій кабінет», has no «Ділянки» and no «Довідка», and the plots list leads a member to «Мій кабінет» (changes the menu of features 006/007); the member gets their own «Початок роботи»; the member pages no longer include «Ділянки» or «Картка ділянки».
+- 2026-11-05 — owner review of PR #68, second round — «Мій кабінет» is in the menu only for a user who owns a plot; the home screen is the first item of the user's menu (the electrician without a plot: «Покази», «Лічильники»).

@@ -53,14 +53,25 @@ describe('HomeRedirect', () => {
     expect(screen.getByText('account page')).toBeInTheDocument();
   });
 
-  it('sends everyone else to their account', () => {
+  it('sends an owner without board rights to their account', () => {
+    ownedPlots = [{ plotId: 'p1', number: '7' }] as unknown as Me['ownedPlots'];
     renderHome();
     expect(screen.getByText('account page')).toBeInTheDocument();
   });
 
-  it('exposes the same rule as a function', () => {
-    expect(landingPath({ permissions: [], ownedPlots: [] })).toBe('/account');
-    expect(landingPath({ permissions: ['PLOTS_VIEW'], ownedPlots: [] })).toBe('/plots');
-    expect(landingPath({ permissions: ['METERS_VIEW'], ownedPlots: [] })).toBe('/meters');
+  it('sends a person with no plot and no permission to the account', () => {
+    renderHome();
+    expect(screen.getByText('account page')).toBeInTheDocument();
+  });
+
+  it('exposes the same rule as a function: the first item of the menu', () => {
+    const me = (p: Permission[], plots: Me['ownedPlots'] = []) =>
+      ({ permissions: p, ownedPlots: plots }) as Me;
+    const plot = [{ plotId: 'p1', number: '7' }] as unknown as Me['ownedPlots'];
+    expect(landingPath(me([]))).toBe('/account');
+    expect(landingPath(me([], plot))).toBe('/account');
+    expect(landingPath(me(['PLOTS_VIEW'], plot))).toBe('/plots');
+    expect(landingPath(me(['METERS_VIEW']))).toBe('/meters');
+    expect(landingPath(me(['TARIFFS_VIEW']))).toBe('/tariffs');
   });
 });

@@ -319,7 +319,8 @@ test.describe('§2.4 and §2.6 the contents', () => {
           contents(electrician).getByRole('heading', { level: 2, name: uk.help.sections[section] }),
         ).toHaveCount(0);
       }
-      // «Мій кабінет» is for everyone; the pages for owners and members (the bill, the member's start) are not
+      // the account help page is for everyone (the name in the header opens the account); the pages for owners and
+      // members (the bill, the member's start) are not
       await expect(pageLink(electrician, titleOf('uk', 'account'))).toBeVisible();
       await expect(pageLink(electrician, titleOf('uk', 'member-bill'))).toHaveCount(0);
       await expect(contents(electrician).locator('a[href="/help/member-getting-started"]')).toHaveCount(0);

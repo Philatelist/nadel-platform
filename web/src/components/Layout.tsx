@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import { useMe } from '../me';
 import { landingPath } from '../landing';
-import { NAV_ITEMS } from '../nav';
+import { menuItems } from '../nav';
 import { HelpButton } from '../help/HelpButton';
 import { originState, useHelpOrigin } from '../help/helpOrigin';
 import { HelpPanelSlotContext } from '../help/helpPanelSlot';
@@ -30,9 +30,7 @@ export function Layout() {
   const helpOrigin = useHelpOrigin();
 
   const title = me.tenant?.name ?? t.app.name;
-  const items = NAV_ITEMS.filter(
-    (item) => (!item.permission || me.permissions.includes(item.permission)) && (item.visible?.(me) ?? true),
-  );
+  const items = menuItems(me);
 
   useEffect(() => {
     if (!open) return;

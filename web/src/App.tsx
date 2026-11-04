@@ -31,8 +31,8 @@ export const appRoutes: RouteObject[] = [
         ],
       },
       {
-        // a member without the plots list is sent to the account, where their own plots are
-        element: <RequirePermission permission="PLOTS_VIEW" redirectTo="/account" />,
+        // without the plots list, go home (the account of an owner, where their own plots are)
+        element: <RequirePermission permission="PLOTS_VIEW" redirectTo="/" />,
         children: [
           {
             path: 'plots',
