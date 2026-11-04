@@ -1,10 +1,11 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes } from 'react-router';
+import { Link, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HelpBundle } from '../../help/types';
 import { renderWithApp } from '../test/render';
 import { HelpButton } from './HelpButton';
+import { HelpBackLink } from './helpOrigin';
 import { HelpViewerProvider } from './helpViewer';
 import type { HelpViewer } from './helpVisibility';
 
@@ -58,33 +59,97 @@ beforeEach(() => {
 
 beforeEach(() => window.localStorage.setItem('nadel.locale', 'uk'));
 
+const panelName = (title: string) => ({ name: title });
+
 describe('HelpPanel', () => {
-  it('opens the page of the current screen and keeps the screen behind it', async () => {
+  it('opens the page of the current screen beside it and keeps the screen usable', async () => {
     render('/payments');
-    await userEvent.click(screen.getByRole('button', { name: 'Довідка про цей екран' }));
-    expect(screen.getByRole('dialog', { name: 'Платежі' })).toBeInTheDocument();
+    const open = screen.getByRole('button', { name: 'Довідка про цей екран' });
+    await userEvent.click(open);
+    const panel = screen.getByRole('complementary', panelName('Платежі'));
+    expect(panel).toHaveFocus();
     expect(screen.getByText('Текст: Платежі')).toBeInTheDocument();
     expect(screen.getByText('Екран за панеллю')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // not modal: nothing is inert or hidden from assistive technology
+    expect(document.querySelector('[inert]')).toBeNull();
+    expect(screen.getByText('Екран за панеллю').closest('[aria-hidden="true"]')).toBeNull();
+    expect(open).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('links to the full page', async () => {
-    render('/payments');
+  it('keeps links outside the panel clickable and navigates with the panel open', async () => {
+    renderWithApp(
+      <HelpViewerProvider viewer={treasurer}>
+        <HelpButton />
+        <Link to="/audit">В журнал</Link>
+        <Link to="/payments">До платежів</Link>
+        <Routes>
+          <Route path="*" element={<p>Екран за панеллю</p>} />
+        </Routes>
+      </HelpViewerProvider>,
+      { route: '/payments' },
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Довідка про цей екран' }));
-    expect(screen.getByRole('link', { name: 'Відкрити повністю' })).toHaveAttribute('href', '/help/payments');
+    expect(screen.getByRole('complementary', panelName('Платежі'))).toBeInTheDocument();
+    // a screen without a visible page closes the panel (and hides «?»)
+    await userEvent.click(screen.getByRole('link', { name: 'В журнал' }));
+    expect(screen.queryByRole('complementary')).toBeNull();
+    // coming back does not reopen the old panel
+    await userEvent.click(screen.getByRole('link', { name: 'До платежів' }));
+    expect(screen.queryByRole('complementary')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Довідка про цей екран' })).toBeInTheDocument();
   });
 
-  it('closes with the close button and with Escape', async () => {
+  it('shows the help of the new screen when the route changes to a screen that has a page', async () => {
+    bundle.pages.push(page('tariffs', 'Тарифи', ['/tariffs'], ['PAYMENTS_VIEW']));
+    renderWithApp(
+      <HelpViewerProvider viewer={treasurer}>
+        <HelpButton />
+        <Link to="/tariffs">До тарифів</Link>
+        <Routes>
+          <Route path="*" element={<p>Екран за панеллю</p>} />
+        </Routes>
+      </HelpViewerProvider>,
+      { route: '/payments' },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Довідка про цей екран' }));
+    await userEvent.click(screen.getByRole('link', { name: 'До тарифів' }));
+    expect(screen.getByRole('complementary', panelName('Тарифи'))).toBeInTheDocument();
+    expect(screen.queryByText('Текст: Платежі')).toBeNull();
+  });
+
+  it('links to the full page and passes the screen it was opened from', async () => {
+    renderWithApp(
+      <HelpViewerProvider viewer={treasurer}>
+        <HelpButton />
+        <Routes>
+          <Route path="/help/:id" element={<HelpBackLink />} />
+          <Route path="*" element={<p>Екран за панеллю</p>} />
+        </Routes>
+      </HelpViewerProvider>,
+      { route: '/payments' },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Довідка про цей екран' }));
+    const full = screen.getByRole('link', { name: 'Відкрити повністю' });
+    expect(full).toHaveAttribute('href', '/help/payments');
+    await userEvent.click(full);
+    expect(screen.getByRole('link', { name: '← Назад до «Платежі»' })).toHaveAttribute('href', '/payments');
+  });
+
+  it('closes with the close button, the phone back button and Escape, returning focus to «?»', async () => {
     render('/payments');
     const open = screen.getByRole('button', { name: 'Довідка про цей екран' });
     await userEvent.click(open);
     await userEvent.click(screen.getByRole('button', { name: 'Закрити' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('complementary')).toBeNull();
+    expect(open).toHaveFocus();
+    await userEvent.click(open);
+    await userEvent.click(screen.getByRole('button', { name: '← Назад' }));
+    expect(screen.queryByRole('complementary')).toBeNull();
     await userEvent.click(open);
     await userEvent.keyboard('{Escape}');
-    // jsdom does not fire the native cancel event on Escape, so dispatch it as the browser would.
-    screen.queryByRole('dialog')?.dispatchEvent(new Event('cancel', { cancelable: true }));
-    expect(await screen.findByRole('button', { name: 'Довідка про цей екран' })).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('complementary')).toBeNull();
+    expect(open).toHaveFocus();
   });
 
   it('has no button on a screen without a visible page', () => {

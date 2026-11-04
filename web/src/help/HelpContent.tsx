@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useCarriedHelpState } from './helpOrigin';
 import type { Locale } from '@nadel/shared';
 import type { HelpNode } from '../../help/types';
 import { useT } from '../i18n';
@@ -16,6 +17,30 @@ const headingClass: Record<'h2' | 'h3' | 'h4', string> = {
   h3: 'mt-4 scroll-mt-4 text-lg font-semibold text-ink',
   h4: 'mt-3 scroll-mt-4 font-semibold text-ink',
 };
+
+/** A link to another help page; it carries the origin, so the way back survives. */
+export function HelpPageLink({
+  pageId,
+  anchor,
+  className = 'text-accent underline',
+  children,
+}: {
+  pageId: string;
+  anchor?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const state = useCarriedHelpState();
+  return (
+    <Link
+      to={{ pathname: `/help/${pageId}`, hash: anchor ? `#${anchor}` : '' }}
+      state={state}
+      className={className}
+    >
+      {children}
+    </Link>
+  );
+}
 
 function Callout({ children }: { children: ReactNode }) {
   const t = useT();
@@ -61,13 +86,9 @@ function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visibl
       if (visible && !visible(node.pageId))
         return <span key={key}>{renderNodes(node.children, locale, visible)}</span>;
       return (
-        <Link
-          key={key}
-          to={{ pathname: `/help/${node.pageId}`, hash: node.anchor ? `#${node.anchor}` : '' }}
-          className="text-accent underline"
-        >
+        <HelpPageLink key={key} pageId={node.pageId} anchor={node.anchor}>
           {renderNodes(node.children, locale, visible)}
-        </Link>
+        </HelpPageLink>
       );
     case 'a':
       return (

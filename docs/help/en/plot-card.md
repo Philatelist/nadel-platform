@@ -7,7 +7,6 @@ routes:
   - /plots/:id
 permissions:
   - PLOTS_VIEW
-  - member
 section: plots-members
 order: 20
 shots:
@@ -21,10 +20,6 @@ shots:
     open: { css: 'main a[href^="/plots/"]', text: '9' }
     steps:
       - { click: Change owner }
-  - name: plot-card-member
-    user: member
-    path: /plots
-    open: { css: 'main a[href^="/plots/"]', text: '7' }
 ---
 
 ## What the screen is for
@@ -34,7 +29,7 @@ The card gathers everything about one plot: its data, the owners with the owners
 ## Who sees it
 
 - Whoever has the permission "{{ui:permission.PLOTS_VIEW.name}}" sees the card of any plot with all details.
-- A member sees only the card of a plot they own. It opens from their plot list or from "{{ui:nav.account}}". The member sees the plot data, the owners, their account, tariffs, meters and invoices. The member does not see the "{{ui:plot.fields.notes}}" field or any buttons that change data.
+- A plot owner opens the card of their plot from "{{ui:nav.account}}": see [My account](help:account). The owner sees only the card of their own plot, without the "{{ui:plot.fields.notes}}" field and without buttons that change data.
 - The buttons depend on permissions: "{{ui:permission.PLOTS_EDIT.name}}" gives editing and archiving, "{{ui:permission.OWNERSHIP_EDIT.name}}" together with "{{ui:permission.MEMBERS_VIEW.name}}" gives changing owners, "{{ui:permission.PAYMENTS_ENTER.name}}" gives the button to enter a payment.
 - A member cannot open somebody else's plot: the system does not show its data.
 
@@ -56,7 +51,7 @@ At the top are the link "{{ui:plot.back}}" and a title with the number, for exam
 
 The table shows: {{ui:plot.fields.number}}, {{ui:plot.fields.street}}, {{ui:plot.fields.kind}}, {{ui:plot.fields.status}}, {{ui:plot.fields.area}} (in sotky and in m², for example "15 sotky (1,500 m²)"), {{ui:plot.fields.cadastralNumber}}, {{ui:plot.fields.building}} ("{{ui:plot.hasBuilding}}" or "{{ui:plot.noBuilding}}") and {{ui:plot.fields.notes}}. The building is for reference only: it does not affect charges. Notes are seen only by those who have "{{ui:permission.PLOTS_VIEW.name}}".
 
-The status shows the debt colour: see [Plots](help:plots). A member always sees the status of their own plot.
+The status shows the debt colour: see [Plots](help:plots). The owner always sees the status of their own plot.
 
 ### The "{{ui:plot.ownersTitle}}" panel
 
@@ -102,10 +97,6 @@ This tab is open at first. Its panels:
 
 If there is only one tab, the tab bar is not shown.
 
-### The member's view
-
-The owner of a plot sees the same data, but without "{{ui:plot.fields.notes}}" and without the buttons that change data. The owner sees the owners and the history, their account, the expected charges, the meters of the plot and its invoices. The owner has no "{{ui:plot.tabs.reconciliationAct}}" and "{{ui:plot.tabs.certificates}}" tabs: they ask the board for these or download the act in "{{ui:nav.account}}".
-
 ## Worked example
 
 Plot 9, the corner plot by the gate: 15 sotky (1,500 m²), has a building, the note says "Кутова ділянка біля в’їзних воріт" (corner plot by the entrance gate). In 2025 it was sold: until 31.05.2025 it was owned by Honcharenko Mykola (now archived), and since 01.06.2025 by Lytvynenko Svitlana. Basis: "Договір купівлі-продажу від 20.05.2025" (sale contract of 20.05.2025).
@@ -125,8 +116,6 @@ Plot 7 belongs to two people: Bondarenko 1/2 and Moroz 1/2. Their shares togethe
 ![Card of plot 9: owners, history, tabs](shot:plot-card)
 
 ![The change owner form](shot:plot-card-change-owner)
-
-![Card of plot 7 as its owner sees it](shot:plot-card-member)
 
 ## Related pages
 

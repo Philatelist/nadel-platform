@@ -50,3 +50,20 @@ describe('RequirePermission with any', () => {
     expect(screen.queryByText('form')).toBeNull();
   });
 });
+
+describe('RequirePermission with redirectTo', () => {
+  it('sends a person without the permission to the given screen, e.g. a member opening /plots', () => {
+    permissions = [];
+    renderWithApp(
+      <Routes>
+        <Route element={<RequirePermission permission="PLOTS_VIEW" redirectTo="/account" />}>
+          <Route path="/plots" element={<div>plots list</div>} />
+        </Route>
+        <Route path="/account" element={<div>account page</div>} />
+      </Routes>,
+      { route: '/plots' },
+    );
+    expect(screen.getByText('account page')).toBeInTheDocument();
+    expect(screen.queryByText('plots list')).toBeNull();
+  });
+});

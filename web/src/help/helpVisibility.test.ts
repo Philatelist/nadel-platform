@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANONYMOUS_VIEWER, isPageVisible, viewerFromMe, visiblePageIds } from './helpVisibility';
+import { ANONYMOUS_VIEWER, isBoardUser, isPageVisible, viewerFromMe, visiblePageIds } from './helpVisibility';
 
 const pages = [
   { id: 'everyone', permissions: [] },
@@ -60,5 +60,16 @@ describe('helpVisibility', () => {
 
   it('shows the anonymous visitor every page', () => {
     expect(visiblePageIds(pages, ANONYMOUS_VIEWER).size).toBe(pages.length);
+  });
+
+  it('shows a board page to anyone holding a permission, but not to a plain member or an owner', () => {
+    const boardPages = [{ id: 'start', permissions: ['board'] }];
+    const treasurer = viewerFromMe({ permissions: ['PAYMENTS_VIEW'], ownedPlots: [] });
+    const member = viewerFromMe({ permissions: [], ownedPlots: [plot] });
+    expect(isPageVisible(boardPages[0]!, treasurer)).toBe(true);
+    expect(isPageVisible(boardPages[0]!, member)).toBe(false);
+    expect(isPageVisible(boardPages[0]!, ANONYMOUS_VIEWER)).toBe(true);
+    expect(isBoardUser([])).toBe(false);
+    expect(isBoardUser(['AUDIT_VIEW'])).toBe(true);
   });
 });

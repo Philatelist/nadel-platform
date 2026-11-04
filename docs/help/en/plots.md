@@ -7,15 +7,11 @@ routes:
   - /plots
 permissions:
   - PLOTS_VIEW
-  - member
 section: plots-members
 order: 10
 shots:
   - name: plots
     user: chairman
-    path: /plots
-  - name: plots-member
-    user: member
     path: /plots
 ---
 
@@ -27,10 +23,10 @@ This is the register of all plots of the cooperative. Here you search for a plot
 
 The full register is seen by those who have the permission "{{ui:permission.PLOTS_VIEW.name}}": the chairman and the treasurer, and any custom role with this permission. The "{{ui:plots.add}}" button is seen by whoever also has "{{ui:permission.PLOTS_EDIT.name}}".
 
-A member who owns a plot also sees the screen, but a shorter one. It has only four columns: {{ui:plots.columns.number}}, {{ui:plots.columns.street}}, {{ui:plots.columns.kind}} and {{ui:plots.columns.status}}. The member does not see areas, cadastral numbers or owners, there is no "{{ui:plots.showArchived}}" switch and no add button. Search works only by number or street.
+A member without the permission "{{ui:permission.PLOTS_VIEW.name}}" does not have this screen: there is no "{{ui:nav.plots}}" item in their menu, and if they open the list address the system sends them to "{{ui:nav.account}}". A member opens their own plots from the account, see [My account](help:account).
 
-> [!important]
-> A member sees the status colour of other people's plots only when the [settings](help:settings) say "{{ui:settings.visibility.ALL_PLOTS.label}}". Normally it says "{{ui:settings.visibility.OWN_ONLY.label}}", and instead of the colour of another plot an empty neutral circle is shown. Amounts, owners and personal data of other people's plots are never shown to a member.
+> [!note]
+> The setting "{{ui:settings.visibilityLegend}}" (in the [settings](help:settings)) applies to the plot map that will come later. For now members do not see the plot list, so they do not see other people's plots or colours at all.
 
 ## Every element
 
@@ -40,7 +36,7 @@ On the right in the header. Opens the [new plot form](help:plot-form).
 
 ### Search and filters
 
-- The search field: "{{ui:plots.searchPlaceholder}}". For a member it says: "{{ui:plots.searchPlaceholderRestricted}}". The list updates as soon as you stop typing. Letter case does not matter.
+- The search field: "{{ui:plots.searchPlaceholder}}". The list updates as soon as you stop typing. Letter case does not matter.
 - The "{{ui:plots.filterKind}}" filter: "{{ui:plots.allKinds}}", "{{ui:plot.kind.PLOT}}" or "{{ui:plot.kind.COMMON}}". Common land (roads, shared territory) has no owners, tariffs or plot meters.
 - The "{{ui:plots.filterStatus}}" filter: "{{ui:plots.allStatuses}}" or one of the statuses described below.
 - The "{{ui:plots.showArchived}}" switch adds archived plots to the list. They are marked "{{ui:plots.archived}}".
@@ -82,13 +78,9 @@ The treasurer wants to check the debtors on Sadova street.
 3. To see those closer to the threshold, choose "{{ui:status.RED}}".
 4. Click the number of the plot you need, for example 9 (15 sotky, owner Lytvynenko), to open the [plot card](help:plot-card) and see what the debt consists of.
 
-The member Bondarenko, who owns plots 7 and 15, sees numbers, streets and kinds of all plots in the same list, but the colour of only his two. The other plots have an empty circle.
-
 ## Screenshots
 
 ![The plot register with search and filters](shot:plots)
-
-![The plot list as a member sees it](shot:plots-member)
 
 ## Related pages
 

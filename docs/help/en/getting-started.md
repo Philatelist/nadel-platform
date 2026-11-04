@@ -1,10 +1,11 @@
 ---
 id: getting-started
 title: "Getting started"
-description: "What the system does, who sees what, how to sign in, where the menu is, how to change the language and theme, and how to use the help."
+description: "For the board: what the system does, who sees what, how to sign in, where the menu is, how to change the language and theme, and how to use the help."
 kind: topic
 routes: []
-permissions: []
+permissions:
+  - board
 section: getting-started
 order: 10
 shots: []
@@ -30,9 +31,9 @@ The chairman can create custom roles. For example, the "Electrician" role has ju
 
 Open the address of the system given by the board and press {{ui:auth.signIn}}. Signing in happens on a separate sign-in page: enter your e-mail and password. After signing in you land on the home page. Which one depends on your rights:
 
-- someone who can see plots lands on the plot list;
+- someone who can see plots (has the permission "{{ui:permission.PLOTS_VIEW.name}}") lands on the plot list;
 - an electrician with no plots of their own lands on readings or on the meter register;
-- everyone else lands on "{{ui:nav.account}}".
+- everyone else, including an ordinary member, lands on "{{ui:nav.account}}". It is their home screen; there is a separate page about it, [Getting started as a member](help:member-getting-started).
 
 If signing in fails, the system says: "{{ui:auth.signInFailed}}". Try again. If it still does not work, contact the chairman.
 
@@ -45,9 +46,9 @@ The {{ui:auth.signOut}} button in the header ends your session. If the session e
 
 ## The header and the menu
 
-On the left of the header is the name of your cooperative, on the right your name. The name leads to "{{ui:nav.account}}". Next to it are the language switch, the theme switch, the "?" button and the {{ui:auth.signOut}} button.
+On the left of the header is the name of your cooperative, on the right your name. The name leads to "{{ui:nav.account}}", and the cooperative name with the logo leads to your home screen (the plot list, readings or "{{ui:nav.account}}", depending on your rights). Next to it are the language switch, the theme switch, the "?" button and the {{ui:auth.signOut}} button.
 
-The menu on the left shows only the sections open to you. The chairman sees everything, the treasurer less, a member the least. What is not in the menu is not needed by you: the system does not show a section you have no access to. If you open such a page by a link, the system says: "{{ui:access.denied}}".
+The menu on the left shows only the sections open to you. The chairman sees everything, the treasurer less. An ordinary member has neither "{{ui:nav.plots}}" nor "{{ui:help.title}}" in the menu: their menu starts with "{{ui:nav.account}}", and if they open the plot list by its address, it sends them to the account. A member opens their own plots from the account. What is not in the menu is not needed by you: the system does not show a section you have no access to. If you open such a page by a link, the system says: "{{ui:access.denied}}".
 
 On a phone the menu hides behind the {{ui:nav.menu}} button.
 
@@ -59,9 +60,9 @@ The theme has three options: {{ui:theme.system}}, {{ui:theme.light}} and {{ui:th
 
 ## The help
 
-The "?" button in the header opens the help for the screen you are on. The help appears at the side, and full screen on a phone. The "{{ui:help.openFull}}" button opens the same page on its own. The "{{ui:help.close}}" button or the Esc key closes the panel.
+The "?" button in the header opens the help for the screen you are on. The help appears at the side, next to the screen: the screen stays usable, you can scroll and work with it while the panel is open. When you move to another screen, the panel shows the help for that screen, or closes if that screen has no help. On a phone the help takes the whole screen, and the "{{ui:help.back}}" button returns to the screen. The "{{ui:help.openFull}}" button opens the same page on its own. The "{{ui:help.close}}" button or the Esc key closes the panel.
 
-The whole help opens from the "{{ui:help.title}}" item in the menu. It has a table of contents by section and a "{{ui:help.search}}" field at the top: search by a word from the text or by a button name; one typo in the word does not matter. Each page explains one part of the system: what every button and field does, when to use it, what happens next and what to do if the system shows an error. There are examples with numbers and screenshots. On a help page you see a list of headings at the right: it helps you jump to the right place.
+The whole help opens from the "{{ui:help.title}}" item in the menu (it is there only for those who hold at least one permission; a member opens the help with the "?" button). Every help page has "← Back to …": it returns to the screen you opened it from. It has a table of contents by section and a "{{ui:help.search}}" field at the top: search by a word from the text or by a button name; one typo in the word does not matter. Each page explains one part of the system: what every button and field does, when to use it, what happens next and what to do if the system shows an error. There are examples with numbers and screenshots. On a help page you see a list of headings at the right: it helps you jump to the right place.
 
 You see only the pages about the screens you can use. If you open an unavailable page by a link, the system says: "{{ui:help.hidden}}".
 

@@ -9,6 +9,10 @@ permissions: []
 section: member
 order: 10
 shots:
+  - name: plot-card-member
+    user: member
+    path: /account
+    open: { css: 'main a[href^="/plots/"]', text: '7' }
   - name: account-page
     user: member
     path: /account
@@ -33,11 +37,11 @@ shots:
 
 ## What the screen is for
 
-{{ui:account.title}} is the personal page of everyone who signs in. A plot owner sees everything about their plots in one place: what will be charged, what is already charged and paid, their meters and invoices. From here you can submit a meter reading, download an invoice, connect Telegram and get a reconciliation act.
+{{ui:account.title}} is the personal page of everyone who signs in, and the home screen of a cooperative member: after signing in they land here, it is the first item of their menu, and the logo in the header leads back here. A plot owner sees everything about their plots in one place: what will be charged, what is already charged and paid, their meters and invoices. From here you can submit a meter reading, download an invoice, connect Telegram and get a reconciliation act.
 
 ## Who sees it
 
-Every signed-in user sees the account, and everyone sees only their own data. Other people's plots, amounts, owners and personal data are not here. The colour of other plots on the map is visible only when the chairman has turned on showing all plots to members, and the amounts of other plots are never shown.
+Every signed-in user sees the account, and everyone sees only their own data. Other people's plots, amounts, owners and personal data are not here. Members are not shown the list of all plots. The setting "Who sees plot colours" applies to the plot map that will come later, and the amounts of other plots are never shown.
 
 If you have no plot, the parts about plots do not appear. Then you see only your own data and roles.
 
@@ -56,6 +60,12 @@ The screen is made of separate blocks, one under another, in this order.
 The {{ui:ownership.myPlots}} block has a card for each of your plots: the number (it leads to the [plot card](help:plot-card)), the street and your share. Below are the co-owners and the history of owners. If you have no plots, the system says "{{ui:ownership.noOwnedPlots}}".
 
 Next to each plot there is the {{ui:reconciliationAct.open}} button. It opens the {{ui:reconciliationAct.formTitle}} form: choose the dates in the {{ui:reconciliationAct.from}} and {{ui:reconciliationAct.to}} fields and press {{ui:reconciliationAct.download}}. You get a PDF with the charges, payments and the debt or overpayment at the start and the end of the period. The {{ui:reconciliationAct.close}} button folds the form. More: [Documents for a member](help:member-documents).
+
+### The card of my plot
+
+The plot number in the {{ui:ownership.myPlots}} card is a link: press it and the plot card opens, with a "{{ui:plot.backToAccount}}" link. The card shows the plot data (area, street, debt status), the owners with the ownership history, your account with charges and payments, the expected charges by tariffs, the plot's meters and its invoices. You have no "{{ui:plot.fields.notes}}" field and no buttons that change data, and the system does not show the card of someone else's plot. You do not need an overall view of all plots: you open everything of yours from here.
+
+![Card of plot 7 as its owner sees it](shot:plot-card-member)
 
 ### My meters
 
@@ -109,4 +119,5 @@ Olena owns plot 9. She opens her account after the board has closed October.
 - [Documents for a member](help:member-documents)
 - [How to connect Telegram](help:member-telegram)
 - [Plot card](help:plot-card)
+- [Getting started as a member](help:member-getting-started)
 - [Getting started](help:getting-started)

@@ -671,8 +671,8 @@ END $$;</pre>
         </thead>
         <tbody>
           <tr>
-            <td>Cooperative name</td>
-            <td>Goes to the home page</td>
+            <td>Cooperative name with the logo</td>
+            <td>Goes to the user's home screen: for a cooperative member this is "My account"</td>
             <td>—</td>
           </tr>
           <tr>
@@ -692,13 +692,19 @@ END $$;</pre>
           </tr>
           <tr>
             <td>Menu</td>
-            <td>Shows only the sections the person has permissions for</td>
+            <td>
+              Shows only the sections the person has permissions for. An ordinary cooperative member has no
+              "Plots" and no "Help": their menu starts with "My account", and opening the plot list by its
+              address sends them to the account. The "Help" item is there only for those who hold at least one
+              permission
+            </td>
             <td>—</td>
           </tr>
           <tr>
             <td>"?" in the header</td>
             <td>
-              Opens help about the current screen in a side panel (details below, "Help in the application")
+              Opens help about the current screen in a side panel (details below, "Help in the application").
+              A cooperative member opens the help with this button
             </td>
             <td>—</td>
           </tr>
@@ -718,7 +724,7 @@ END $$;</pre>
           <tr>
             <td>Search, "Kind", "Status", "Show archived"</td>
             <td>Filter the register</td>
-            <td>View plots (a member sees a short list)</td>
+            <td>View plots (a cooperative member does not see the plot list)</td>
           </tr>
           <tr>
             <td>Add plot</td>
@@ -1783,8 +1789,11 @@ END $$;</pre>
           <tr>
             <td>"?" in the header</td>
             <td>
-              Opens a panel on the right with help about the current screen; "Open in full" leads to the help
-              page. If the screen has no page, the button is not shown
+              Opens a panel at the side with help about the current screen. The panel is not modal: the screen
+              stays usable and scrollable. Moving to another screen shows that screen's help in the panel, or
+              closes it if that screen has no help. Esc and "Close" close the panel; "Open in full" leads to
+              the help page. On a phone the panel is full screen with a "← Back" button. If the screen has no
+              page, the button is not shown
             </td>
             <td>—</td>
           </tr>
@@ -1795,7 +1804,7 @@ END $$;</pre>
               one typo in a word). A person sees only the pages for their permissions and roles; a direct link
               to another page shows a message that the section is not available, without the content
             </td>
-            <td>any user</td>
+            <td>anyone who holds at least one permission (the menu item); everyone else uses "?"</td>
           </tr>
           <tr>
             <td>Help without signing in</td>
@@ -2400,6 +2409,13 @@ END $$;</pre>
           changes a screen, a button, a permission, a calculation rule or how the platform is run updates the
           pages in both languages in the same PR. Button names are written only as
           <code>{{ui:key}}</code> from the i18n catalog: a stale key breaks the build.
+        </li>
+        <li>
+          The <code>permissions</code> field of a page takes <code>Permission</code> values and two tokens:
+          <code>member</code> (the viewer owns a plot, or holds the permission to view members) and
+          <code>board</code> (the viewer holds at least one permission). An empty list means every signed-in
+          user. A page for the board, such as the board's "Getting started", uses <code>board</code>; a page
+          for plot owners uses <code>member</code>.
         </li>
         <li>
           The completeness check: every route and menu item has a page, every screenshot is a file, the two

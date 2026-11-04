@@ -34,7 +34,7 @@ describe('Layout', () => {
   it('titles the header with the cooperative name, keeps the product name as a muted label', () => {
     renderWithApp(<Layout />);
     const link = screen.getByRole('link', { name: 'Coop' });
-    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('href', '/account');
     expect(link).toHaveAttribute('title', 'Coop');
     expect(link).toHaveClass('truncate', 'font-serif');
     const product = screen.getByText('Nadel');
@@ -46,23 +46,27 @@ describe('Layout', () => {
     me = { ...meWith([]), tenant: undefined } as Me;
     renderWithApp(<Layout />);
     const link = screen.getByRole('link', { name: 'Nadel' });
-    expect(link).toHaveAttribute('href', '/');
+    expect(link).toHaveAttribute('href', '/account');
     expect(link).toHaveAttribute('title', 'Nadel');
     expect(screen.getAllByText('Nadel')).toHaveLength(1);
   });
 
-  it('gives a member without permissions a menu with only Plots', () => {
+  it('gives a member without permissions only My account: no Plots, no Help in the menu', () => {
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
     const links = nav.querySelectorAll('a');
     expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/plots');
+    expect(links[0]).toHaveAttribute('href', '/account');
+    expect(links[0]).toHaveTextContent('My account');
+    expect(screen.queryByRole('link', { name: 'Plots' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Help' })).toBeNull();
+    expect(document.querySelector('a[href="/help"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Test User' })).toHaveAttribute('href', '/account');
   });
 
   it('puts Plots first in the menu', () => {
-    me = meWith(['MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
+    me = meWith(['PLOTS_VIEW', 'MEMBERS_VIEW', 'ROLES_MANAGE', 'AUDIT_VIEW']);
     renderWithApp(<Layout />);
     const hrefs = Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map(
       (a) => a.getAttribute('href'),
@@ -71,7 +75,7 @@ describe('Layout', () => {
   });
 
   it('shows Payments after Charges, only with PAYMENTS_VIEW', () => {
-    me = meWith(['CHARGES_VIEW', 'PAYMENTS_VIEW', 'REPORTS_VIEW']);
+    me = meWith(['PLOTS_VIEW', 'CHARGES_VIEW', 'PAYMENTS_VIEW', 'REPORTS_VIEW']);
     const { unmount } = renderWithApp(<Layout />);
     const hrefs = () =>
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
@@ -79,13 +83,13 @@ describe('Layout', () => {
       );
     expect(hrefs()).toEqual(['/plots', '/charges', '/payments', '/reports', '/documents/certificates']);
     unmount();
-    me = meWith(['CHARGES_VIEW']);
+    me = meWith(['PLOTS_VIEW', 'CHARGES_VIEW']);
     renderWithApp(<Layout />);
     expect(hrefs()).toEqual(['/plots', '/charges', '/documents/certificates']);
   });
 
   it('shows Reports after Charges, only with REPORTS_VIEW', () => {
-    me = meWith(['CHARGES_VIEW', 'REPORTS_VIEW']);
+    me = meWith(['PLOTS_VIEW', 'CHARGES_VIEW', 'REPORTS_VIEW']);
     const { unmount } = renderWithApp(<Layout />);
     const hrefs = () =>
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
@@ -93,7 +97,7 @@ describe('Layout', () => {
       );
     expect(hrefs()).toEqual(['/plots', '/charges', '/reports', '/documents/certificates']);
     unmount();
-    me = meWith(['CHARGES_VIEW']);
+    me = meWith(['PLOTS_VIEW', 'CHARGES_VIEW']);
     renderWithApp(<Layout />);
     expect(hrefs()).toEqual(['/plots', '/charges', '/documents/certificates']);
   });
@@ -108,7 +112,7 @@ describe('Layout', () => {
   });
 
   it('shows Cooperative settings last, only with SETTINGS_MANAGE', () => {
-    me = meWith(['MEMBERS_VIEW', 'SETTINGS_MANAGE']);
+    me = meWith(['PLOTS_VIEW', 'MEMBERS_VIEW', 'SETTINGS_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);
     const hrefs = () =>
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
@@ -131,7 +135,7 @@ describe('Layout', () => {
   });
 
   it('shows Import after Members, only with IMPORT_RUN', () => {
-    me = meWith(['MEMBERS_VIEW', 'IMPORT_RUN', 'ROLES_MANAGE']);
+    me = meWith(['PLOTS_VIEW', 'MEMBERS_VIEW', 'IMPORT_RUN', 'ROLES_MANAGE']);
     const { unmount } = renderWithApp(<Layout />);
     const hrefs = () =>
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
@@ -145,7 +149,7 @@ describe('Layout', () => {
   });
 
   it('shows Tariffs before Import, only with TARIFFS_VIEW', () => {
-    me = meWith(['MEMBERS_VIEW', 'TARIFFS_VIEW', 'IMPORT_RUN']);
+    me = meWith(['PLOTS_VIEW', 'MEMBERS_VIEW', 'TARIFFS_VIEW', 'IMPORT_RUN']);
     const { unmount } = renderWithApp(<Layout />);
     const hrefs = () =>
       Array.from(screen.getByRole('navigation', { name: 'Main menu' }).querySelectorAll('a')).map((a) =>
@@ -218,23 +222,33 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'To approve' })).toHaveAttribute('href', '/readings/approvals');
   });
 
-  it('gives the electrician only Readings and Meters, without Plots', () => {
+  it('gives the electrician My account, Readings and Meters, without Plots', () => {
     me = meWith(['READINGS_ENTER', 'METERS_VIEW']);
     renderWithApp(<Layout />);
     const nav = screen.getByRole('navigation', { name: 'Main menu' });
     expect(Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/account',
       '/readings',
       '/meters',
     ]);
   });
 
-  it('keeps Plots for a meter reader who owns a plot or may view plots', () => {
+  it('hides Plots from a meter reader who owns a plot (the plots are on the account) and keeps it with PLOTS_VIEW', () => {
     me = { ...meWith(['METERS_VIEW']), ownedPlots: [{ plotId: 'p1', number: '7' }] } as unknown as Me;
     const { unmount } = renderWithApp(<Layout />);
-    expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Plots' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'My account' })).toBeInTheDocument();
     unmount();
     me = meWith(['METERS_VIEW', 'PLOTS_VIEW']);
     renderWithApp(<Layout />);
     expect(screen.getByRole('link', { name: 'Plots' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My account' })).toBeNull();
+  });
+
+  it('shows Help in the menu to a board user only, and points the logo to the home screen', () => {
+    me = meWith(['PLOTS_VIEW', 'MEMBERS_VIEW']);
+    renderWithApp(<Layout />);
+    expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/help');
+    expect(screen.getByRole('link', { name: 'Coop' })).toHaveAttribute('href', '/plots');
   });
 });

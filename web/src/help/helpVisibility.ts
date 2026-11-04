@@ -17,6 +17,7 @@ export function viewerFromMe(me: Pick<Me, 'permissions' | 'ownedPlots'>): HelpVi
 }
 
 /**
+ * `board` in a page's permissions stands for "holds at least one permission" (the base MEMBER role has none).
  * `member` in a page's permissions stands for "owns a plot now, or holds MEMBERS_VIEW" (board people who look after
  * members may read what members see, so the chairman sees every page). Any other entry is a permission code.
  * Help is a filter for clarity, not a secret.
@@ -24,11 +25,16 @@ export function viewerFromMe(me: Pick<Me, 'permissions' | 'ownedPlots'>): HelpVi
 export function isPageVisible(page: Pick<HelpBundlePage, 'permissions'>, viewer: HelpViewer): boolean {
   if (viewer.kind === 'anonymous') return true;
   if (page.permissions.length === 0) return true;
-  return page.permissions.some((entry) =>
-    entry === 'member'
-      ? viewer.ownsPlot || viewer.permissions.includes(membersViewPermission)
-      : viewer.permissions.includes(entry),
-  );
+  return page.permissions.some((entry) => {
+    if (entry === 'board') return isBoardUser(viewer.permissions);
+    if (entry === 'member') return viewer.ownsPlot || viewer.permissions.includes(membersViewPermission);
+    return viewer.permissions.includes(entry);
+  });
+}
+
+/** A board user holds at least one permission; the base Member role has none. */
+export function isBoardUser(permissions: readonly string[]): boolean {
+  return permissions.length > 0;
 }
 
 export function visiblePageIds(pages: readonly VisibilityPage[], viewer: HelpViewer): Set<string> {

@@ -3,6 +3,7 @@ import type { Me, Permission } from '@nadel/api-client';
 import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
+import { landingPath } from '../landing';
 import { HomeRedirect } from './HomeRedirect';
 
 let permissions: Permission[];
@@ -55,5 +56,11 @@ describe('HomeRedirect', () => {
   it('sends everyone else to their account', () => {
     renderHome();
     expect(screen.getByText('account page')).toBeInTheDocument();
+  });
+
+  it('exposes the same rule as a function', () => {
+    expect(landingPath({ permissions: [], ownedPlots: [] })).toBe('/account');
+    expect(landingPath({ permissions: ['PLOTS_VIEW'], ownedPlots: [] })).toBe('/plots');
+    expect(landingPath({ permissions: ['METERS_VIEW'], ownedPlots: [] })).toBe('/meters');
   });
 });

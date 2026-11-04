@@ -171,4 +171,13 @@ describe('checkHelp', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]?.detail).toContain('NOPE');
   });
+
+  it('UNKNOWN_PERMISSION accepts the board token', () => {
+    const uk = screen('start', 'uk', { routes: ['/plots'], permissions: ['board'] });
+    const issues = only(
+      checkHelp(input({ pages: { uk: [uk], en: [screen('start', 'en', { routes: ['/plots'] })] } })),
+      'UNKNOWN_PERMISSION',
+    );
+    expect(issues).toEqual([]);
+  });
 });

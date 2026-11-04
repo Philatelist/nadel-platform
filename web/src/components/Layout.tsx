@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from 'react-oidc-context';
 import { useMe } from '../me';
+import { landingPath } from '../landing';
 import { NAV_ITEMS } from '../nav';
 import { HelpButton } from '../help/HelpButton';
+import { originState, useHelpOrigin } from '../help/helpOrigin';
+import { HelpPanelSlotContext } from '../help/helpPanelSlot';
+import { isBoardUser } from '../help/helpVisibility';
 import { useT } from '../i18n';
 import { RoleNameList } from './RoleName';
 import { UserContent } from './UserContent';
@@ -22,6 +26,8 @@ export function Layout() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const [helpSlot, setHelpSlot] = useState<HTMLElement | null>(null);
+  const helpOrigin = useHelpOrigin();
 
   const title = me.tenant?.name ?? t.app.name;
   const items = NAV_ITEMS.filter(
@@ -41,82 +47,93 @@ export function Layout() {
   }, [open]);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
-        <Link
-          to="/"
-          title={title}
-          className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
-        >
-          {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
-        </Link>
-        {me.tenant?.name && (
-          <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
-        )}
-        <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-col text-sm leading-tight">
-            <Link to="/account" className="truncate font-medium text-ink">
-              <UserContent>{me.fullName}</UserContent>
-            </Link>
-            <span className="truncate text-xs text-ink-muted">
-              <RoleNameList roles={me.roles} />
-            </span>
+    <HelpPanelSlotContext value={helpSlot}>
+      <div className="flex h-full flex-col">
+        {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
+          <Link
+            to={landingPath(me)}
+            title={title}
+            className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+          >
+            {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
+          </Link>
+          {me.tenant?.name && (
+            <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
+          )}
+          <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-col text-sm leading-tight">
+              <Link to="/account" className="truncate font-medium text-ink">
+                <UserContent>{me.fullName}</UserContent>
+              </Link>
+              <span className="truncate text-xs text-ink-muted">
+                <RoleNameList roles={me.roles} />
+              </span>
+            </div>
+            <HelpButton />
+            <LocaleSwitch />
+            <div className="hidden md:flex">
+              <ThemeSwitch />
+            </div>
+            <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
+              {t.auth.signOut}
+            </Button>
           </div>
-          <HelpButton />
-          <LocaleSwitch />
-          <div className="hidden md:flex">
-            <ThemeSwitch />
-          </div>
-          <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
-            {t.auth.signOut}
+          <Button
+            ref={menuButton}
+            variant="secondary"
+            className="order-2 md:hidden"
+            aria-expanded={open}
+            aria-controls="app-menu"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {t.nav.menu}
           </Button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <aside
+            id="app-menu"
+            className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
+          >
+            <div className="mb-2 md:hidden">
+              <ThemeSwitch />
+            </div>
+            <nav aria-label={t.nav.main} className="flex flex-col gap-1">
+              {items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/readings'}
+                  className={itemClass}
+                  onClick={() => setOpen(false)}
+                >
+                  {t.nav[item.label]}
+                </NavLink>
+              ))}
+            </nav>
+            {/* The help in the menu is for the board; a member reaches it through «?». It sits apart from the list. */}
+            {isBoardUser(me.permissions) && (
+              <div className="mt-2 border-t border-line pt-2">
+                <NavLink
+                  to="/help"
+                  state={originState(helpOrigin)}
+                  className={itemClass}
+                  onClick={() => setOpen(false)}
+                >
+                  {t.help.title}
+                </NavLink>
+              </div>
+            )}
+          </aside>
+          <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
+            <div className="mx-auto max-w-[1060px]">
+              <Outlet />
+            </div>
+          </main>
+          {/* The help panel is rendered here, as a column beside main, so the page narrows instead of being covered. */}
+          <div ref={setHelpSlot} className="contents" />
         </div>
-        <Button
-          ref={menuButton}
-          variant="secondary"
-          className="order-2 md:hidden"
-          aria-expanded={open}
-          aria-controls="app-menu"
-          onClick={() => setOpen((value) => !value)}
-        >
-          {t.nav.menu}
-        </Button>
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <aside
-          id="app-menu"
-          className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
-        >
-          <div className="mb-2 md:hidden">
-            <ThemeSwitch />
-          </div>
-          <nav aria-label={t.nav.main} className="flex flex-col gap-1">
-            {items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/readings'}
-                className={itemClass}
-                onClick={() => setOpen(false)}
-              >
-                {t.nav[item.label]}
-              </NavLink>
-            ))}
-          </nav>
-          {/* The help is for every signed-in user, so it sits apart from the permission-driven list. */}
-          <div className={`${items.length > 0 ? 'mt-2 border-t border-line pt-2' : ''}`}>
-            <NavLink to="/help" className={itemClass} onClick={() => setOpen(false)}>
-              {t.help.title}
-            </NavLink>
-          </div>
-        </aside>
-        <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
-          <div className="mx-auto max-w-[1060px]">
-            <Outlet />
-          </div>
-        </main>
       </div>
-    </div>
+    </HelpPanelSlotContext>
   );
 }

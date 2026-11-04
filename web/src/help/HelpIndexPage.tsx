@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { PageHeader, Panel, SearchField } from '../components/ui';
 import { useT } from '../i18n';
 import { HELP_SECTIONS, type HelpBundle } from '../../help/types';
+import { HelpPageLink } from './HelpContent';
+import { HelpBackLink } from './helpOrigin';
 import { useHelpViewer } from './helpViewer';
 import { isPageVisible } from './helpVisibility';
 import { useHelpBundle } from './useHelpBundle';
@@ -20,9 +21,7 @@ function HelpResults({ bundle, query }: { bundle: HelpBundle; query: string }) {
       <ul className="flex flex-col gap-1.5">
         {results.map((result) => (
           <li key={result.id}>
-            <Link to={`/help/${result.id}`} className="text-accent underline">
-              {result.title}
-            </Link>
+            <HelpPageLink pageId={result.id}>{result.title}</HelpPageLink>
           </li>
         ))}
       </ul>
@@ -39,6 +38,7 @@ export function HelpIndexPage() {
   const searching = search.trim() !== '';
   return (
     <div className="flex flex-col gap-4">
+      <HelpBackLink />
       <PageHeader title={t.help.title} />
       <SearchField
         label={t.help.search}
@@ -62,9 +62,7 @@ export function HelpIndexPage() {
                     <ul className="flex flex-col gap-1.5">
                       {pages.map((page) => (
                         <li key={page.id}>
-                          <Link to={`/help/${page.id}`} className="text-accent underline">
-                            {page.title}
-                          </Link>
+                          <HelpPageLink pageId={page.id}>{page.title}</HelpPageLink>
                         </li>
                       ))}
                     </ul>

@@ -31,8 +31,14 @@ export const appRoutes: RouteObject[] = [
         ],
       },
       {
-        path: 'plots',
-        lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
+        // a member without the plots list is sent to the account, where their own plots are
+        element: <RequirePermission permission="PLOTS_VIEW" redirectTo="/account" />,
+        children: [
+          {
+            path: 'plots',
+            lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
+          },
+        ],
       },
       {
         path: 'plots/:id',

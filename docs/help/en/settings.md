@@ -57,6 +57,8 @@ The {{ui:settings.save}} button is active only when the choice has changed.
 > [!important]
 > Neighbours know whose plot is whose, so the colour effectively shows the debtor. Turn on "{{ui:settings.visibility.ALL_PLOTS.label}}" only by a decision of the general meeting. Under the choice the system reminds you: "{{ui:settings.visibilityHint}}". Amounts, owners and personal data of other people's plots are never shown to a member under any setting.
 
+The setting applies to the plot map that will come later. Today members do not see the plot list, so they do not see other people's plots at all, whatever is chosen here.
+
 ### The "{{ui:settings.threshold.title}}" panel
 
 A plot turns red when its debt reaches a certain amount or its oldest debt has lasted a certain number of days. Any other debt is yellow. The fields:

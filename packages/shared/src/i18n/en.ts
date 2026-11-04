@@ -280,6 +280,7 @@ export const en = {
       reconciliationAct: 'Reconciliation act',
     },
     back: 'Back to plots',
+    backToAccount: 'To my account',
     fields: {
       number: 'Number',
       street: 'Street',
@@ -632,6 +633,8 @@ export const en = {
     visibilityLegend: 'Who sees plot colours',
     visibilityHint:
       'Show the debt colour of all plots to all members only by decision of the general meeting',
+    visibilityMapHint:
+      'The plot colours on the map (the map comes later): “Own plots only” shows a member the colour of their own plots only, “All plots” shows all colours. Amounts, owners and personal data of other plots are never shown.',
     visibility: {
       OWN_ONLY: {
         label: 'Own plots only',
@@ -3646,6 +3649,8 @@ export const en = {
     search: 'Search the help',
     noResults: 'Nothing found',
     hidden: 'This section is not available to you',
+    back: '← Back',
+    backTo: '← Back to “{name}”',
     toContents: 'Back to the help contents',
     important: 'Important',
     onThisPage: 'On this page',

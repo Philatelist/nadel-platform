@@ -6,6 +6,7 @@ import { useLocale, useT } from '../i18n';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import type { HelpBundlePage } from '../../help/types';
 import { HelpContent } from './HelpContent';
+import { HelpBackLink, useCarriedHelpState } from './helpOrigin';
 import { useHelpViewer } from './helpViewer';
 import { isPageVisible, visiblePageIds } from './helpVisibility';
 import { useHelpBundle } from './useHelpBundle';
@@ -16,6 +17,7 @@ function PageBody({ page, visibleIds }: { page: HelpBundlePage; visibleIds: Read
   const { locale } = useLocale();
   const { hash } = useLocation();
   const [active, setActive] = useState<string | null>(null);
+  const carried = useCarriedHelpState();
   useHelpMeta(page);
 
   useEffect(() => {
@@ -40,11 +42,12 @@ function PageBody({ page, visibleIds }: { page: HelpBundlePage; visibleIds: Read
 
   return (
     <div className="flex flex-col gap-4" lang={locale}>
+      <HelpBackLink />
       <PageHeader
         title={page.title}
         description={page.description}
         actions={
-          <Link to="/help" className="text-accent underline">
+          <Link to="/help" state={carried} className="text-accent underline">
             {t.help.toContents}
           </Link>
         }

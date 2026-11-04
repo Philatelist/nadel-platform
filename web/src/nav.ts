@@ -1,9 +1,10 @@
 import type { Me, Permission } from '@nadel/api-client';
-import { showsPlots } from './plotsMenu';
+import { showsAccount, showsPlots } from './plotsMenu';
 
 export interface NavItem {
   to: string;
   label:
+    | 'account'
     | 'plots'
     | 'members'
     | 'tariffs'
@@ -28,6 +29,7 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
+  { to: '/account', label: 'account', visible: showsAccount },
   { to: '/plots', label: 'plots', visible: showsPlots },
   { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
   { to: '/tariffs', label: 'tariffs', permission: 'TARIFFS_VIEW' },

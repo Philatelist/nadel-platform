@@ -113,6 +113,7 @@ function SettingsForm({ saved }: { saved: PlotStatusVisibility }) {
           }))}
         />
         <p className="text-sm text-ink-muted">{s.visibilityHint}</p>
+        <p className="text-sm text-ink-muted">{s.visibilityMapHint}</p>
         {result === 'saved' && <Notice tone="success">{s.saved}</Notice>}
         {typeof result === 'object' && <Notice tone="danger">{result.error}</Notice>}
         <div>

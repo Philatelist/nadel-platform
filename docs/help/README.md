@@ -18,7 +18,7 @@ Every page starts with a YAML block.
 | `description` | One sentence for search engines. |
 | `kind` | `screen` (explains one screen, six-part template, at least one shot) or `topic` (free structure). |
 | `routes` | React Router patterns the page explains, for example `/payments/new`. Empty for topics. |
-| `permissions` | Any of these `Permission` values, or `member` (owns a plot, or holds `MEMBERS_VIEW`, so the board sees what members see). Empty means every signed-in user. |
+| `permissions` | Any of these `Permission` values, `member` (owns a plot, or holds `MEMBERS_VIEW`, so the board sees what members see) or `board` (holds at least one permission; the base Member role has none, so a plain member does not see it). Empty means every signed-in user. |
 | `section` | `getting-started`, `plots-members`, `tariffs-charges`, `meters`, `payments-cash`, `documents-delivery`, `reports`, `settings`, `how-it-calculates`, `member`: the order of the contents. |
 | `order` | Integer; the order inside the section. |
 | `shots` | Screenshots to capture: `{ name, user, path, viewport?, open?, steps?, element? }`. Same step vocabulary as `docs/guide/scripts/capture-screens.mjs`; `steps` text is in the page's language. |

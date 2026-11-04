@@ -27,7 +27,7 @@ export interface CheckInput {
   routes: readonly string[] | null;
   /** `to` of every menu item; `null` skips the menu coverage. */
   navItems: readonly string[] | null;
-  /** API `Permission` values; `member` is always allowed in addition. */
+  /** API `Permission` values; `member` and `board` are always allowed in addition. */
   permissions: readonly string[];
   shotExists: (locale: Locale, name: string) => boolean;
 }
@@ -47,7 +47,7 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 export function checkHelp({ pages, routes, navItems, permissions, shotExists }: CheckInput): HelpIssue[] {
   const issues: HelpIssue[] = [];
   const locales = Object.keys(pages) as Locale[];
-  const allowedPermissions = new Set<string>([...permissions, 'member']);
+  const allowedPermissions = new Set<string>([...permissions, 'member', 'board']);
 
   const ids = new Map<Locale, Set<string>>(locales.map((l) => [l, new Set(pages[l].map((p) => p.id))]));
   const everyId = new Set([...ids.values()].flatMap((set) => [...set]));

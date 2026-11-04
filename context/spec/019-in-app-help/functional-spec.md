@@ -122,14 +122,33 @@ The build fails, naming the problem, when:
 ### 2.3 The «?» button and the side panel
 
 Every screen has a «?» button in its header. Pressing it opens the help page of that screen in a panel on the side of
-the screen; the screen stays where it was. On a phone the panel opens over the whole screen. The panel has «Відкрити
-повністю», which opens the same page in the help section, and a button to close it.
+the screen; the screen stays where it was and stays usable: the menu can be clicked and the screen scrolled while the
+panel is open (the panel does not block the page). Moving to another screen with the panel open shows that screen's
+help in the panel, or closes the panel when that screen has no help. On a phone the panel opens over the whole screen
+with «← Назад». The panel has «Відкрити повністю», which opens the same page in the help section, and a button to close
+it (Esc closes it too).
+
+Every help page and the help contents have «← Назад до …», which returns to the screen the help was opened from, or,
+when the help was opened directly, to the user's home screen («Мій кабінет» for a member). The application's name in
+the header always leads to the user's home screen.
+
+**The member's menu (owner decision in the review of PR #68).** A user without the right to view plots (a member) sees
+«Мій кабінет» first in the menu and no «Ділянки»; opening the plots list leads them to «Мій кабінет»; their own plot
+cards are opened from «Мій кабінет». «Довідка» is in the menu only for users with at least one right (the board); a
+member reaches the help through «?». The setting «Хто бачить кольори ділянок» keeps its meaning for the plot map that
+comes later; the settings screen says so.
 
 - **Acceptance Criteria:**
   - [x] Given the treasurer is on «Платежі», when they press «?», then a side panel opens with the help page about the
         payments screen and the payments list stays visible behind it. — _e2e `help.spec.ts` §2.3 #1 passed_
   - [x] Given the member is on «Мій рахунок», when they press «?», then the panel shows the page about «Мій рахунок». — _e2e `help.spec.ts` §2.3 #2 (@smoke) passed_
   - [x] Given the panel is open, when the user presses «Відкрити повністю», then the same page opens in the help section. — _e2e §2.3 #2 passed_
+  - [ ] Given the panel is open, when the user clicks a menu item or scrolls the screen, then the screen responds, and
+        when they arrive on the new screen, then the panel shows that screen's help (or closes when it has none).
+  - [ ] Given the member opened help from «Мій кабінет», when they press «← Назад до …», then they return to «Мій
+        кабінет»; and when they press the application's name, then «Мій кабінет» opens.
+  - [ ] Given the member is signed in, when they look at the menu, then «Мій кабінет» is first and there is neither
+        «Ділянки» nor «Довідка», and when they open the plots list address, then «Мій кабінет» opens.
   - [x] Given a phone-sized screen, when the user presses «?», then the help covers the whole screen and can be closed. — _e2e §2.3 #4 passed (390 px)_
   - [x] When the user presses «?» on any screen of the application, then the page about that screen opens. — _`pageForPath.test.ts`, `appRoutePaths.test.ts`, `helpContent.test.ts` (every route has a page); e2e §2.3 #5 negative passed_
 
@@ -306,3 +325,4 @@ the last change). The owner manual PDF and the Telegram leaflet are built as now
 ## Change Log
 
 - 2026-11-04 — created by `/feature-pipeline` from `docs/features/019-in-app-help.md`.
+- 2026-11-04 — owner review of PR #68 — the «?» panel is non-modal and follows the screen; every help page has «← Назад до …»; the application's name leads home; the member's menu starts with «Мій кабінет», has no «Ділянки» and no «Довідка», and the plots list leads a member to «Мій кабінет» (changes the menu of features 006/007); the member gets their own «Початок роботи»; the member pages no longer include «Ділянки» or «Картка ділянки».

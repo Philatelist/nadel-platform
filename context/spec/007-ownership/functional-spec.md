@@ -232,3 +232,5 @@ history, while other people's plots show no colour.
 ## Change Log
 
 - (none yet)
+
+- 2026-11-04 — feature 019 (owner review of PR #68) — a member (no right to view plots) no longer has «Ділянки» in the menu and the plots list leads them to «Мій кабінет»; their own plot cards open from «Мій кабінет». The member criteria above describe the earlier behaviour. The setting «Хто бачить кольори ділянок» keeps its meaning for the plot map that comes later.
