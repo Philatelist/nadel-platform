@@ -275,7 +275,8 @@ test.describe('payments', () => {
 
       // an intermediate value above the open amount: the table stays, the problem shows by the line, no save
       await line.fill('9999');
-      await expect(dialog.getByText('The amount exceeds what is open on the charge')).toBeVisible();
+      // the line says how much is left open on the charge (the hint by the field)
+      await expect(dialog.getByText('More than the remaining ₴500.00')).toBeVisible();
       await expect(table).toBeVisible();
       await expect(line).toHaveValue('9999');
       await expect(submit).toBeDisabled();
@@ -283,7 +284,7 @@ test.describe('payments', () => {
 
       // corrected: the problem goes, the button is back, and the reallocation saves
       await line.fill('150');
-      await expect(dialog.getByText('The amount exceeds what is open on the charge')).toHaveCount(0);
+      await expect(dialog.getByText('More than the remaining ₴500.00')).toHaveCount(0);
       await expect(submit).toBeEnabled();
       await submit.click();
       await expect(dialog).toHaveCount(0);
