@@ -149,6 +149,7 @@
   - react-router 7
   - MapLibre GL 6
   - `oidc-client-ts` 3.5 with `react-oidc-context` 3.3 (`web/src/auth.ts`)
+- **In-app help** **[in code, feature 019]**: Markdown pages in `docs/help/<lang>/` compiled at build time by `web/help/` into virtual modules (no backend, API or database). The «?» button and the `/help` section show them per role; `/help` is also readable without signing in. The app is `noindex`, the pre-rendered help pages are indexable, the stand flag `NADEL_NOINDEX` overrides this with a header. The board guide PDF is built from the same pages.
 - **One app for both audiences:** the member account and the admin screens live in one app, and the role decides what is shown.
 
 ### Mobile client

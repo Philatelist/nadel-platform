@@ -1,14 +1,18 @@
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router';
 import { useAuth } from 'react-oidc-context';
+import { PublicHelpApp } from './help/PublicHelpApp';
 import { RequirePermission } from './components/RequirePermission';
 import { HomeRedirect } from './components/HomeRedirect';
 import { Layout } from './components/Layout';
 import { SignIn } from './components/SignIn';
 import { MeProvider } from './me';
+import { HelpIndexPage } from './help/HelpIndexPage';
+import { HelpPageView } from './help/HelpPageView';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
-const router = createBrowserRouter([
+/** The route tree; the help check reads it to prove every screen has a help page. */
+export const appRoutes: RouteObject[] = [
   {
     element: <Layout />,
     children: [
@@ -27,8 +31,14 @@ const router = createBrowserRouter([
         ],
       },
       {
-        path: 'plots',
-        lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
+        // without the plots list, go home (the account of an owner, where their own plots are)
+        element: <RequirePermission permission="PLOTS_VIEW" redirectTo="/" />,
+        children: [
+          {
+            path: 'plots',
+            lazy: () => import('./pages/PlotsPage').then((m) => ({ Component: m.PlotsPage })),
+          },
+        ],
       },
       {
         path: 'plots/:id',
@@ -339,15 +349,24 @@ const router = createBrowserRouter([
         path: 'members/:id',
         lazy: () => import('./pages/MemberPage').then((m) => ({ Component: m.MemberPage })),
       },
+      { path: 'help', element: <HelpIndexPage /> },
+      { path: 'help/:id', element: <HelpPageView /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
-]);
+];
+
+const router = createBrowserRouter(appRoutes);
 
 export function App() {
   const auth = useAuth();
   const t = useT();
 
+  const { pathname } = window.location;
+  // the help is public: no wait for the sign-in check and no sign-in screen
+  if (!auth.isAuthenticated && (pathname === '/help' || pathname.startsWith('/help/'))) {
+    return <PublicHelpApp />;
+  }
   if (auth.isLoading) {
     return <div className="grid h-full place-items-center text-ink-muted">{t.auth.signingIn}</div>;
   }

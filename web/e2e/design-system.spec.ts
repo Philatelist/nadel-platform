@@ -206,7 +206,10 @@ test.describe('page frame (2.6)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
     const header = page.getByRole('banner');
-    await expect(header.getByRole('link', { name: 'СТ «Надія»', exact: true })).toHaveAttribute('href', '/');
+    await expect(header.getByRole('link', { name: 'СТ «Надія»', exact: true })).toHaveAttribute(
+      'href',
+      '/plots',
+    ); // the home of the chairman
     await expect(header.getByText('Наділ', { exact: true })).toBeVisible();
     await expect(header).toContainText('СТ «Надія»');
     await expect(header).toContainText('Коваленко');
@@ -217,7 +220,7 @@ test.describe('page frame (2.6)', () => {
     await expect(language.getByRole('button')).toHaveCount(2);
 
     const menu = page.locator('#app-menu nav');
-    await expect(menu.getByRole('link')).toHaveCount(13); // Plots, Members, Tariffs, Readings, To approve, Meters, Charges, Payments, Reports, Import, Roles, Audit log, Cooperative settings
+    await expect(menu.getByRole('link')).toHaveCount(17); // every section of the chairman; the Help link sits apart from this list
     await page.goto('/members');
     await expect(menu.locator('a[aria-current="page"]')).toHaveCount(1);
     expect(
@@ -245,7 +248,7 @@ test.describe('page frame (2.6)', () => {
     });
   });
 
-  test('plain member sees the header and the account page, with a menu holding only Plots @smoke', async ({
+  test('plain member sees the header and the account page, with a menu holding only My account @smoke', async ({
     page,
   }) => {
     await loginAs(page, 'member@demo.local');
@@ -256,7 +259,7 @@ test.describe('page frame (2.6)', () => {
     await expect(page.getByRole('banner').getByText('Nadel', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.locator('#app-menu nav').getByRole('link')).toHaveText(['Plots']);
+    await expect(page.locator('#app-menu nav').getByRole('link')).toHaveText(['My account']);
     // the Menu button is a phone-only control; this is a desktop viewport
     await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeHidden();
   });
@@ -303,11 +306,16 @@ test.describe('keyboard (2.8)', () => {
       'Meters',
       'Charges',
       'Payments',
+      'Cash and bank',
       'Reports',
+      'Certificate register',
+      'Deliveries',
+      'Announcements',
       'Import',
       'Roles',
       'Audit log',
       'Cooperative settings',
+      'Help',
     ]);
     expect(visited.some((v) => v.type === 'search')).toBe(true);
     for (const v of visited) {

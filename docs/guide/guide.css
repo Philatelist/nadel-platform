@@ -449,3 +449,15 @@ section.part .lead {
 .toc > ol > li.toc-part a {
   color: var(--accent);
 }
+
+/* Interface names quoted from the application (the board guide is built from the help pages) */
+.ui {
+  display: inline-block;
+  padding: 0 1.4mm;
+  border: 1px solid var(--line);
+  border-radius: 1.2mm;
+  background: var(--tint);
+  font-weight: 600;
+  font-size: 0.95em;
+  white-space: nowrap;
+}

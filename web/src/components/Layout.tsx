@@ -1,69 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from 'react-oidc-context';
-import type { Me, Permission } from '@nadel/api-client';
 import { useMe } from '../me';
-import { showsPlots } from '../plotsMenu';
+import { landingPath } from '../landing';
+import { menuItems } from '../nav';
+import { HelpButton } from '../help/HelpButton';
+import { originState, useHelpOrigin } from '../help/helpOrigin';
+import { HelpPanelSlotContext } from '../help/helpPanelSlot';
+import { isBoardUser } from '../help/helpVisibility';
 import { useT } from '../i18n';
 import { RoleNameList } from './RoleName';
 import { UserContent } from './UserContent';
 import { LocaleSwitch } from './LocaleSwitch';
 import { ThemeSwitch } from './ThemeSwitch';
 import { Button } from './ui';
-
-interface NavItem {
-  to: string;
-  label:
-    | 'plots'
-    | 'members'
-    | 'tariffs'
-    | 'readings'
-    | 'approvals'
-    | 'meters'
-    | 'charges'
-    | 'payments'
-    | 'cashbook'
-    | 'reports'
-    | 'certificates'
-    | 'deliveries'
-    | 'announcements'
-    | 'imports'
-    | 'roles'
-    | 'audit'
-    | 'settings';
-  /** Omitted: shown to every signed-in member (the server decides what they may see). */
-  permission?: Permission;
-  /** Extra rule on top of `permission`, from the signed-in person. */
-  visible?: (me: Me) => boolean;
-}
-
-const NAV_ITEMS: readonly NavItem[] = [
-  { to: '/plots', label: 'plots', visible: showsPlots },
-  { to: '/members', label: 'members', permission: 'MEMBERS_VIEW' },
-  { to: '/tariffs', label: 'tariffs', permission: 'TARIFFS_VIEW' },
-  { to: '/readings', label: 'readings', permission: 'READINGS_ENTER' },
-  { to: '/readings/approvals', label: 'approvals', permission: 'READINGS_APPROVE' },
-  { to: '/meters', label: 'meters', permission: 'METERS_VIEW' },
-  { to: '/charges', label: 'charges', permission: 'CHARGES_VIEW' },
-  { to: '/payments', label: 'payments', permission: 'PAYMENTS_VIEW' },
-  { to: '/cashbook', label: 'cashbook', permission: 'CASHBOOK_VIEW' },
-  {
-    to: '/reports',
-    label: 'reports',
-    visible: (me) => me.permissions.includes('REPORTS_VIEW') || me.permissions.includes('CASHBOOK_VIEW'),
-  },
-  { to: '/documents/certificates', label: 'certificates', permission: 'CHARGES_VIEW' },
-  { to: '/deliveries', label: 'deliveries', permission: 'INVOICES_ISSUE' },
-  { to: '/announcements', label: 'announcements', permission: 'ANNOUNCEMENTS_SEND' },
-  { to: '/imports', label: 'imports', permission: 'IMPORT_RUN' },
-  { to: '/roles', label: 'roles', permission: 'ROLES_MANAGE' },
-  { to: '/audit', label: 'audit', permission: 'AUDIT_VIEW' },
-  {
-    to: '/settings',
-    label: 'settings',
-    visible: (me) => me.permissions.includes('SETTINGS_MANAGE') || me.permissions.includes('METERS_MANAGE'),
-  },
-];
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   `flex min-h-11 items-center rounded-control px-3 text-[15px] no-underline ${
@@ -76,12 +26,11 @@ export function Layout() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const [helpSlot, setHelpSlot] = useState<HTMLElement | null>(null);
+  const helpOrigin = useHelpOrigin();
 
   const title = me.tenant?.name ?? t.app.name;
-  const items = NAV_ITEMS.filter(
-    (item) => (!item.permission || me.permissions.includes(item.permission)) && (item.visible?.(me) ?? true),
-  );
-  const hasMenu = items.length > 0;
+  const items = menuItems(me);
 
   useEffect(() => {
     if (!open) return;
@@ -96,37 +45,38 @@ export function Layout() {
   }, [open]);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
-        <Link
-          to="/"
-          title={title}
-          className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
-        >
-          {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
-        </Link>
-        {me.tenant?.name && (
-          <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
-        )}
-        <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-col text-sm leading-tight">
-            <Link to="/account" className="truncate font-medium text-ink">
-              <UserContent>{me.fullName}</UserContent>
-            </Link>
-            <span className="truncate text-xs text-ink-muted">
-              <RoleNameList roles={me.roles} />
-            </span>
+    <HelpPanelSlotContext value={helpSlot}>
+      <div className="flex h-full flex-col">
+        {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
+          <Link
+            to={landingPath(me)}
+            title={title}
+            className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+          >
+            {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
+          </Link>
+          {me.tenant?.name && (
+            <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
+          )}
+          <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-col text-sm leading-tight">
+              <Link to="/account" className="truncate font-medium text-ink">
+                <UserContent>{me.fullName}</UserContent>
+              </Link>
+              <span className="truncate text-xs text-ink-muted">
+                <RoleNameList roles={me.roles} />
+              </span>
+            </div>
+            <HelpButton />
+            <LocaleSwitch />
+            <div className="hidden md:flex">
+              <ThemeSwitch />
+            </div>
+            <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
+              {t.auth.signOut}
+            </Button>
           </div>
-          <LocaleSwitch />
-          <div className={hasMenu ? 'hidden md:flex' : 'flex'}>
-            <ThemeSwitch />
-          </div>
-          <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
-            {t.auth.signOut}
-          </Button>
-        </div>
-        {hasMenu && (
           <Button
             ref={menuButton}
             variant="secondary"
@@ -137,10 +87,8 @@ export function Layout() {
           >
             {t.nav.menu}
           </Button>
-        )}
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {hasMenu && (
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <aside
             id="app-menu"
             className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
@@ -161,14 +109,29 @@ export function Layout() {
                 </NavLink>
               ))}
             </nav>
+            {/* The help in the menu is for the board; a member reaches it through «?». It sits apart from the list. */}
+            {isBoardUser(me.permissions) && (
+              <div className="mt-2 border-t border-line pt-2">
+                <NavLink
+                  to="/help"
+                  state={originState(helpOrigin)}
+                  className={itemClass}
+                  onClick={() => setOpen(false)}
+                >
+                  {t.help.title}
+                </NavLink>
+              </div>
+            )}
           </aside>
-        )}
-        <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
-          <div className="mx-auto max-w-[1060px]">
-            <Outlet />
-          </div>
-        </main>
+          <main className="min-w-0 flex-1 overflow-auto px-4 py-6 md:px-7">
+            <div className="mx-auto max-w-[1060px]">
+              <Outlet />
+            </div>
+          </main>
+          {/* The help panel is rendered here, as a column beside main, so the page narrows instead of being covered. */}
+          <div ref={setHelpSlot} className="contents" />
+        </div>
       </div>
-    </div>
+    </HelpPanelSlotContext>
   );
 }

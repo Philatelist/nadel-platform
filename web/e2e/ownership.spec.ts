@@ -46,6 +46,28 @@ async function openDemoPlot(page: Page, number: string, search: string): Promise
   await expect(page.getByRole('heading', { level: 1, name: `Plot ${number}` })).toBeVisible();
 }
 
+interface ListedPlot {
+  id: string;
+  number: string;
+  status?: string;
+  areaM2?: number;
+}
+
+/** The plots the API lists for the signed-in person (a member has no plots screen, but the API still limits the rows). */
+async function listedPlots(page: Page, query: string): Promise<ListedPlot[]> {
+  const result = await api(page, 'GET', `/plots?q=${encodeURIComponent(query)}`);
+  expect(result.status).toBe(200);
+  return (JSON.parse(result.body) as { items: ListedPlot[] }).items;
+}
+
+/** Opens a plot of the demo cooperative by address: a member reaches the cards of other plots only this way. */
+async function openPlotByNumber(page: Page, number: string): Promise<void> {
+  const plot = (await listedPlots(page, number)).find((p) => p.number === number);
+  expect(plot, `demo plot ${number} in the list of the API`).toBeDefined();
+  await page.goto(`/plots/${plot?.id}`);
+  await expect(page.getByRole('heading', { level: 1, name: `Plot ${number}` })).toBeVisible();
+}
+
 /** The audit log is written by the outbox: reload until the row appears. */
 async function expectAuditRow(page: Page, plotNumber: string, action: string): Promise<Locator> {
   const row = page.getByRole('row').filter({ hasText: plotNumber }).filter({ hasText: action }).first();
@@ -223,7 +245,7 @@ test.describe('ownership', () => {
     await expect(page.getByText('Мороз Галина')).toBeVisible();
 
     // a plot of someone else: number, street and kind only
-    await openDemoPlot(page, '9', 'Search by number or street');
+    await openPlotByNumber(page, '9');
     for (const hidden of ['Owners', 'Ownership history', 'Area', 'Cadastral number', 'Status']) {
       await expect(main(page).getByText(hidden, { exact: true })).toHaveCount(0);
     }
@@ -231,25 +253,23 @@ test.describe('ownership', () => {
     await expect(main(page)).not.toContainText('Литвиненко');
     await expect(main(page)).not.toContainText(/No debt|Has debt|Debt above threshold/);
 
-    // the list: own plots 7 and 15 show a status label (the demo ledger: 7 is paid up, 15 still owes; red or yellow
-    // by where the anchor day falls), every other plot a neutral mark without a label
+    // a member has no plots list: /plots lands on the account
     await page.goto('/plots');
-    await expect(rows(page).first()).toBeVisible();
-    const labelled = rows(page).filter({ hasText: /Has debt|Debt above threshold|No debt/ });
-    await expect(labelled).toHaveCount(2);
-    await expect(labelled.nth(0)).toContainText('7');
-    await expect(labelled.nth(1)).toContainText('15');
-    await expect(rows(page).filter({ hasText: /No owner|Common land/ })).toHaveCount(0);
-    await expect(main(page).getByTestId('status-neutral')).toHaveCount(18);
-    // the status filter only matches the member's own plots
-    const firstText = (await labelled.nth(0).textContent()) ?? '';
-    const label =
-      ['Debt above threshold', 'Has debt', 'No debt'].find((l) => firstText.includes(l)) ?? 'No debt';
-    const withLabel = await labelled.filter({ hasText: label }).count();
-    await main(page).getByLabel('Status', { exact: true }).selectOption({ label });
-    await expect(rows(page)).toHaveCount(withLabel);
-    await expect(numbers(page).first()).toHaveText('7');
-    expect((await numbers(page).allTextContents()).every((n) => n === '7' || n === '15')).toBe(true);
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(menuLink(page, 'Plots')).toHaveCount(0);
+
+    // what the API sends the member: own plots 7 and 15 carry a status (the demo ledger: 7 is paid up, 15 still owes),
+    // every other plot none, so the client can only draw a neutral mark; the details stay with the owners
+    const listed = await listedPlots(page, '');
+    const withStatus = listed.filter((p) => p.status !== undefined);
+    expect(withStatus.map((p) => p.number).sort()).toEqual(['15', '7']);
+    expect(listed.filter((p) => p.status === undefined)).toHaveLength(18);
+    expect(
+      listed
+        .filter((p) => p.areaM2 !== undefined)
+        .map((p) => p.number)
+        .sort(),
+    ).toEqual(['15', '7']);
   });
 
   test('chairman switches to "All plots": the member sees labels on other plots but still no area or owners', async ({
@@ -270,16 +290,17 @@ test.describe('ownership', () => {
         .click();
       await expect(main(page).getByText('Settings saved.')).toBeVisible();
 
-      await member.goto('/plots');
-      await expect(rows(member).first()).toBeVisible();
-      await expect(main(member).getByTestId('status-neutral')).toHaveCount(0);
-      await expect(rows(member).filter({ hasText: /Debt above threshold|Has debt|No debt/ })).toHaveCount(20);
-      await expect(
-        main(member)
-          .locator('thead th')
-          .filter({ hasText: /Area|Owners/ }),
-      ).toHaveCount(0);
-      await openDemoPlot(member, '9', 'Search by number or street');
+      // the member has no plots list; what the API sends is the same the list used to show
+      const listed = await listedPlots(member, '');
+      expect(listed.length).toBeGreaterThan(0);
+      expect(listed.filter((p) => p.status === undefined)).toEqual([]);
+      expect(
+        listed
+          .filter((p) => p.areaM2 !== undefined)
+          .map((p) => p.number)
+          .sort(),
+      ).toEqual(['15', '7']);
+      await openPlotByNumber(member, '9');
       await expect(main(member)).toContainText(/Debt above threshold|Has debt/); // plot 9 has a debt in the demo ledger
       await expect(main(member)).not.toContainText('sotka');
       await expect(main(member)).not.toContainText('Литвиненко');

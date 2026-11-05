@@ -100,7 +100,7 @@ test.describe('responsive page frame', () => {
       await noSidewaysScroll('the charge details dialog');
     });
 
-    test('plain member: the Menu button opens a menu with only Plots', async ({ page }) => {
+    test('plain member: the Menu button opens a menu with only My account', async ({ page }) => {
       await loginAs(page, 'member@demo.local');
 
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -108,7 +108,7 @@ test.describe('responsive page frame', () => {
       await expect(menuButton).toBeVisible();
       await menuButton.click();
       const nav = page.getByRole('navigation', { name: 'Main menu' });
-      await expect(nav.getByRole('link')).toHaveText(['Plots']);
+      await expect(nav.getByRole('link')).toHaveText(['My account']);
     });
   });
 

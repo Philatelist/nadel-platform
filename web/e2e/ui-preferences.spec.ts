@@ -200,7 +200,7 @@ test.describe('cooperative name as the title (Ukrainian UI)', () => {
       await page.setViewportSize({ width: 1280, height: 800 });
       const header = page.getByRole('banner');
       const title = header.getByRole('link', { name: 'СТ «Надія»', exact: true });
-      await expect(title).toHaveAttribute('href', '/');
+      await expect(title).toHaveAttribute('href', '/plots'); // the home of the chairman
       await expect(header.getByText('Наділ', { exact: true })).toBeVisible();
       const [titleSize, labelSize] = await Promise.all([
         title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),

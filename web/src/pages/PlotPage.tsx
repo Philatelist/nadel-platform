@@ -36,6 +36,7 @@ import { NotFoundPage } from './NotFoundPage';
 
 export function PlotPage() {
   const t = useT();
+  const canListPlots = useMe().permissions.includes('PLOTS_VIEW');
   const { id = '' } = useParams();
   const plot = useGetPlot(id);
   useDocumentTitle(plot.data ? cardTitle(t, plot.data) : t.plots.title);
@@ -44,9 +45,15 @@ export function PlotPage() {
 
   return (
     <div className="flex flex-col gap-4 text-[15px]">
-      <Link to="/plots" className="text-ink-muted hover:text-ink">
-        {t.plot.back}
-      </Link>
+      {canListPlots ? (
+        <Link to="/plots" className="text-ink-muted hover:text-ink">
+          {t.plot.back}
+        </Link>
+      ) : (
+        <Link to="/account" className="text-ink-muted hover:text-ink">
+          {t.plot.backToAccount}
+        </Link>
+      )}
       <QueryBoundary query={plot}>{(data) => <PlotView key={data.id} plot={data} />}</QueryBoundary>
     </div>
   );

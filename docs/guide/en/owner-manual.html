@@ -206,8 +206,23 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
             <td>End-to-end browser scenarios (Playwright) on a separate database</td>
           </tr>
           <tr>
-            <td><code>make guide-shots</code>, <code>make guide</code></td>
-            <td>Screenshots for the guides (from the running app) and the PDF build</td>
+            <td><code>make help-shots ID=&lt;id&gt;</code></td>
+            <td>
+              Screenshots of one help page (for example <code>ID=payments-enter</code>) from the running demo
+              app, in both languages, into <code>web/public/help/img/</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>make guide-shots</code></td>
+            <td>Screenshots of all help pages (<code>make up</code> must be running)</td>
+          </tr>
+          <tr>
+            <td><code>make guide</code></td>
+            <td>
+              Builds the PDFs into <code>docs/guide/pdf</code>: the board guide from the help pages in
+              <code>docs/help</code>, the owner's manual and the leaflet from
+              <code>docs/guide/&lt;lang&gt;/*.html</code>
+            </td>
           </tr>
           <tr>
             <td><code>make clean</code></td>
@@ -656,8 +671,8 @@ END $$;</pre>
         </thead>
         <tbody>
           <tr>
-            <td>Cooperative name</td>
-            <td>Goes to the home page</td>
+            <td>Cooperative name with the logo</td>
+            <td>Goes to the user's home screen: for a cooperative member this is "My account"</td>
             <td>—</td>
           </tr>
           <tr>
@@ -677,7 +692,21 @@ END $$;</pre>
           </tr>
           <tr>
             <td>Menu</td>
-            <td>Shows only the sections the person has permissions for</td>
+            <td>
+              Shows only the sections the person has permissions for. An ordinary cooperative member has no
+              "Plots" and no "Help": their menu starts with "My account", and opening the plot list by its
+              address sends them to the account. "My account" is in the menu only for someone who owns a plot
+              now (an electrician without a plot sees "Readings" and "Meters"). The home screen is the first
+              menu item. The "Help" item is there only for those who hold at least one permission
+            </td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>"?" in the header</td>
+            <td>
+              Opens help about the current screen in a side panel (details below, "Help in the application").
+              A cooperative member opens the help with this button
+            </td>
             <td>—</td>
           </tr>
         </tbody>
@@ -696,7 +725,7 @@ END $$;</pre>
           <tr>
             <td>Search, "Kind", "Status", "Show archived"</td>
             <td>Filter the register</td>
-            <td>View plots (a member sees a short list)</td>
+            <td>View plots (a cooperative member does not see the plot list)</td>
           </tr>
           <tr>
             <td>Add plot</td>
@@ -1742,6 +1771,60 @@ END $$;</pre>
           </tr>
         </tbody>
       </table>
+
+      <h3>Help in the application</h3>
+      <p>
+        The help is built into the application: it has no server or database of its own. It is the pages
+        <code>docs/help/uk/*.md</code> and <code>docs/help/en/*.md</code>, compiled together with the web
+        client (the format is described in <code>docs/help/README.md</code>).
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>What it does</th>
+            <th>Permission</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>"?" in the header</td>
+            <td>
+              Opens a panel at the side with help about the current screen. The panel is not modal: the screen
+              stays usable and scrollable. Moving to another screen shows that screen's help in the panel, or
+              closes it if that screen has no help. Esc and "Close" close the panel; "Open in full" leads to
+              the help page. On a phone the panel is full screen with a "← Back" button. If the screen has no
+              page, the button is not shown
+            </td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Help → contents and search</td>
+            <td>
+              The <code>/help</code> section: the contents by topic and a search over the pages (it tolerates
+              one typo in a word). A person sees only the pages for their permissions and roles; a direct link
+              to another page shows a message that the section is not available, without the content
+            </td>
+            <td>anyone who holds at least one permission (the menu item); everyone else uses "?"</td>
+          </tr>
+          <tr>
+            <td>Help without signing in</td>
+            <td>
+              The pages <code>/help</code> and <code>/help/&lt;id&gt;</code> open without signing in, with no
+              request to the API and no personal data; after signing in from the help the person returns to
+              the same page
+            </td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Search engines: the application itself carries
+        <code>&lt;meta name="robots" content="noindex"&gt;</code> and is not indexed, while the (Ukrainian)
+        help pages get their own title, description, canonical address and
+        <code>robots: index, follow</code> when the web client is built, so they can be indexed. For a stand
+        there is the <code>NADEL_NOINDEX</code> flag (chapter 9).
+      </p>
     </section>
 
     <section class="chapter" id="permissions">
@@ -2204,6 +2287,15 @@ END $$;</pre>
         </li>
         <li>The Keycloak admin console and the database only through an SSH tunnel.</li>
       </ul>
+      <h3>Help and search engines</h3>
+      <p>
+        The <code>NADEL_NOINDEX</code> setting in <code>.env</code> (default <code>true</code>) makes Caddy
+        add the header <code>X-Robots-Tag: noindex, nofollow</code> to every response, so a stand is never
+        indexed. Set <code>NADEL_NOINDEX=false</code> only on a real public site where the help pages
+        (<code>/help/…</code>) should be indexed, then run <code>docker compose up -d caddy</code>. The site
+        address for canonical links is <code>VITE_SITE_URL</code> at web build time. More:
+        <code>infra/stand/README.md</code>.
+      </p>
       <h3>Backups and monitoring</h3>
       <ul>
         <li>
@@ -2310,6 +2402,42 @@ END $$;</pre>
           </tr>
         </tbody>
       </table>
+      <h3>Help in the application: source and checks</h3>
+      <ul>
+        <li>
+          The help pages live in <code>docs/help/uk/&lt;id&gt;.md</code> and
+          <code>docs/help/en/&lt;id&gt;.md</code> (the same <code>id</code> and structure). A feature that
+          changes a screen, a button, a permission, a calculation rule or how the platform is run updates the
+          pages in both languages in the same PR. Button names are written only as
+          <code>{{ui:key}}</code> from the i18n catalog: a stale key breaks the build.
+        </li>
+        <li>
+          The <code>permissions</code> field of a page takes <code>Permission</code> values and two tokens:
+          <code>member</code> (the viewer owns a plot, or holds the permission to view members) and
+          <code>board</code> (the viewer holds at least one permission). An empty list means every signed-in
+          user. A page for the board, such as the board's "Getting started", uses <code>board</code>; a page
+          for plot owners uses <code>member</code>.
+        </li>
+        <li>
+          The completeness check: every route and menu item has a page, every screenshot is a file, the two
+          languages match, every <code>{{ui:…}}</code> key exists. It runs in the web tests (<code
+            >make check</code
+          >) and in the web build (<code>vite build</code>): on a mismatch the build fails. In development
+          (<code>make web</code>) mismatches are only shown as warnings. To work on part of the pages locally
+          you can run the build with <code>HELP_CHECK=warn</code>: then it only warns too. Do not use that
+          flag for a PR.
+        </li>
+        <li>
+          Screenshots: <code>make help-shots ID=&lt;id&gt;</code> for one page,
+          <code>make guide-shots</code> for all of them; the shot list of a page is the
+          <code>shots</code> field in its front matter. The script refuses to run against anything but the
+          demo cooperative.
+        </li>
+        <li>
+          The board guide PDF is built from the help pages (<code>make guide</code>): there is no separate
+          HTML text for it in <code>docs/guide</code> any more; the PDF is not edited, the help is.
+        </li>
+      </ul>
       <h3>Rules</h3>
       <ul>
         <li>
@@ -2543,6 +2671,14 @@ END $$;</pre>
               photos from an iPhone. Add the photo in Safari, or on the iPhone turn on Settings → Camera →
               Formats → "Most Compatible" (photos will be JPEG)." A request over 27 MB is rejected by a proxy
               or the server.
+            </td>
+          </tr>
+          <tr>
+            <td>The web build fails with an error about the help (a missing page, key or screenshot)</td>
+            <td>
+              The help completeness check found a mismatch (the error text lists it): add the page or the
+              screenshot, or fix the <code>{{ui:…}}</code> key. For partial local work:
+              <code>HELP_CHECK=warn pnpm --filter web build</code> (do not use it for a PR).
             </td>
           </tr>
           <tr>

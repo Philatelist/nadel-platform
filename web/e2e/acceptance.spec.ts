@@ -37,12 +37,18 @@ const ALL_PERMISSIONS = [
   'View payments',
   'Enter payments',
   'Reverse payments',
+  'Issue invoices',
+  'Issue certificates',
+  'Send announcements',
+  'View cash and bank',
+  'Enter cash book entries',
+  'Approve cash book operations',
 ];
 
 const nav = (page: Page) => page.locator('#app-menu nav');
 const navLink = (page: Page, name: string) => nav(page).getByRole('link', { name, exact: true });
 // "My account" is no longer a menu item: the user's name in the page header bar links to /account.
-const accountLink = (page: Page) => page.getByRole('banner').locator('a[href="/account"]');
+const accountLink = (page: Page) => page.getByRole('banner').locator('a[href="/account"]').last();
 /** Rows of the first table in the main area, without the header row. */
 const tableRows = (page: Page) => page.getByRole('main').locator('tbody tr');
 
@@ -128,7 +134,8 @@ test.describe('§2.5 what an ordinary member sees', () => {
     await expect(page.getByText('Preferred channel', { exact: true })).toBeVisible();
     await expect(page.getByText('Notes', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /edit|archive|restore/i })).toHaveCount(0);
-    await expectNavigation(page, ['Plots', 'My account'], ['Members', 'Roles', 'Audit log']);
+    await expectNavigation(page, ['My account'], ['Plots', 'Members', 'Roles', 'Audit log']);
+    await expect(nav(page).getByRole('link').first()).toHaveText('My account');
 
     // someone else's card looks exactly like a card that does not exist
     await page.goto(`/members/${CHAIRMAN_ID}`);
@@ -229,7 +236,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all twenty-five permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all thirty-one permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -345,7 +352,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: twenty-five permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: thirty-one permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)
@@ -532,8 +539,8 @@ test.describe('chairman journeys that change data', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Enter a phone number like +380671234567 or 0671234567.')).toBeVisible();
     await expect(page).toHaveURL(/\/members\/new$/);
+    // Telegram needs no contact since feature 017 (the member links the bot themselves)
     for (const [channel, message] of [
-      ['Telegram', 'Telegram needs a Telegram username.'],
       ['Email', 'Email needs an email.'],
       ['Viber', 'Viber needs a Viber phone.'],
     ] as const) {

@@ -16,7 +16,7 @@ let deleteOptions: Opts;
 vi.mock('../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
   useOptionalMe: () => null,
-  useMe: () => ({ ownedPlots }),
+  useMe: () => ({ ownedPlots, permissions }),
 }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -271,5 +271,24 @@ describe('PlotPage reconciliation act tab', () => {
     permissions = ['PLOTS_VIEW'];
     renderCard();
     expect(screen.queryByRole('tab', { name: 'Reconciliation act' })).toBeNull();
+  });
+});
+
+describe('PlotPage back link', () => {
+  beforeEach(() => {
+    plot = { ...active };
+  });
+
+  it('goes back to the plots list for a person with PLOTS_VIEW', () => {
+    permissions = ['PLOTS_VIEW'];
+    renderCard();
+    expect(screen.getByRole('link', { name: 'Back to plots' })).toHaveAttribute('href', '/plots');
+  });
+
+  it('goes back to the account for a person without PLOTS_VIEW', () => {
+    permissions = [];
+    renderCard();
+    expect(screen.getByRole('link', { name: 'To my account' })).toHaveAttribute('href', '/account');
+    expect(screen.queryByRole('link', { name: 'Back to plots' })).toBeNull();
   });
 });

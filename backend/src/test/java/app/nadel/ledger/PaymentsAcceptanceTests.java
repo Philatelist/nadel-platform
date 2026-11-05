@@ -831,13 +831,31 @@ class PaymentsAcceptanceTests extends FreshPaymentSupport {
     // the demo payments (cash, bank, reversed, split over plots 7 and 15, all colours): DemoLedgerDataTests
 
     @Test
-    void fs2_13_bothBoardGuidesHaveTheChapterAndPartTwoExplainsTheAllocationOrder() throws IOException {
-        // the PDFs are built from these pages (make guide); the examples are the ones of 2.1, 2.2, 2.7 and 2.8
-        String uk = Files.readString(Path.of("..", "docs", "guide", "uk", "board-guide.html"));
-        String en = Files.readString(Path.of("..", "docs", "guide", "en", "board-guide.html"));
-        assertThat(uk).contains("Платежі та каса");
-        assertThat(en).contains("Payments and cash desk");
-        assertThat(uk).contains("700,00").contains("150,00").contains("200 × 300 / 400 = 150,00");
-        assertThat(en).contains("700.00").contains("150.00").contains("200 × 300 / 400 = 150.00");
+    void fs2_13_bothHelpLanguagesHaveThePaymentsChapterAndHowItCalculatesExplainsTheAllocationOrder()
+            throws IOException {
+        // the board guide lives in the in-app help pages (019); the examples are the ones of 2.1, 2.2, 2.7 and 2.8
+        Path uk = Path.of("..", "docs", "help", "uk");
+        Path en = Path.of("..", "docs", "help", "en");
+        // the "payments and cash" chapter: list, entry form and card, in both languages
+        for (Path lang : List.of(uk, en)) {
+            for (String page : List.of("payments.md", "payments-enter.md", "payment-card.md")) {
+                assertThat(Files.readString(lang.resolve(page))).contains("section: payments-cash");
+            }
+        }
+        String ukEnter = Files.readString(uk.resolve("payments-enter.md"));
+        String enEnter = Files.readString(en.resolve("payments-enter.md"));
+        assertThat(ukEnter).contains("title: Внести платіж").contains("700,00").contains("150,00");
+        assertThat(enEnter).contains("title: Enter a payment").contains("700.00").contains("150.00");
+        // Part II "how the system calculates": the oldest-first order and the proportional split over plots
+        String ukAllocate = Files.readString(uk.resolve("how-payments-allocate.md"));
+        String enAllocate = Files.readString(en.resolve("how-payments-allocate.md"));
+        assertThat(ukAllocate).contains("section: how-it-calculates")
+                .contains("Платіж 700,00. Спершу найстаріший: внесок 600,00, потім електрика 100,00")
+                .contains("Борг ділянки — 150,00")
+                .contains("200 × 300 / 400 = 150,00");
+        assertThat(enAllocate).contains("section: how-it-calculates")
+                .contains("Payment 700.00. The oldest first: membership 600.00, then electricity 100.00")
+                .contains("The plot's debt is 150.00")
+                .contains("200 × 300 / 400 = 150.00");
     }
 }

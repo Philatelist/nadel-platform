@@ -55,7 +55,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    files: ['e2e/**/*.ts', 'playwright.config.ts', 'help/**/*.ts', 'vite.config.ts'],
     languageOptions: { globals: globals.node },
   },
 );

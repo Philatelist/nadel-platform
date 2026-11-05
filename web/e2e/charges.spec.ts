@@ -438,7 +438,13 @@ test.describe('charges and period closing', () => {
       .click();
     await expect(page.getByRole('heading', { level: 1, name: monthLabel(open) })).toBeVisible();
     await expect(main(page).getByText('Before closing')).toBeVisible();
-    await expect(main(page).getByRole('button')).toHaveCount(0);
+    // no charge action (run, close); the only buttons are the month's invoices, which the treasurer issues
+    // (INVOICES_ISSUE, feature 018)
+    await expect(main(page).getByRole('heading', { level: 2, name: 'Invoices of the month' })).toBeVisible();
+    expect((await main(page).getByRole('button').allTextContents()).map((name) => name.trim())).toEqual([
+      `Build invoices for ${monthLabel(open)}`,
+      'PDF for printing',
+    ]);
 
     // the losses and common consumers pages show the history only
     await page.goto('/charges/losses');

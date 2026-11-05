@@ -9,6 +9,7 @@ Payment accounting platform for dacha (garden) cooperatives.
 - Treasurer allocates payments across charge types, with partial payments and prepayments
 - Monthly invoices with an NBU payment QR code, delivered by email, Telegram and Viber
 - Web account and apps for iOS and Android
+- In-app help (the «?» button and `/help`): a page for every screen, per role, in Ukrainian and English, readable without signing in
 - Many cooperatives on one platform with full data isolation
 
 ## Stack
@@ -61,3 +62,5 @@ with `docker compose -f infra/docker-compose.yml down -v` (see [infra/README.md]
 - [docs/adr](docs/adr) — architecture decision records
 - [docs/features](docs/features) — feature specs
 - [docs/roadmap.md](docs/roadmap.md) — roadmap
+- [docs/help](docs/help/README.md) — the in-app help, one Markdown page per screen and language; the source of the board guide PDF. `make help-shots ID=<page id>` takes the screenshots of one page, `make guide-shots` of all pages, `make guide` builds the PDFs
+- [docs/guide](docs/guide/README.md) — the guides in `docs/guide/pdf` (board guide, built from the help; platform owner's manual)

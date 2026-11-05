@@ -13,8 +13,23 @@ export const oidcConfig: AuthProviderProps = {
   scope: 'openid profile email',
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   automaticSilentRenew: true,
-  onSigninCallback: () => {
+  onSigninCallback: (user) => {
+    const returnTo = returnPathOf(user?.state);
+    if (returnTo) {
+      // back to the page the visitor signed in from (the public help); a reload keeps the stored session and drops ?code
+      window.location.replace(returnTo);
+      return;
+    }
     // remove ?code=…&state=… from the address bar after sign-in
     window.history.replaceState({}, document.title, window.location.pathname);
   },
 };
+
+/** The `returnTo` path carried through the sign-in redirect; only a same-origin absolute path is accepted. */
+export function returnPathOf(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null || !('returnTo' in state)) return null;
+  const { returnTo } = state;
+  return typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//')
+    ? returnTo
+    : null;
+}
