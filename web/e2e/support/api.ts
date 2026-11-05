@@ -124,9 +124,13 @@ export async function createPlot(page: Page, number: string): Promise<CreatedPlo
 }
 
 /** A member whose last name is unique, so that the member search finds exactly this one. */
-export async function createMember(page: Page, lastName: string): Promise<CreatedMember> {
+export async function createMember(page: Page, lastName: string, email?: string): Promise<CreatedMember> {
   const created = expectCreated<{ id: string }>(
-    await api(page, 'POST', '/members', { lastName, firstName: 'Test' }),
+    await api(page, 'POST', '/members', {
+      lastName,
+      firstName: 'Test',
+      ...(email === undefined ? {} : { email }),
+    }),
   );
   return { id: created.id, name: `${lastName} Test`, lastName };
 }

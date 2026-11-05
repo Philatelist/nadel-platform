@@ -67,6 +67,7 @@ Here are all the permissions that can be given to a role. The right column shows
 |---|---|---|
 | {{ui:permission.MEMBERS_VIEW.name}} | See all members, their contacts and notes | chairman, treasurer |
 | {{ui:permission.MEMBERS_EDIT.name}} | Add, change, archive and restore members | chairman |
+| {{ui:permission.MEMBERS_INVITE.name}} | Invite members to sign in, resend an invitation and switch access off | chairman |
 | {{ui:permission.ROLES_MANAGE.name}} | Create, change and delete custom roles, change the permissions of base roles, give roles | chairman |
 | {{ui:permission.AUDIT_VIEW.name}} | Read the change log | chairman, treasurer |
 | {{ui:permission.PLOTS_VIEW.name}} | See all plots with details | chairman, treasurer |

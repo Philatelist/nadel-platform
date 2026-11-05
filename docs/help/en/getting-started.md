@@ -40,7 +40,7 @@ If signing in fails, the system says: "{{ui:auth.signInFailed}}". Try again. If 
 The system finds you among the members by e-mail. If the member card has no e-mail or a different one, you will see "{{ui:access.notLinkedTitle}}". Ask the chairman to correct the e-mail in your [member card](help:member-card).
 
 > [!important]
-> The account used to sign in (e-mail and password) is created separately from the member card. There is no self-registration or invitation by e-mail yet: to get access, contact the chairman.
+> There is no self-registration. A person gets access when someone with the permission "{{ui:permission.MEMBERS_INVITE.name}}" (by default the chairman) presses "{{ui:memberAccess.invite}}" on the [member card](help:member-card). The person receives a letter with a link, sets a password on the [set-password page](help:set-password) and signs in with their e-mail. The e-mail in the card is the login.
 
 The {{ui:auth.signOut}} button in the header ends your session. If the session expires on its own, the system asks you to sign in again.
 

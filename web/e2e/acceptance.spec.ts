@@ -14,6 +14,7 @@ const PAVLENKO_ID = 'aaaaaaaa-0000-0000-0000-000000000014'; // has a note in the
 const ALL_PERMISSIONS = [
   'View members',
   'Edit members',
+  'Invite to the system',
   'Manage roles',
   'View audit log',
   'View plots',
@@ -236,7 +237,7 @@ test.describe('§2.7 / §2.8 members list and read-only card', () => {
 });
 
 test.describe('§2.2 / §2.13 roles screen', () => {
-  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all thirty-one permissions locked', async ({
+  test('§2.2 #1, #2 and §2.13 #2: five roles, base role names are editable, Chairman has all thirty-two permissions locked', async ({
     page,
   }) => {
     await loginAs(page, 'chairman@demo.local');
@@ -352,7 +353,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
     expect(await page.getByRole('main').innerText()).not.toContain('base:');
   });
 
-  test('§2.1 #1 and §2.11 #3: thirty-one permissions with descriptions in Ukrainian by default, English on switch', async ({
+  test('§2.1 #1 and §2.11 #3: thirty-two permissions with descriptions in Ukrainian by default, English on switch', async ({
     browser,
   }) => {
     // a browser language that is not supported falls back to the default locale (Ukrainian)

@@ -13,6 +13,7 @@ import { Link, useLocation, useParams } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MemberDetails } from '../components/MemberDetails';
 import { MemberForm } from '../components/MemberForm';
+import { MemberAccess } from '../components/members/MemberAccess';
 import { MemberPlotsPanel } from '../components/ownership/MemberPlotsPanel';
 import { MemberRolesForm } from '../components/MemberRolesForm';
 import { QueryBoundary } from '../components/QueryBoundary';
@@ -160,6 +161,7 @@ function MemberView({ member }: { member: Member }) {
           ) : (
             <MemberDetails member={member} />
           )}
+          {member.access && !editingRoles && <MemberAccess member={member} access={member.access} />}
           <MemberPlotsPanel memberId={member.id} />
         </>
       )}

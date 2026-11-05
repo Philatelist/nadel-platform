@@ -569,4 +569,13 @@ test.describe('§2.7 the public help', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/help\/payments-enter$/);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /^index/);
   });
+
+  test('020: the set-password page opens signed out without a token, shows the invalid text and stays on the app', async ({
+    page,
+  }) => {
+    await chooseLocale(page, 'uk');
+    await page.goto('/set-password');
+    await expect(page.getByText(messages('uk').setPassword.invalid)).toBeVisible();
+    expect(page.url()).toContain('localhost:5173/set-password');
+  });
 });
