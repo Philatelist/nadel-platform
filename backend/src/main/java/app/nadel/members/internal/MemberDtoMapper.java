@@ -5,6 +5,7 @@ import app.nadel.identity.Permission;
 import java.time.ZoneOffset;
 import java.util.List;
 import nadel.contract.model.BaseRole;
+import nadel.contract.model.MemberAccess;
 import nadel.contract.model.MemberSummary;
 import nadel.contract.model.RoleRef;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +14,8 @@ import org.jspecify.annotations.Nullable;
  * The only place that turns a member into API output, and therefore the only place that decides what a viewer may
  * see. The contacts come opened ({@link MemberCrypto}). {@code telegramLinked} is a flag only ({@link TelegramLinkFlags}). {@code notes} is filled only for a viewer with
  * {@code MEMBERS_VIEW}; otherwise it stays null and the key is absent from the JSON (null properties are not
- * serialised).
+ * serialised). {@code access} (feature 020, {@link MemberCards}) follows the same rule, so a member never sees it on
+ * their own card.
  */
 final class MemberDtoMapper {
 
@@ -21,7 +23,7 @@ final class MemberDtoMapper {
     }
 
     static nadel.contract.model.Member toDto(Member member, OpenedContacts contacts, List<RoleGrant> roles,
-            AccessProfile viewer, boolean telegramLinked) {
+            AccessProfile viewer, boolean telegramLinked, @Nullable MemberAccess access) {
         var dto = new nadel.contract.model.Member(
                 member.getId(),
                 member.getLastName(),
@@ -42,6 +44,7 @@ final class MemberDtoMapper {
         }
         if (viewer.can(Permission.MEMBERS_VIEW)) {
             dto.setNotes(contacts.notes());
+            dto.setAccess(access);
         }
         return dto;
     }

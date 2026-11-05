@@ -16,6 +16,14 @@ tags:
     description: Current user
   - name: members
     description: Cooperative members (people), their contacts and roles
+  - name: member-access
+    description: >-
+      A member's access to the system (feature 020): inviting them by e-mail, sending the invitation again and turning
+      access off
+  - name: public-invitations
+    description: >-
+      Public, without a token: the person who opened an invitation link sees the e-mail it was sent to and sets their
+      password
   - name: permissions
     description: The fixed list of permissions
   - name: roles
@@ -208,8 +216,8 @@ paths:
       description: |
         Returns one member of the current cooperative.
         A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
-        answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
-        caller has `MEMBERS_VIEW`.
+        answer is 404, exactly as for an id that does not exist. The `notes` and `access` fields are present only
+        when the caller has `MEMBERS_VIEW`, so a member never sees `access` on their own card.
       parameters:
         - name: id
           in: path
@@ -416,6 +424,198 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /members/{id}/invitation:
+    post:
+      tags: [member-access]
+      operationId: inviteMember
+      summary: Invite a member into the system
+      description: |
+        Invites the member: makes (or links) their sign-in account with the member's e-mail as the login and sends a
+        letter «Задайте пароль» with a one-time link from the cooperative's own mailbox (and, best effort, through the
+        cooperative's bot when the member has linked Telegram). The link works for 72 hours and only once. Allowed when
+        the access status is `NOT_INVITED` or `DISABLED`. Requires `MEMBERS_VIEW` and `MEMBERS_INVITE`. An unknown id
+        or a member of another cooperative is 404. Answers the member's new access (`INVITED`).
+
+        Refused with 409: the member is archived (`MEMBER_ARCHIVED`), has no e-mail (`MEMBER_EMAIL_MISSING`), the
+        cooperative has no mailbox (`DELIVERY_NOT_CONFIGURED`), the member is already invited (`INVITATION_PENDING`,
+        send it again with `resendMemberInvitation`) or already has access (`ACCESS_ALREADY_ACTIVE`), the e-mail is
+        already a login in another cooperative (`EMAIL_IN_OTHER_COOPERATIVE`, which one is never said), or the sign-in
+        account with the e-mail is already linked to another member of this cooperative (`SIGN_IN_ACCOUNT_IN_USE`).
+        Nothing is sent then.
+
+        502 `INVITATION_NOT_SENT` (with `failureCode`): the letter could not be sent; nothing changes, the access
+        status stays as it was and no audit entry is written. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service
+        could not be reached. A sent invitation is written to the audit log (`MEMBER_INVITED`, with the channels only:
+        never the link).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access after the invitation was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+        '502':
+          $ref: '#/components/responses/InvitationNotSent'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
+
+  /members/{id}/invitation/resend:
+    post:
+      tags: [member-access]
+      operationId: resendMemberInvitation
+      summary: Send the invitation again with a new link
+      description: |
+        Sends the invited member a new letter with a new one-time link (72 hours, once); the previous link stops
+        working as soon as the new one is sent. Allowed only when the access status is `INVITED` (otherwise 409
+        `NOT_INVITED`). Requires `MEMBERS_VIEW` and `MEMBERS_INVITE`. An unknown id or a member of another cooperative
+        is 404. Answers the member's access (`INVITED`, with the new `invitedAt`).
+
+        Refused like `inviteMember`: 409 `MEMBER_ARCHIVED`, `MEMBER_EMAIL_MISSING`, `DELIVERY_NOT_CONFIGURED`,
+        `EMAIL_IN_OTHER_COOPERATIVE`, `SIGN_IN_ACCOUNT_IN_USE`; 502 `INVITATION_NOT_SENT` (with `failureCode`; the
+        previous link still works and no audit entry is written); 503 `SIGN_IN_SERVICE_UNAVAILABLE`. A sent invitation
+        is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access after the new invitation was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+        '502':
+          $ref: '#/components/responses/InvitationNotSent'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
+
+  /members/{id}/access/disable:
+    post:
+      tags: [member-access]
+      operationId: disableMemberAccess
+      summary: Turn a member's access off
+      description: |
+        Turns off the access of an invited member or a member with access: their open invitation link stops working
+        and they can no longer sign in. The member card and all the member's data stay. Requires `MEMBERS_VIEW` and
+        `MEMBERS_INVITE`. An unknown id or a member of another cooperative is 404. Access that is already `DISABLED`
+        is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. Answers the
+        member's access (`DISABLED`). Written to the audit log (`MEMBER_ACCESS_DISABLED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access, now turned off
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+
+  /public/invitations/inspect:
+    post:
+      tags: [public-invitations]
+      operationId: inspectInvitation
+      summary: Check an invitation link
+      description: |
+        Public, without a token. The set-password page sends the token from the invitation link (in the body, never in
+        the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
+        `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
+        expired, or of a member whose access was turned off or who was archived): the answer never says which.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenInput'
+      responses:
+        '200':
+          description: The invitation can be used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/InvitationInvalid'
+
+  /public/invitations/accept:
+    post:
+      tags: [public-invitations]
+      operationId: acceptInvitation
+      summary: Set the password with an invitation link
+      description: |
+        Public, without a token. Sets the member's sign-in password from the invitation link and gives them access
+        (`ACTIVE`); the link is used up. The member then signs in normally with their e-mail and this password.
+        The password is never logged or stored by the application.
+
+        400 `VALIDATION_FAILED` with `errors[{field: password}]`: `TOO_SHORT` under 8 characters, `TOO_LONG` over 128,
+        `PASSWORD_POLICY` the sign-in service refused it by its own rules. 404 `INVITATION_INVALID` as in
+        `inspectInvitation`. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link
+        stays usable.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationAcceptInput'
+      responses:
+        '204':
+          description: The password is set; the member has access
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/InvitationInvalid'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
 
   /permissions:
     get:
@@ -7791,6 +7991,58 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    InvitationConflict:
+      description: >-
+        The member's access cannot change this way (feature 020): the member is archived (code `MEMBER_ARCHIVED`), has
+        no e-mail, which is the login (code `MEMBER_EMAIL_MISSING`), the cooperative has no mailbox to send the letter
+        from (code `DELIVERY_NOT_CONFIGURED`), the member is already invited (code `INVITATION_PENDING`) or already has
+        access (code `ACCESS_ALREADY_ACTIVE`), the e-mail is already a login in another cooperative (code
+        `EMAIL_IN_OTHER_COOPERATIVE`, never saying which), the sign-in account with the e-mail is linked to another
+        member of this cooperative (code `SIGN_IN_ACCOUNT_IN_USE`), the invitation is sent again for a member who is
+        not invited (code `NOT_INVITED`), or access is turned off for a member who was never invited (code
+        `ACCESS_NOT_GRANTED`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationNotSent:
+      description: >-
+        The invitation letter could not be sent (code `INVITATION_NOT_SENT`, with `failureCode`: `SMTP_AUTH_FAILED`
+        the mail server refused the mailbox's user name or password, `SMTP_REJECTED` it refused the letter,
+        `CONNECTION_FAILED` it could not be reached or did not answer in time, `SMTP_HOST_NOT_ALLOWED` it is not a
+        server the application may connect to); the access status is unchanged and an earlier link still works
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    SignInServiceUnavailable:
+      description: >-
+        The sign-in service (Keycloak) could not be reached or did not answer in time (code
+        `SIGN_IN_SERVICE_UNAVAILABLE`); nothing changed and the request can be tried again later
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationInvalid:
+      description: >-
+        The invitation link cannot be used (code `INVITATION_INVALID`): it is unknown, already used, replaced by a newer
+        one, expired, or the member's access was turned off or the member was archived. The answer never says which
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     InvoiceBuildTooLarge:
       description: >-
         The month has more invoiceable plots than one build takes (code `INVOICE_BUILD_TOO_LARGE`, with `limit`, the
@@ -8065,6 +8317,7 @@ components:
       enum:
         - MEMBERS_VIEW
         - MEMBERS_EDIT
+        - MEMBERS_INVITE
         - ROLES_MANAGE
         - AUDIT_VIEW
         - PLOTS_VIEW
@@ -8364,7 +8617,8 @@ components:
     Member:
       type: object
       description: |
-        A person of the cooperative. `notes` is present only when the caller has the `MEMBERS_VIEW` permission.
+        A person of the cooperative. `notes` and `access` are present only when the caller has the `MEMBERS_VIEW`
+        permission.
       required: [id, lastName, firstName, phones, deliveryChannel, roles, archived]
       properties:
         id:
@@ -8409,6 +8663,98 @@ components:
           description: >-
             Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in
             responses; read-only. Only this flag is shown: never the member's Telegram account details
+        access:
+          allOf:
+            - $ref: '#/components/schemas/MemberAccess'
+          readOnly: true
+          description: >-
+            The member's access to the system (feature 020). Present only when the caller has `MEMBERS_VIEW`; the key
+            is absent otherwise, so a member never sees it on their own card. Read-only: it changes only through the
+            invitation endpoints (`inviteMember`, `resendMemberInvitation`, `disableMemberAccess`)
+
+    MemberAccessStatus:
+      type: string
+      description: >-
+        A member's access to the system: `NOT_INVITED` never invited, `INVITED` the invitation was sent and the member
+        has not set a password yet, `ACTIVE` the member set a password and may sign in, `DISABLED` the board turned
+        access off or the member was archived (the board invites again to give it back)
+      enum: [NOT_INVITED, INVITED, ACTIVE, DISABLED]
+
+    InviteBlockedReason:
+      type: string
+      description: >-
+        Why the member cannot be invited now: `EMAIL_MISSING` the member has no e-mail, which is the login;
+        `MAILBOX_NOT_CONFIGURED` the cooperative's mailbox is not set up
+      enum: [EMAIL_MISSING, MAILBOX_NOT_CONFIGURED]
+
+    MemberAccess:
+      type: object
+      description: >-
+        A member's access to the system (feature 020), on the member card for callers with `MEMBERS_VIEW` and as the
+        answer of the invitation endpoints
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/MemberAccessStatus'
+        invitedAt:
+          type: string
+          format: date-time
+          description: When the latest invitation was sent; present for `INVITED` (and kept afterwards)
+        lastSignInAt:
+          type: string
+          format: date-time
+          description: >-
+            The member's latest sign-in, recorded at most once an hour; absent before the first sign-in
+        disabledAt:
+          type: string
+          format: date-time
+          description: When access was turned off; present for `DISABLED`
+        inviteBlockedBy:
+          allOf:
+            - $ref: '#/components/schemas/InviteBlockedReason'
+          description: >-
+            Present when an invitation (or a new one) could not be sent now, so the client disables the action and
+            shows the reason; absent when nothing blocks it
+
+    InvitationTokenInput:
+      type: object
+      description: The token from an invitation link (`inspectInvitation`)
+      required: [token]
+      properties:
+        token:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+          description: The one-time token from the link. A secret like a password, never logged
+
+    InvitationInfo:
+      type: object
+      description: What a usable invitation link shows on the set-password page (`inspectInvitation`)
+      required: [email]
+      properties:
+        email:
+          type: string
+          description: The e-mail the invitation was sent to; it is the member's login
+
+    InvitationAcceptInput:
+      type: object
+      description: >-
+        The token from an invitation link and the new password (`acceptInvitation`). The password is never logged or
+        stored by the application
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+          description: The one-time token from the link. A secret like a password, never logged
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
 
     MemberInput:
       type: object
@@ -8525,6 +8871,9 @@ components:
         - MEMBER_ARCHIVED
         - MEMBER_RESTORED
         - MEMBER_ROLES_CHANGED
+        - MEMBER_INVITED
+        - MEMBER_INVITE_RESENT
+        - MEMBER_ACCESS_DISABLED
         - ROLE_CREATED
         - ROLE_UPDATED
         - ROLE_DELETED
@@ -8654,7 +9003,10 @@ components:
         about the member whose Telegram was linked or unlinked (label "Last First"), never with Telegram account
         details: `TELEGRAM_LINKED` has no fields, `TELEGRAM_UNLINKED` has `endReason` (new value only: `UNLINKED` the
         member unlinked it in the bot or the account, `BLOCKED` the member blocked the bot, `MOVED` the chat was
-        linked to another member). `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
+        linked to another member). `MEMBER_INVITED`, `MEMBER_INVITE_RESENT` and `MEMBER_ACCESS_DISABLED` (feature
+        020) are `MEMBER` entries about the member whose access changed (label "Last First"): the invitation entries
+        have `channels` (new value only: the channels the link went through, codes `EMAIL` and `TELEGRAM` joined by
+        ", "), `MEMBER_ACCESS_DISABLED` has no fields; never the link, a token or a password. `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
         `BILLING_MONTH` entry with the entity id of `INVOICES_ISSUED`; its fields (new values only) are `month`
         (`YYYY-MM`), `telegram`, `email` and `paper` (the deliveries created per channel) and, for one invoice,
         `number`. An `ANNOUNCEMENT` entry (`ANNOUNCEMENT_SENT`, feature 017) is about an announcement of the board:
@@ -9495,6 +9847,12 @@ components:
           description: >-
             For `CASH_INSUFFICIENT`: the earliest day that lowest cash balance is reached; absent on every other
             problem
+        failureCode:
+          allOf:
+            - $ref: '#/components/schemas/DeliveryFailureCode'
+          description: >-
+            For `INVITATION_NOT_SENT`: why the letter was not sent (`SMTP_AUTH_FAILED`, `SMTP_REJECTED`,
+            `CONNECTION_FAILED` or `SMTP_HOST_NOT_ALLOWED`, as for a delivery); absent on every other problem
 
     InvoiceBuildRequest:
       type: object
@@ -9913,6 +10271,8 @@ components:
           type: string
           description: >-
             Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
+            `TOO_SHORT` (under the minimum length, for example a password under 8 characters), `PASSWORD_POLICY` (the
+            sign-in service refused the password by its own rules),
             `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
             `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to),
             `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal

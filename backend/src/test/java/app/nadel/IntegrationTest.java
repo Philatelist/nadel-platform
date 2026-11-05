@@ -326,6 +326,9 @@ public abstract class IntegrationTest {
     @AfterEach
     void removeFixtureMembers() {
         for (Fixture fixture : createdMembers) {
+            // feature 020: an invitation leaves access and link rows, which the application may not delete
+            ownerJdbc().update("delete from member_invitation where member_id = ?", fixture.id());
+            ownerJdbc().update("delete from member_access where member_id = ?", fixture.id());
             inTenant(fixture.tenant(), sql -> {
                 sql.update("delete from member_role where member_id = ?", fixture.id());
                 return sql.update("delete from member where id = ?", fixture.id());

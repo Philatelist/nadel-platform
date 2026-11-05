@@ -34,6 +34,8 @@ class SecurityConfiguration {
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // feature 020: the set-password page has no token yet (the invitation token is in the body)
+                        .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(e -> e

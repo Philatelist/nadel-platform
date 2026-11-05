@@ -12,6 +12,7 @@
   "supportedLocales": ["uk", "en"],
   "defaultLocale": "uk",
   "accessTokenLifespan": 300,
+  "passwordPolicy": "length(8)",
   "roles": {
     "realm": [
       {
@@ -90,6 +91,23 @@
       ],
       "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "basic", "email"],
       "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "nadel-backend-admin",
+      "name": "Nadel Backend Admin",
+      "description": "Service account the backend uses to create and update users (Keycloak Admin API)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "nadel-backend-admin-dev-secret",
+      "protocol": "openid-connect",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": []
     }
   ],
   "users": [
@@ -198,6 +216,14 @@
         }
       ],
       "realmRoles": ["PLATFORM_OPERATOR"]
+    },
+    {
+      "username": "service-account-nadel-backend-admin",
+      "enabled": true,
+      "serviceAccountClientId": "nadel-backend-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users"]
+      }
     }
   ],
   "components": {

@@ -8,7 +8,11 @@
  * to refuse archiving a member ({@code plots} refuses a current owner), and {@link app.nadel.members.MemberImport},
  * which plans the member rows of an Excel import ({@code imports}), {@link app.nadel.members.MemberChannels}, the
  * member's own choice of channel ({@code notifications}), and the SPI {@link app.nadel.members.TelegramLinkStatus},
- * whether a member's Telegram is linked, implemented by {@code notifications}. The module also implements {@link app.nadel.identity.AccessProfileSource} for the
+ * whether a member's Telegram is linked, implemented by {@code notifications}, and the SPI
+ * {@link app.nadel.members.InvitationDelivery} with {@link app.nadel.members.InvitationDeliveryResult}, which sends the
+ * invitation into the system with its one-time link (feature 020), implemented by {@code notifications}. The module
+ * keeps each member's access to the system ({@code member_access}, {@code member_invitation}) and uses
+ * {@code identity.SignInAccounts} for the Keycloak accounts. The module also implements {@link app.nadel.identity.AccessProfileSource} for the
  * sign-in flow and {@link app.nadel.audit.ActorNames}, and serves {@code /members} and {@code /roles}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Members and roles")

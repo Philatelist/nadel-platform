@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
+import nadel.contract.model.DeliveryFailureCode;
 import nadel.contract.model.Problem;
 import nadel.contract.model.ProblemFieldError;
 import nadel.contract.model.RequisiteField;
@@ -56,6 +57,17 @@ public class ProblemWriter {
      */
     public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
             List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date) {
+        return body(status, code, detail, errors, missing, limit, balance, date, null);
+    }
+
+    /**
+     * The response body with every extension: besides {@code missing}, {@code limit}, {@code balance} and {@code date},
+     * the delivery failure of {@code INVITATION_NOT_SENT} ({@code failureCode}, a {@code DeliveryFailureCode}, left out
+     * when null).
+     */
+    public static Problem body(HttpStatusCode status, String code, String detail, List<FieldProblem> errors,
+            List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date,
+            @Nullable String failureCode) {
         var problem = new Problem();
         problem.setType("about:blank");
         problem.setTitle(title(status));
@@ -78,6 +90,9 @@ public class ProblemWriter {
         }
         if (date != null) {
             problem.setDate(date);
+        }
+        if (failureCode != null) {
+            problem.setFailureCode(DeliveryFailureCode.fromValue(failureCode));
         }
         return problem;
     }

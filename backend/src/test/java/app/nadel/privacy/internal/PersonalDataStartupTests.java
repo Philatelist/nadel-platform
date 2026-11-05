@@ -253,6 +253,8 @@ class PersonalDataStartupTests {
                         "--spring.flyway.locations=classpath:db/migration",
                         "--spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:0/realms/test",
                         "--server.port=0",
+                        // feature 020: every profile but dev needs the Keycloak admin secret to start
+                        "--nadel.keycloak.admin.client-secret=test-secret",
                         "--spring.main.banner-mode=off");
     }
 

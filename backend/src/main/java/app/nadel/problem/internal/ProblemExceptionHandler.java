@@ -46,7 +46,7 @@ class ProblemExceptionHandler extends ResponseEntityExceptionHandler {
             log.error("Answered {} with problem code {}", ex.status().value(), ex.code());
         }
         Problem body = ProblemWriter.body(ex.status(), ex.code(), ex.getMessage(), ex.errors(), ex.missing(),
-                ex.limit(), ex.balance(), ex.date());
+                ex.limit(), ex.balance(), ex.date(), ex.failureCode());
         HttpHeaders out = new HttpHeaders();
         out.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
         return new ResponseEntity<>(body, out, ex.status());

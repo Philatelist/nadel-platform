@@ -27,6 +27,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "and m.archivedAt is null")
     Optional<Member> findActiveBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);
 
+    /** The member (archived included) linked to the Keycloak subject; at most one ({@code member_tenant_subject_uq}). */
+    @Query("select m from Member m where m.tenantId = :tenantId and m.keycloakSubject = :subject")
+    Optional<Member> findAnyBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);
+
     /** The active member with this e-mail blind index; at most one (unique {@code member_tenant_email_bidx_uq}). */
     @Query("select m from Member m where m.tenantId = :tenantId and m.emailBidx = :emailBidx "
             + "and m.archivedAt is null")

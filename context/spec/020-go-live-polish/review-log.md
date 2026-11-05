@@ -16,3 +16,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `4ef6f02..cd9183b` | PASS | — | static; minor: TariffUsages.lastChargedDay map get, double query invalidation in DeleteTariff, LedgerTariffUsage ignores tenantId (RLS) |
+
+## Slice 3 — Archive a used tariff; new tariff form hints
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `cd9183b..ddf8c81` | PASS | — | static + offline compile OK; minor: long javadoc line in ChargeCalculator, redundant query invalidation in ArchiveTariffDialog, comment in TariffVersionChangeService |

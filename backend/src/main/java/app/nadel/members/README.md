@@ -79,6 +79,58 @@ e-mail index at the final flush, is 409 `IMPORT_STALE` (the import then asks for
 `ApiProblemException` to refuse. `plots` implements it (`OwnershipArchiveGuard`, 409 `MEMBER_OWNS_PLOT` while the member
 has a current ownership). A guard must only read and must take no lock that is ordered before a member lock.
 
+`InvitationDelivery` (feature 020) is an SPI implemented by `notifications`: `emailReady(tenantId)` (the cooperative's
+mailbox is set up) and `deliver(tenantId, memberId, email, link, expiresAt)`, which sends the invitation letter with the
+one-time link synchronously and answers `InvitationDeliveryResult` (the channels, or a `Failure`: `NOT_CONFIGURED` or
+a delivery code `SMTP_REJECTED`, `SMTP_AUTH_FAILED`, `CONNECTION_FAILED`, `SMTP_HOST_NOT_ALLOWED`). `InvitationDeliveries`
+reads it through an `ObjectProvider` (no implementation: no cooperative can invite). Synchronous on purpose: the link
+never enters the outbox.
+
+## Access to the system (feature 020)
+
+Tables `member_access` (one row per member: `state` `NONE` | `INVITED` | `ACTIVE` | `DISABLED` with `invited_at`,
+`activated_at`, `disabled_at`, `last_sign_in_at`; no row = never invited) and `member_invitation` (the links: only the
+SHA-256 of the token, the member's e-mail blind index at the time, `expires_at`, `sent_at`, `used_at`, `revoked_at`;
+the application may set only those three times and deletes nothing; one open sent link per member,
+`member_invitation_open_uq`), both under RLS (V36). `members_invitation_tenant(hash)` is the cross-tenant
+`SECURITY DEFINER` function that answers only the cooperative of a token hash (ADR 0020).
+
+- **Status** (`MemberAccessState`): `NONE` or no row is `NOT_INVITED`, except a member without a row who is linked to a
+  Keycloak subject (an account made by hand before feature 020, linked by the legacy sign-in): that member is `ACTIVE`.
+  V36 wrote `ACTIVE` for the members linked then; an invitation writes a row (`NONE`) before it links a subject.
+- **Card** (`MemberCards`, the only place that builds `Member` for output): `access` only for a viewer with
+  `MEMBERS_VIEW` (a member never sees it on their own card): `status`, `invitedAt`, `lastSignInAt`, `disabledAt` (only
+  for `DISABLED`) and `inviteBlockedBy` while the status allows an invitation (not `ACTIVE`): `EMAIL_MISSING` without an
+  e-mail, else `MAILBOX_NOT_CONFIGURED` when `InvitationDelivery.emailReady` is false.
+- **Invite** (`POST /members/{id}/invitation`, `InvitationController`, `MEMBERS_VIEW` and `MEMBERS_INVITE`;
+  `MemberInvitations.invite`), two-phase so a failed letter costs nothing: (1) a read checks 404, 409
+  `MEMBER_ARCHIVED`, `INVITATION_PENDING` (`INVITED`), `ACCESS_ALREADY_ACTIVE` (`ACTIVE`), `MEMBER_EMAIL_MISSING`,
+  `DELIVERY_NOT_CONFIGURED`; (2) outside any transaction `ensureAccount` with `identity.SignInAccounts`: an account of
+  the e-mail in another cooperative (or in none) is 409 `EMAIL_IN_OTHER_COOPERATIVE`; an account of this cooperative is
+  linked and turned on, unless another member of the cooperative holds it or this member is linked to another account
+  that still exists (409 `SIGN_IN_ACCOUNT_IN_USE`); otherwise a new account (no password, e-mail not verified,
+  `tenant_id`); (3) a transaction locks the member `FOR UPDATE`, checks again, sets `keycloak_subject` (the unique index
+  `member_tenant_subject_uq` maps to `SIGN_IN_ACCOUNT_IN_USE`) and inserts the link unsent; (4) outside any transaction
+  `InvitationDelivery.deliver` with `{nadel.web.url}/set-password?token=…`, valid `nadel.invitations.ttl` (72 h);
+  (5) a transaction revokes the member's older open links, marks the new one sent, sets `INVITED` + `invited_at` and
+  publishes the audit event `MEMBER_INVITED` (entity `MEMBER`, field `channels` only: `EMAIL`, later `EMAIL, TELEGRAM`).
+  A letter that is not sent revokes the unsent link in a compensating transaction and answers 502
+  `INVITATION_NOT_SENT` with `failureCode` (`NOT_CONFIGURED` is 409 `DELIVERY_NOT_CONFIGURED`): the state stays, nothing
+  is audited, an earlier link still works. Keycloak failures are 503 `SIGN_IN_SERVICE_UNAVAILABLE`. Resend and disable
+  answer 501 until slice 6.
+- **Tokens** (`InvitationTokens`): 32 bytes of `SecureRandom`, base64url without padding; stored as SHA-256 of the
+  text. The token, the link and the password never reach the audit log, the outbox, a log line or an exception.
+- **Public endpoints** (`PublicInvitationController`, `/api/v1/public/**` open in `identity`'s `SecurityConfiguration`,
+  token in the body): `POST /public/invitations/inspect` answers the e-mail of a usable link; `POST
+  /public/invitations/accept` (password 8..128, Bean Validation `TOO_SHORT` / `TOO_LONG`) hashes the token, finds the
+  cooperative with `members_invitation_tenant`, binds it with `TenantContext.runAs` and, in one transaction, locks the
+  member then the link, checks it (sent, not used, not revoked, not expired by the `Clock`, member active and `INVITED`,
+  link e-mail = the member's current `email_bidx`), sets the password (`reset-password`, a refused one is 400
+  `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true`, then
+  `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
+- **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
+  no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
+
 ## What is here
 
 - `MemberAccessProfileSource` implements `identity`'s `AccessProfileSource`: finds the active member for a token and
@@ -134,15 +186,15 @@ has a current ownership). A guard must only read and must take no lock that is o
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
 - Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
-  `GET /permissions` (`PermissionCatalog`: the nineteen permissions in enum order with English text), `GET /roles`
-  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all nineteen),
+  `GET /permissions` (`PermissionCatalog`: the thirty-two permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all thirty-two),
   `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
   member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
   every request, nothing is cached.
   - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
     (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
     `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
-  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all nineteen (a PUT with the full
+  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all thirty-two (a PUT with the full
     set is accepted and changes nothing, and its name can be changed); Treasurer and Member permissions and every
     description are editable. A PUT omits `description` = clears it.
   - Renaming (feature 004): every role, base roles included, can be renamed; names stay unique per cooperative ignoring
@@ -228,4 +280,4 @@ roles have no base code. Electrician is no longer a base role.
   the same contacts again; a listed member that does not exist is skipped. The demo users sign in by e-mail through
   `email_bidx`.
 
-Depends on `identity`, `problem`, `audit` and `privacy`.
+Depends on `identity`, `problem`, `audit`, `privacy` and `tenancy`.

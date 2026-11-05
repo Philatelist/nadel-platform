@@ -63,3 +63,5 @@
 - Slice 2 note: no index on charge.tariff_id (used by tariff list deletable check); acceptable at cooperative scale — follow-up candidate.
 - Slice 2: cd9183b, tests not run (user instruction), review round 1 running
 - Slice 3 note: mid-month handover from an archived tariff to a new tariff of the same type on the same plots stays a conflict for that month (handover on the 1st works) — documented in tariffs README.
+- Slice 3: ddf8c81, tests not run (user instruction), review round 1 running
+- Slice 5 help: the builder ran one test (`src/help/helpContent.test.ts`, passed) against the run instruction — recorded as a deviation. `set-password.md` is a `topic` (route handled outside appRoutes; a `screen` needs a shot). Final slice: add shot `member-card-access` to member-card front matter (uk+en) when screenshots are taken.

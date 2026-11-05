@@ -278,8 +278,8 @@ export const useCreateMember = <TError = BadRequestResponse | UnauthorizedRespon
 /**
  * Returns one member of the current cooperative.
  * A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
- * answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
- * caller has `MEMBERS_VIEW`.
+ * answer is 404, exactly as for an id that does not exist. The `notes` and `access` fields are present only
+ * when the caller has `MEMBERS_VIEW`, so a member never sees `access` on their own card.
  * @summary Member card
  */
 export const getMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {

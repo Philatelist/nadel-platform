@@ -67,6 +67,11 @@ docker compose -f infra/docker-compose.yml down -v
 make infra
 ```
 
+The realm also has the confidential client `nadel-backend-admin` (service account with `manage-users`,
+`view-users`, `query-users`; dev secret `nadel-backend-admin-dev-secret`) that the backend uses for the Keycloak
+Admin API, and the password policy `length(8)`. After pulling a change of the realm file run
+`docker compose -f infra/docker-compose.yml down -v` so it is re-imported.
+
 `down -v` deletes all local data (Postgres volume included). Cooperative roles are not Keycloak roles
 (ADR 0009); the realm only keeps `PLATFORM_OPERATOR`.
 

@@ -23,6 +23,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * transaction. The usual request is a single read-only transaction. The caller has bound the tenant, so the
  * tenant-aware transaction manager sets {@code app.tenant_id} for every transaction started here.
  * <p>
+ * A member whose stored access ({@link MemberAccessState}, feature 020) is {@code INVITED} (the password is not set
+ * yet) or {@code DISABLED} is refused at once, whatever Keycloak says. No row or {@code NONE} keeps the rules above:
+ * an account made by hand before feature 020 still links by its verified e-mail and then reads as {@code ACTIVE}.
+ * <p>
  * Logs only tenant ids, subjects and member ids: never names, phones or e-mail addresses.
  */
 @Service
@@ -33,14 +37,16 @@ class MemberAccessProfileSource implements AccessProfileSource {
     private final MemberRepository members;
     private final RoleGrantReader grants;
     private final MemberCrypto crypto;
+    private final MemberAccessState access;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
 
     MemberAccessProfileSource(MemberRepository members, RoleGrantReader grants, MemberCrypto crypto,
-            PlatformTransactionManager transactionManager) {
+            MemberAccessState access, PlatformTransactionManager transactionManager) {
         this.members = members;
         this.grants = grants;
         this.crypto = crypto;
+        this.access = access;
         this.reading = new TransactionTemplate(transactionManager);
         this.reading.setReadOnly(true);
         this.writing = new TransactionTemplate(transactionManager);
@@ -66,7 +72,20 @@ class MemberAccessProfileSource implements AccessProfileSource {
     }
 
     private Optional<AccessProfile> findBySubject(UUID tenantId, String subject) {
-        return members.findActiveBySubject(tenantId, subject).map(member -> profileOf(member, subject));
+        return members.findActiveBySubject(tenantId, subject).filter(this::mayEnter)
+                .map(member -> profileOf(member, subject));
+    }
+
+    /** Whether the stored access lets the member in: never while {@code INVITED} or {@code DISABLED}. */
+    private boolean mayEnter(Member member) {
+        Optional<MemberAccessState.State> state = access.find(member.getId()).map(MemberAccessState.Row::state);
+        if (state.isPresent() && (state.get() == MemberAccessState.State.INVITED
+                || state.get() == MemberAccessState.State.DISABLED)) {
+            log.info("Member {} of tenant {} has access {}: sign-in refused", member.getId(), member.getTenantId(),
+                    state.get());
+            return false;
+        }
+        return true;
     }
 
     private Optional<AccessProfile> linkByEmail(UUID tenantId, String subject, String email) {
@@ -77,6 +96,9 @@ class MemberAccessProfileSource implements AccessProfileSource {
             return Optional.empty();
         }
         Member member = candidate.get();
+        if (!mayEnter(member)) {
+            return Optional.empty();
+        }
         if (member.getKeycloakSubject() != null) {
             // Never relink: the e-mail belongs to a member that is bound to a Keycloak user already.
             if (!member.getKeycloakSubject().equals(subject)) {

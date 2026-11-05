@@ -33,23 +33,21 @@ class MemberCommands {
     private static final String EMAIL_INDEX = "member_tenant_email_bidx_uq";
 
     private final MemberRepository members;
-    private final RoleGrantReader grants;
     private final LastChairmanGuard lastChairman;
     private final List<MemberArchiveGuard> archiveGuards;
     private final MemberAuditPublisher audit;
     private final MemberCrypto crypto;
-    private final TelegramLinkFlags telegram;
+    private final MemberCards cards;
 
-    MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
+    MemberCommands(MemberRepository members, LastChairmanGuard lastChairman,
             List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto,
-            TelegramLinkFlags telegram) {
+            MemberCards cards) {
         this.members = members;
-        this.grants = grants;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
         this.audit = audit;
         this.crypto = crypto;
-        this.telegram = telegram;
+        this.cards = cards;
     }
 
     @Transactional
@@ -177,7 +175,7 @@ class MemberCommands {
     }
 
     private nadel.contract.model.Member card(Member member, OpenedContacts contacts, AccessProfile viewer) {
-        return MemberDtoMapper.toDto(member, contacts, grants.read(member), viewer, telegram.linked(member.getId()));
+        return cards.card(member, contacts, viewer);
     }
 
     private static MemberData withNotes(MemberData data, String notes) {

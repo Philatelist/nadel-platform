@@ -14,8 +14,8 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used:
 
 - `members`: `MemberDirectory` (names, contacts and channels; `activeIds` for an announcement to every member),
-  `MemberChannels` (the member's own channel choice); the SPI `TelegramLinkStatus` is implemented here by
-  `TelegramLinkStatusProvider`.
+  `MemberChannels` (the member's own channel choice); the SPIs `TelegramLinkStatus` and `InvitationDelivery`
+  (feature 020) are implemented here by `TelegramLinkStatusProvider` and `InvitationLetters`.
 - `documents`: `DocumentsFacade` (`latestInvoices`, `invoiceSummary`, `invoicePdf`, `invoiceForDay` for the bot's
   «Рахунок», `receiptPdf` for the cash receipt), `DocumentFormats` for the texts; the SPI `PaperRecipients` is
   implemented here by `PaperCopiesProvider`.
@@ -38,7 +38,8 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 - **Audit actions it publishes** (`audit.AuditEvent`): `DELIVERY_SETTINGS_CHANGED`, `TELEGRAM_LINKED`,
   `TELEGRAM_UNLINKED`, `INVOICES_SENT`, `ANNOUNCEMENT_SENT`. Never a secret, a chat id or an announcement's text.
 - **SPIs it implements:** `members.TelegramLinkStatus` (`TelegramLinkStatusProvider`), `documents.PaperRecipients`
-  (`PaperCopiesProvider`, which creates the print-time link codes).
+  (`PaperCopiesProvider`, which creates the print-time link codes), `members.InvitationDelivery` (`InvitationLetters`,
+  feature 020, below).
 - **Jobs and schedules:** the JobRunr job `DispatchDeliveries(tenantId, channel)` (`DispatchDeliveriesHandler` →
   `DeliveryDispatcher`); `@Scheduled` on every instance (`BotSchedule`): `BotSupervisor.tick` every 20 s and
   `DeliveryDispatcher.sweep` every minute.
@@ -48,6 +49,24 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
   `notifications_due_lanes(timestamptz)` (V30_1).
 - **Texts:** member messages and letters only from `resources/notifications/messages_uk.properties`
   (`NotificationTexts`, Ukrainian, ADR 0012); the server returns codes to the screens.
+
+## Invitation letters (feature 020)
+
+`InvitationLetters` implements `members.InvitationDelivery`, the letter «Задайте пароль» of an invitation into the
+system with its one-time set-password link:
+
+- `emailReady(tenantId)`: the cooperative's mailbox is set up (`DeliverySettingsService.current().emailConfigured()`,
+  bound with `TenantContext.runAs`).
+- `deliver(tenantId, memberId, email, link, expiresAt)`: synchronous, like the test letter (`DeliveryChecks`): the
+  opened mailbox (`DeliverySettingsService.mailbox`), the texts `invitation.subject` / `invitation.body` of
+  `messages_uk.properties` (the cooperative's name, the login, the link, the expiry in the cooperative's zone
+  `dd.MM.yyyy HH:mm`), plain text, sent through `Letters` (which checks the host with `SmtpHostPolicy` first). Answers
+  the channels (`EMAIL`) or the failure: `NOT_CONFIGURED` without a mailbox, else the `MailFailure` code
+  (`SMTP_REJECTED`, `SMTP_AUTH_FAILED`, `CONNECTION_FAILED`, `SMTP_HOST_NOT_ALLOWED`). Nothing goes through the delivery
+  register, the outbox or the audit log (the link is a secret); `members` audits `MEMBER_INVITED` with the channels.
+  The log has the cooperative id, the member id and the outcome code only.
+- Telegram: the bot copy of the link for a member with an active link comes in feature 020 slice 6 and adds
+  `TELEGRAM` to the channels.
 
 ## Endpoints (tag `notifications`)
 
