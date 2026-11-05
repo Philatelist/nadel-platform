@@ -41,7 +41,7 @@ At the top there is the link "{{ui:tariffs.back}}", then the tariff name, the ch
 
 ### The overlap warning
 
-If the tariff overlaps another tariff of the same type, you see a yellow message "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the tariffs in the block "{{ui:tariffs.scope.title}}".
+If the tariff overlaps another tariff of the same type, you see a yellow message "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the tariffs in the block "{{ui:tariffs.scope.title}}". The warning reads: "{{ui:tariffs.conflict.text}}"
 
 ### The block "{{ui:tariffs.scope.title}}"
 

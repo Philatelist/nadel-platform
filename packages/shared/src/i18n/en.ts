@@ -730,7 +730,7 @@ export const en = {
     frequency: { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', YEARLY: 'Yearly', ONE_OFF: 'One-off' },
     conflict: {
       overlaps: 'Overlaps with tariff',
-      text: '{count} plots are covered by both tariffs, so they are not charged until one of the scopes is changed.',
+      text: 'Tariffs of the same charge type cannot apply to the same plots. These plots are not being charged now. Change the plots of one of the tariffs or choose a different charge type.',
       plots: 'Plots',
       more: 'and {count} more',
     },
@@ -3428,6 +3428,7 @@ export const en = {
       converting: 'Converting the photo…',
       tooLarge: 'The file is too large. Maximum 5 MB.',
       tooMany: 'No more than 5 files.',
+      duplicate: 'This file is already attached',
       typeNotAllowed: 'Only photos (JPEG, PNG) and PDF are allowed.',
       heicFailed:
         'This browser cannot open HEIC photos from an iPhone. Add the photo in Safari, or on the iPhone turn on Settings → Camera → Formats → "Most Compatible" (photos will be JPEG).',

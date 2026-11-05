@@ -40,7 +40,7 @@ Open the screen with the {{ui:payments.enter}} button in the payment list or on 
 | {{ui:payments.form.source}} | {{ui:payments.source.CASH}} or {{ui:payments.source.BANK}}. |
 | {{ui:payments.form.receivedOn}} | Today by default. You can enter another date, but the warning "{{ui:payments.form.dateWarning}}" appears. A future date is not accepted. |
 | {{ui:payments.form.amount}} | More than zero, at most two decimals, for example 1250.50. |
-| {{ui:payments.form.payer}} | Optional. The plot owners come first ({{ui:payments.form.payerOwners}}), then {{ui:payments.form.payerOther}}. The option {{ui:payments.form.payerNone}} leaves the field empty. |
+| {{ui:payments.form.payer}} | Optional. The plot owners come first ({{ui:payments.form.payerOwners}}), then {{ui:payments.form.payerOther}}. The option {{ui:payments.form.payerNone}} leaves the field empty. If the plot has exactly one current owner, that owner is preselected as the payer; with several owners, choose the payer yourself (owners are listed first). |
 | {{ui:payments.form.note}} | Optional, up to 200 characters, for example the name of a relative who brought the money. This is personal data, so the note is stored encrypted and only a person who also has the right "View members" can see it. |
 | {{ui:payments.form.bankReference}} | Only for the source "{{ui:payments.source.BANK}}". Optional, up to 64 characters. |
 
@@ -52,7 +52,8 @@ The system pays the oldest debt first. If debts are from the same day, it follow
 
 - You can change the amount in any row.
 - The {{ui:payments.proposal.add}} button adds another open charge of this plot.
-- At the bottom you see how much is allocated: "{{ui:payments.proposal.allocatedTotal}} X {{ui:payments.proposal.of}} Y".
+- At the bottom you see how much is allocated: "{{ui:payments.proposal.allocatedTotal}} X {{ui:payments.proposal.of}} Y" (X allocated out of the payment amount Y).
+- If the amount in a row is larger than the charge balance, the line "More than the remaining {amount}" appears above the amount field with the balance.
 
 > [!important]
 > When automatic allocation of the prepayment is on in the settings, rows you leave empty do not become a prepayment: the free part of the payment goes straight to the oldest debts of the plot. The note "{{ui:payments.proposal.automaticNote}}" then stands under the "{{ui:payments.proposal.prepayment}}" row. A prepayment remains only when the plot has no open debts.
@@ -79,7 +80,7 @@ The {{ui:payments.form.save}} button records the payment. A payment is never del
 | {{ui:payments.problem.PLOT_ARCHIVED}} | The plot is archived. A payment cannot be entered for it. |
 | {{ui:payments.form.amountInvalid}} | Correct the amount: a number with at most two decimals. |
 | {{ui:payments.proposal.outdated}} | Someone changed the plot account between the preview and saving. Review the allocation again and save. |
-| The amount in a row is more than the charge balance | A message "More than the remaining" stands by the row. Reduce the amount to the balance. |
+| The amount in a row is more than the charge balance | The line "More than the remaining {amount}" stands above the amount field. Reduce the amount to the balance. |
 
 If any allocation row is wrong, the table stays on the screen, a message stands by the row, and you can save as soon as there are no errors. The total allocated cannot be more than the payment.
 

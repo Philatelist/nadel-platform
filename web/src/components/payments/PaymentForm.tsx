@@ -8,8 +8,9 @@ import {
 } from '@nadel/api-client';
 import { isZeroMoney, normalizeMoneyInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale, useT } from '../../i18n';
+import { usePlotPayerOwners } from '../../hooks/usePlotPayerOwners';
 import { kyivToday } from '../../kyivToday';
 import { problemCode } from '../../problem';
 import type { PickedMember } from '../ownership/MemberPicker';
@@ -82,6 +83,9 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
   const [receivedOn, setReceivedOn] = useState(today);
   const [amountText, setAmountText] = useState('');
   const [payer, setPayer] = useState<PickedMember | null>(null);
+  const payerTouched = useRef(false);
+  const { owners: plotOwners, soleOwnerId } = usePlotPayerOwners(plotId);
+  const soleOwner = plotOwners.find((o) => o.memberId === soleOwnerId);
   const [note, setNote] = useState('');
   const [reference, setReference] = useState('');
   const [edits, setEdits] = useState<Edits>(null);
@@ -93,6 +97,13 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     payments: SavedPayment[];
     plotNumbers: Record<string, string>;
   }>();
+
+  // The only owner of the plot pays by default, until the user touches the payer.
+  useEffect(() => {
+    if (!payerTouched.current && soleOwner !== undefined) {
+      setPayer({ id: soleOwner.memberId, name: soleOwner.memberName });
+    }
+  }, [soleOwner?.memberId, soleOwner?.memberName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const amount = normalizeMoneyInput(amountText);
   const typed = linesOf(edits);
@@ -294,6 +305,7 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     setSavedGroup(undefined);
     setSplitPayer(null);
     setAmountText('');
+    payerTouched.current = false;
     setPayer(null);
     setNote('');
     setReference('');
@@ -350,6 +362,7 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
               changeLabel={f.changePlot}
               onChange={(id) => {
                 setPlotId(id);
+                payerTouched.current = false;
                 setPayer(null);
                 resetProposal();
               }}
@@ -409,7 +422,10 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
             plotId={plotId}
             value={payer}
             error={errors.fields.payerMemberId}
-            onChange={setPayer}
+            onChange={(member) => {
+              payerTouched.current = true;
+              setPayer(member);
+            }}
           />
         )}
         <TextArea

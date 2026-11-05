@@ -53,7 +53,7 @@ The bases are: {{ui:tariffs.basis.PER_PLOT}}, {{ui:tariffs.basis.PER_AREA_SOTKA}
 
 ### The overlap warning
 
-Two tariffs of one charge type cannot apply to the same plot on the same day. If they do, a yellow warning appears under the tariff: "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the two tariffs on the [tariff card](help:tariff-card). While the overlap stays, those plots land in the queue ["Not charged"](help:not-charged).
+Two tariffs of one charge type cannot apply to the same plot on the same day. If they do, a yellow warning appears under the tariff: "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the two tariffs on the [tariff card](help:tariff-card). The warning reads: "{{ui:tariffs.conflict.text}}" So open the card of one of the tariffs and change its plots, or choose a different charge type. While the overlap stays, those plots land in the queue ["Not charged"](help:not-charged).
 
 ## Worked example
 
