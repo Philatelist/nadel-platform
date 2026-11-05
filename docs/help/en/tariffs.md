@@ -34,6 +34,10 @@ The chairman and the treasurer see this screen: those who have the "{{ui:permiss
 
 Both buttons are shown to the chairman only.
 
+### The "{{ui:tariffs.list.active}}" / "{{ui:tariffs.list.archived}}" switch
+
+Above the list there is the switch "{{ui:tariffs.list.statusLabel}}". "{{ui:tariffs.list.active}}" is shown by default. A tariff that was [archived](help:tariff-card) moves to "{{ui:tariffs.list.archived}}": there it carries the mark "{{ui:tariffs.archivedBadge}}" and shows the date until which it applied. If there are no archived tariffs, the screen says "{{ui:tariffs.list.noArchived}}".
+
 ### Blocks by charge type
 
 Each charge type has its own block with the type name. If the type is switched off, it carries the mark "{{ui:tariffs.inactive}}". Such a type stays in the list, but its tariffs give no expected amount.

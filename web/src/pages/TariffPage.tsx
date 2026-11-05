@@ -5,6 +5,7 @@ import {
   useGetTariff,
   type Tariff,
 } from '@nadel/api-client';
+import { formatDay, format } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -12,12 +13,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ChargeTypeName } from '../components/ChargeTypeName';
 import { UserContent, formatUser } from '../components/UserContent';
 import { QueryBoundary } from '../components/QueryBoundary';
+import { ArchiveTariffDialog } from '../components/tariffs/ArchiveTariffDialog';
 import { TariffConflicts } from '../components/tariffs/TariffConflicts';
 import { ScopeEditor } from '../components/tariffs/ScopeEditor';
 import { NewVersionForm } from '../components/tariffs/NewVersionForm';
 import { VersionHistory } from '../components/tariffs/VersionHistory';
 import { Badge, Button, Notice, PageHeader, Panel } from '../components/ui';
-import { useT } from '../i18n';
+import { useLocale, useT } from '../i18n';
 import { useCan } from '../me';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -66,10 +68,27 @@ function DeleteTariff({ tariff }: { tariff: Tariff }) {
   );
 }
 
+/** «Archive» for a used tariff (it cannot be deleted): opens the dialog asking for the day it stops applying. */
+function ArchiveTariff({ tariff }: { tariff: Tariff }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div>
+        <Button variant="secondary" onClick={() => setOpen(true)}>
+          {t.tariffs.archive.action}
+        </Button>
+      </div>
+      {open && <ArchiveTariffDialog tariff={tariff} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 /** `/tariffs/:id`: the tariff, its versions (newest first) and, with TARIFFS_MANAGE, a form for a new version. */
 export function TariffPage() {
   const { id = '' } = useParams();
   const t = useT();
+  const { locale } = useLocale();
   const canManage = useCan('TARIFFS_MANAGE');
   const query = useGetTariff(id);
   useDocumentTitle(query.data?.name ?? t.tariffs.title);
@@ -81,30 +100,45 @@ export function TariffPage() {
         {t.tariffs.back}
       </Link>
       <QueryBoundary query={query}>
-        {(tariff) => (
-          <>
-            <PageHeader
-              title={<UserContent>{tariff.name}</UserContent>}
-              description={
-                <>
-                  {c.chargeType}: <ChargeTypeName type={tariff.chargeType} />
-                </>
-              }
-              badge={!tariff.chargeType.active && <Badge tone="neutral">{t.tariffs.inactive}</Badge>}
-            />
-            <TariffConflicts conflicts={tariff.conflicts} />
-            <ScopeEditor tariff={tariff} />
-            <Panel title={c.history}>
-              <VersionHistory tariff={tariff} />
-            </Panel>
-            {canManage && (
-              <Panel title={c.newVersion}>
-                <NewVersionForm tariff={tariff} />
+        {(tariff) => {
+          const archived = tariff.archivedAt !== undefined;
+          return (
+            <>
+              <PageHeader
+                title={<UserContent>{tariff.name}</UserContent>}
+                description={
+                  <>
+                    {c.chargeType}: <ChargeTypeName type={tariff.chargeType} />
+                  </>
+                }
+                badge={
+                  archived ? (
+                    <Badge tone="neutral">{t.tariffs.archivedBadge}</Badge>
+                  ) : (
+                    !tariff.chargeType.active && <Badge tone="neutral">{t.tariffs.inactive}</Badge>
+                  )
+                }
+              />
+              {archived && tariff.validUntil && (
+                <Notice tone="warning">
+                  {format(t.tariffs.validUntil, { date: formatDay(tariff.validUntil, locale) })}
+                </Notice>
+              )}
+              <TariffConflicts conflicts={tariff.conflicts} />
+              <ScopeEditor tariff={tariff} readOnly={archived} />
+              <Panel title={c.history}>
+                <VersionHistory tariff={tariff} />
               </Panel>
-            )}
-            {canManage && tariff.deletable && <DeleteTariff tariff={tariff} />}
-          </>
-        )}
+              {canManage && !archived && (
+                <Panel title={c.newVersion}>
+                  <NewVersionForm tariff={tariff} />
+                </Panel>
+              )}
+              {canManage && !archived && tariff.deletable && <DeleteTariff tariff={tariff} />}
+              {canManage && !archived && !tariff.deletable && <ArchiveTariff tariff={tariff} />}
+            </>
+          );
+        }}
       </QueryBoundary>
     </div>
   );

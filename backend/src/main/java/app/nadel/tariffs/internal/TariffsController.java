@@ -7,11 +7,14 @@ import java.util.UUID;
 import nadel.contract.api.TariffsApi;
 import nadel.contract.model.PlotTariffs;
 import nadel.contract.model.Tariff;
+import nadel.contract.model.TariffArchive;
 import nadel.contract.model.TariffCreate;
+import nadel.contract.model.TariffListStatus;
 import nadel.contract.model.TariffScopeUpdate;
 import nadel.contract.model.TariffSummary;
 import nadel.contract.model.TariffVersion;
 import nadel.contract.model.TariffVersionCreate;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,8 +45,9 @@ class TariffsController implements TariffsApi {
 
     @Override
     @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW')")
-    public ResponseEntity<List<TariffSummary>> listTariffs() {
-        return ResponseEntity.ok(queries.list());
+    public ResponseEntity<List<TariffSummary>> listTariffs(@Nullable TariffListStatus status,
+            @Nullable UUID chargeTypeId) {
+        return ResponseEntity.ok(queries.list(status, chargeTypeId));
     }
 
     @Override
@@ -64,6 +68,12 @@ class TariffsController implements TariffsApi {
     public ResponseEntity<Void> deleteTariff(UUID id) {
         commands.deleteTariff(id, currentUser.profile());
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
+    public ResponseEntity<Tariff> archiveTariff(UUID id, TariffArchive tariffArchive) {
+        return ResponseEntity.ok(commands.archive(id, tariffArchive.getEndsOn(), currentUser.profile()));
     }
 
     @Override

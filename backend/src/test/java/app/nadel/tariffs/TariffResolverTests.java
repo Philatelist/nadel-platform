@@ -147,6 +147,46 @@ class TariffResolverTests {
     }
 
     @Test
+    void anArchivedTariffThatEndedBeforeTheRangeIsSkipped() {
+        TariffEntry old = ended(allPlots("Old", "2026-01-01"), "2026-09-30");
+        TariffEntry successor = allPlots("New", "2026-10-01");
+
+        assertThat(resolve(snapshot(true, false, old), plot(PLOT_7))).isEqualTo(new None(NoneReason.NO_TARIFF));
+        // the successor from the first day after the end takes over without a conflict
+        assertThat(resolve(snapshot(true, false, old, successor), plot(PLOT_7))).isEqualTo(new Single(successor));
+        // in September the old tariff still applies alone
+        assertThat(TariffResolver.resolve(snapshot(true, false, old, successor), MEMBERSHIP, plot(PLOT_7),
+                LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-30"))).isEqualTo(new Single(old));
+    }
+
+    @Test
+    void anArchivedTariffEndingInsideTheRangeStillApplies() {
+        TariffEntry endsMidMonth = ended(allPlots("Ends on the 15th", "2026-01-01"), "2026-10-15");
+        TariffEntry endsOnTheFirst = ended(allPlots("Ends on the 1st", "2026-01-01"), OCT_1.toString());
+
+        assertThat(resolve(snapshot(true, false, endsMidMonth), plot(PLOT_7))).isEqualTo(new Single(endsMidMonth));
+        assertThat(resolve(snapshot(true, false, endsOnTheFirst), plot(PLOT_7)))
+                .isEqualTo(new Single(endsOnTheFirst));
+    }
+
+    @Test
+    void theLastVersionOfAnArchivedTariffCarriesItsEnd() {
+        TariffEntry membership = ended(allPlots("Membership", "2026-01-01", "2026-06-01"), "2026-09-30");
+
+        assertThat(membership.terms()).extracting(VersionTerms::validTo)
+                .containsExactly(null, LocalDate.parse("2026-09-30"));
+        assertThat(membership.validWithin(LocalDate.parse("2026-09-30"), LocalDate.parse("2026-12-31"))).isTrue();
+        assertThat(membership.validWithin(OCT_1, OCT_31)).isFalse();
+        assertThat(allPlots("Active", "2026-01-01").terms()).extracting(VersionTerms::validTo).containsOnlyNulls();
+    }
+
+    /** The same tariff archived with {@code lastDay} as its {@code validUntil}. */
+    private static TariffEntry ended(TariffEntry tariff, String lastDay) {
+        return new TariffEntry(tariff.id(), tariff.chargeTypeId(), tariff.name(), tariff.scope(),
+                tariff.selectedPlots(), tariff.excludedPlots(), tariff.versions(), LocalDate.parse(lastDay));
+    }
+
+    @Test
     void aRangeEndsOnOrAfterItsFirstDay() {
         assertThatThrownBy(() -> TariffResolver.resolve(snapshot(true, false), MEMBERSHIP, plot(PLOT_7), OCT_31,
                 OCT_1)).isInstanceOf(IllegalArgumentException.class);

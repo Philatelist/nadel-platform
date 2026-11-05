@@ -62,7 +62,7 @@ class JpaTariffBook implements TariffBook {
                             Scope.valueOf(tariff.getScopeKind().name()),
                             plots(rows, TariffScopePlotRecord.Kind.SELECTED),
                             plots(rows, TariffScopePlotRecord.Kind.EXCLUDED),
-                            versionsByTariff.getOrDefault(tariff.getId(), List.of()));
+                            versionsByTariff.getOrDefault(tariff.getId(), List.of()), tariff.getValidUntil());
                 })
                 .toList();
         return new Snapshot(types, entries);

@@ -19,7 +19,7 @@ import type { Rate } from './rate';
 export interface TariffVersion {
   id: string;
   validFrom: string;
-  /** The day before the next version starts; absent for the last version */
+  /** The day before the next version starts; for the last version absent, or the tariff's `validUntil` when it is archived */
   validTo?: string;
   basis: Basis;
   frequency: Frequency;

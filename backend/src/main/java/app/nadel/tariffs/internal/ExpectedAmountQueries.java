@@ -15,6 +15,7 @@ import app.nadel.tariffs.ChargeCalculator;
 import app.nadel.tariffs.ExpectedCharge;
 import app.nadel.tariffs.VersionTerms;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -131,7 +132,7 @@ class ExpectedAmountQueries {
                 continue; // the plot is not among the selected plots
             }
             List<TariffVersionRecord> records = versionsByTariff.getOrDefault(tariff.getId(), List.of());
-            List<VersionTerms> terms = records.stream().map(ExpectedAmountQueries::terms).toList();
+            List<VersionTerms> terms = terms(records, tariff.getValidUntil());
             Optional<ExpectedCharge> charge = ChargeCalculator.calculate(terms, plot.areaM2(), month);
             if (charge.isEmpty()) {
                 continue; // no version applies in the month: the tariff is not listed
@@ -165,9 +166,18 @@ class ExpectedAmountQueries {
                 && ownedPlots.currentPlotsOf(memberId).stream().map(OwnedPlot::plotId).anyMatch(plotId::equals);
     }
 
-    private static VersionTerms terms(TariffVersionRecord version) {
-        return new VersionTerms(version.getValidFrom(), version.getBasis(), version.getFrequency(),
-                version.getRate(), version.getDueDate());
+    /**
+     * The terms of the versions, oldest first; the last one ends on the tariff's {@code validUntil} when it is archived
+     * (feature 020), so no month after the end is listed.
+     */
+    private static List<VersionTerms> terms(List<TariffVersionRecord> oldestFirst, @Nullable LocalDate validUntil) {
+        List<VersionTerms> terms = new ArrayList<>(oldestFirst.size());
+        for (int i = 0; i < oldestFirst.size(); i++) {
+            TariffVersionRecord version = oldestFirst.get(i);
+            terms.add(new VersionTerms(version.getValidFrom(), version.getBasis(), version.getFrequency(),
+                    version.getRate(), version.getDueDate(), i == oldestFirst.size() - 1 ? validUntil : null));
+        }
+        return terms;
     }
 
     private static PlotTariffItem item(TariffRecord tariff, ChargeTypeRecord type, VersionTerms shown) {

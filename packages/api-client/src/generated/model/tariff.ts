@@ -36,4 +36,8 @@ export interface Tariff {
   conflicts: TariffConflict[];
   /** As in the list */
   deletable: boolean;
+  /** As in the list; also `validTo` of the last version of an archived tariff */
+  validUntil?: string;
+  /** As in the list */
+  archivedAt?: string;
 }

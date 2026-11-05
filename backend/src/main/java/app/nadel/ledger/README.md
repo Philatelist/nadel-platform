@@ -667,7 +667,11 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   any basis, count only the days the plot is connected to water (`meters.WaterConnections.connectedDays`, read once
   per run for every chargeable plot and every month the run plans), so a plot that is not connected in the month gets
   no water charge and is never queued, and a connection that starts or ends inside the month splits the fee by days
-  (300.0000 a year from the 16th of October: 12.90). A retry of a month item uses the same days.
+  (300.0000 a year from the 16th of October: 12.90). A retry of a month item uses the same days. An archived tariff
+  (feature 020) ends on its `validUntil`: the resolver skips it for a month that starts after that day, and the
+  calculator counts its last version only up to it (`VersionTerms.lastDayOf`), so a tariff archived from the 1st of
+  March charges February as before and nothing for March; the reading charges (`ReadingChargeCalculator`), losses and
+  common consumers price only the days up to the end as well (see the `tariffs` README, Archiving a tariff).
 - **The charge:** kind `REGULAR`, source `TARIFF`, `tariff_id`, `source_key` `TARIFF:{tariff}:{plot}:{YYYY-MM}`, booked
   in the run month, service period = the first to the last day the versions count for, `accrued_on` = the first day of
   the month (a one-time fee: its due date), `created_by` the person who ran it, `calculation` `{amount, parts[{tariffVersionId,

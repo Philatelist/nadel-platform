@@ -61,3 +61,5 @@
 - Slice 4 realm/infra: `infra/stand/.env.example` could not be read by the builder (permission denied). Not worked around; left as a proposal for the owner (add `NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=` written by stand-init.sh; note `STAND_USER_PASSWORD` ≥ 8 chars).
 - AUTO: stand compose uses `${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:-}` instead of `:?` (compose interpolates all services before stand-init.sh writes the secret). Backend must treat a blank secret as missing (fail fast outside dev; never fall back to the dev secret when the env var is set but blank).
 - Slice 2 note: no index on charge.tariff_id (used by tariff list deletable check); acceptable at cooperative scale — follow-up candidate.
+- Slice 2: cd9183b, tests not run (user instruction), review round 1 running
+- Slice 3 note: mid-month handover from an archived tariff to a new tariff of the same type on the same plots stays a conflict for that month (handover on the 1st works) — documented in tariffs README.

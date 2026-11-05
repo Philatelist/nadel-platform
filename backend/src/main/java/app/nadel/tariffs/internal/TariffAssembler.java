@@ -117,6 +117,32 @@ class TariffAssembler {
     }
 
     /**
+     * The numbers of the plots in the scope of each tariff, by tariff id, in natural order of the number: the active
+     * plots that are not common land, for {@code ALL_PLOTS} minus the excluded ones, for {@code SELECTED_PLOTS} the
+     * selected ones; never narrowed to the plots with a meter (feature 020: the plots on which another tariff of the
+     * charge type would conflict, shown by the new tariff form). The chargeable plots are read once, in natural order.
+     */
+    Map<UUID, List<String>> plotNumbers(Collection<TariffRecord> tariffs) {
+        if (tariffs.isEmpty()) {
+            return Map.of();
+        }
+        List<PlotFacts> chargeable = plots.findChargeable();
+        Map<UUID, List<TariffScopePlotRecord>> byTariff = scopePlots.findOf(tariffs.stream().map(TariffRecord::getId)
+                .toList()).stream().collect(Collectors.groupingBy(TariffScopePlotRecord::getTariffId));
+        Map<UUID, List<String>> numbers = new HashMap<>();
+        for (TariffRecord tariff : tariffs) {
+            boolean all = tariff.getScopeKind() == ScopeKind.ALL_PLOTS;
+            Kind listed = all ? Kind.EXCLUDED : Kind.SELECTED;
+            Set<UUID> ids = byTariff.getOrDefault(tariff.getId(), List.of()).stream()
+                    .filter(row -> row.getKind() == listed).map(TariffScopePlotRecord::getPlotId)
+                    .collect(Collectors.toSet());
+            numbers.put(tariff.getId(), chargeable.stream().filter(plot -> all != ids.contains(plot.id()))
+                    .map(PlotFacts::number).toList());
+        }
+        return numbers;
+    }
+
+    /**
      * Counts the plots of tariffs, loading what all of them share once: the number of chargeable plots and, per
      * resource, the chargeable plots with an active meter.
      */

@@ -24,10 +24,10 @@ Here the chairman creates a new tariff together with its first version. A tariff
 The chairman sees the form: the one who has the "{{ui:permission.TARIFFS_MANAGE.name}}" permission. The treasurer sees tariffs but cannot create a new one.
 
 > [!important]
-> Two tariffs of one charge type cannot cover the same plots on the same day. The monthly water fee has its own type "{{ui:chargeTypes.defaultNames.WATER}}": a fixed amount per plot, and only connected plots pay. The electricity of the well pump is charged with the type "{{ui:chargeTypes.defaultNames.COMMON_CONSUMERS}}" with the split "{{ui:billing.common.split.CONNECTED_PLOTS}}". The type "{{ui:chargeTypes.defaultNames.WATER}}" may be switched off: then it is not in the list, and you must first [switch it on in the charge types](help:charge-types).
+> Two tariffs of one charge type cannot cover the same plots on the same day. The monthly water fee has its own type "{{ui:chargeTypes.defaultNames.WATER}}": a fixed amount per plot, and only connected plots pay. The electricity of the well pump is charged with the type "{{ui:chargeTypes.defaultNames.COMMON_CONSUMERS}}" with the split "{{ui:billing.common.split.CONNECTED_PLOTS}}". The type "{{ui:chargeTypes.defaultNames.WATER}}" may be switched off: then it is shown as "name (inactive — enable)", and choosing it switches it on (or [switch it on in the charge types](help:charge-types)).
 
 > [!important]
-> A tariff cannot be deleted. If you created a tariff by mistake, switch it off: on the [tariff card](help:tariff-card) make the plot list empty ("{{ui:tariffs.scope.selected}}" with no plot) or exclude all plots. Then the tariff is charged to nobody.
+> If you created a tariff by mistake and it has no charges yet, you can delete it on the [tariff card](help:tariff-card). If it has charges, it can only be archived.
 
 ## Every element
 
@@ -37,8 +37,10 @@ At the top there is the link "{{ui:tariffs.back}}".
 
 | Field | What to enter |
 |---|---|
-| {{ui:tariffs.form.chargeType}} | Required. The list has active types only. If there are no active types, the form is replaced with the message "{{ui:tariffs.form.noActiveTypes}}". |
+| {{ui:tariffs.form.chargeType}} | Required. The list has all types. A switched-off type is shown as "name (inactive — enable)": choosing it switches the type on when you save the tariff (the screen says "{{ui:tariffs.form.activating}}"), so you do not need to go to the type list. If there are no types, the form is replaced with the message "{{ui:tariffs.form.noActiveTypes}}". |
 | {{ui:tariffs.form.name}} | Required, up to 100 characters, for example "Для членів кооперативу". |
+
+Under the type field there is the hint "{{ui:tariffs.form.activeTariffs}}": the current tariffs of the chosen type with their plots (or "{{ui:tariffs.form.noPlots}}", "{{ui:tariffs.form.noActiveTariffs}}"). So you see before saving whether the new tariff would overlap an existing one. Next to it there is the link "{{ui:tariffs.form.missingType}} {{ui:tariffs.form.chargeTypesLink}}", which opens the [list of charge types](help:charge-types).
 
 ### The first version
 

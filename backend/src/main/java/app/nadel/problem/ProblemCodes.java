@@ -51,6 +51,10 @@ public final class ProblemCodes {
     public static final String TARIFF_LAST_VERSION = "TARIFF_LAST_VERSION";
     /** 409: a charge was made from a version of the tariff (a reversed one included), so it cannot be deleted. */
     public static final String TARIFF_IN_USE = "TARIFF_IN_USE";
+    /** 409: the tariff is archived; it gets no new version, version change or scope change and no second archive. */
+    public static final String TARIFF_ARCHIVED = "TARIFF_ARCHIVED";
+    /** 409: an unreversed charge was made from the tariff for the chosen end date or a later day. */
+    public static final String TARIFF_CHARGED_AFTER_END = "TARIFF_CHARGED_AFTER_END";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
@@ -324,6 +328,8 @@ public final class ProblemCodes {
     public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
     /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
     public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** The end date of a tariff archive that is not after the start of its last version (field {@code endsOn}). */
+    public static final String TARIFF_END_BEFORE_LAST_VERSION = "TARIFF_END_BEFORE_LAST_VERSION";
     /** An amount that must be greater than zero (an opening balance) is zero or negative. */
     public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
     /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */

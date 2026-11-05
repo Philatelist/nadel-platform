@@ -577,4 +577,50 @@ test.describe('tariffs: acceptance', () => {
       if (typeId) await api(page, 'POST', `/charge-types/${typeId}/archive`).catch(() => undefined);
     }
   });
+
+  test('the new tariff form lists the active tariffs of the chosen type; the archived tab opens', async ({
+    page,
+  }) => {
+    const stamp = Date.now().toString(36);
+    const typeName = `E2E тип ${stamp}`;
+    const tariffName = `E2E тариф ${stamp}`;
+    let typeId: string | undefined;
+    let tariffId: string | undefined;
+    await signIn(page, 'chairman@demo.local', 'uk');
+    try {
+      typeId = await newType(page, typeName);
+      await page.goto('/tariffs/new');
+      const typeSelect = main(page).getByLabel('Вид нарахування', { exact: true });
+      await typeSelect.selectOption({ label: typeName });
+      await expect(main(page).getByText('Діючі тарифи цього виду')).toBeVisible();
+      await expect(main(page).getByText('немає', { exact: true })).toBeVisible();
+      await expect(main(page).getByRole('link', { name: 'Види нарахувань', exact: true })).toHaveAttribute(
+        'href',
+        '/charge-types',
+      );
+
+      tariffId = await newTariff(page, typeId, tariffName, {
+        validFrom: '2099-01-01',
+        basis: 'PER_PLOT',
+        frequency: 'YEARLY',
+        rate: '50',
+      });
+      await page.goto('/tariffs/new');
+      await main(page).getByLabel('Вид нарахування', { exact: true }).selectOption({ label: typeName });
+      await expect(main(page).getByText(tariffName)).toBeVisible();
+
+      // the archived tab lists no active tariff
+      await page.goto('/tariffs');
+      await main(page).getByRole('button', { name: 'Архівні', exact: true }).click();
+      await expect(main(page).getByRole('button', { name: 'Архівні', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(main(page).getByText(tariffName)).toHaveCount(0);
+      // archiving itself needs a tariff with charges: covered by the backend integration tests
+    } finally {
+      if (tariffId) await api(page, 'DELETE', `/tariffs/${tariffId}`).catch(() => undefined);
+      if (typeId) await api(page, 'POST', `/charge-types/${typeId}/archive`).catch(() => undefined);
+    }
+  });
 });

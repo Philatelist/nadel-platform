@@ -76,6 +76,38 @@ class VersionTermsTests {
                 .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
+    void termsWithoutAnEndRunUntilTheNextVersion() {
+        VersionTerms first = new VersionTerms(FROM, Basis.PER_PLOT, Frequency.MONTHLY, RATE, null);
+        VersionTerms second = new VersionTerms(FROM.plusMonths(3), Basis.PER_PLOT, Frequency.MONTHLY, RATE, null);
+
+        assertThat(first.validTo()).isNull();
+        assertThat(VersionTerms.lastDayOf(List.of(first, second), 0)).isEqualTo(LocalDate.of(2027, 3, 31));
+        assertThat(VersionTerms.lastDayOf(List.of(first, second), 1)).isNull();
+    }
+
+    @Test
+    void theEndOfAnArchivedTariffEndsTheLastVersion() {
+        VersionTerms first = new VersionTerms(FROM, Basis.PER_PLOT, Frequency.MONTHLY, RATE, null);
+        VersionTerms last = new VersionTerms(FROM.plusMonths(3), Basis.PER_PLOT, Frequency.MONTHLY, RATE, null)
+                .endingOn(LocalDate.of(2027, 6, 30));
+
+        assertThat(last.validTo()).isEqualTo(LocalDate.of(2027, 6, 30));
+        assertThat(last.validFrom()).isEqualTo(FROM.plusMonths(3));
+        assertThat(VersionTerms.lastDayOf(List.of(first, last), 1)).isEqualTo(LocalDate.of(2027, 6, 30));
+        // an own end after the next version's start gives way to the day before it
+        VersionTerms longer = first.endingOn(LocalDate.of(2027, 12, 31));
+        assertThat(VersionTerms.lastDayOf(List.of(longer, last), 0)).isEqualTo(LocalDate.of(2027, 3, 31));
+    }
+
+    @Test
+    void aVersionCannotEndBeforeItStarts() {
+        assertThatThrownBy(() -> new VersionTerms(FROM, Basis.PER_PLOT, Frequency.MONTHLY, RATE, null,
+                FROM.minusDays(1))).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new VersionTerms(FROM, Basis.PER_PLOT, Frequency.MONTHLY, RATE, null, FROM).validTo())
+                .isEqualTo(FROM);
+    }
+
     private static List<Violation> violations(Basis basis, Frequency frequency, LocalDate dueDate) {
         assertThat(VersionTerms.violations(basis, frequency, dueDate)).isNotEmpty();
         try {

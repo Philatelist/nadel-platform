@@ -82,7 +82,7 @@ Every row has buttons (chairman only):
 | {{ui:tariffs.card.edit}} | Opens the form "{{ui:tariffs.card.editVersion}}" with the same fields as the [new tariff form](help:tariff-form). The button "{{ui:tariffs.card.save}}" saves. |
 | {{ui:tariffs.card.delete}} | Asks for confirmation "{{ui:tariffs.card.deleteTitle}}". This cannot be undone. |
 
-While a version has no charges, it can be corrected or deleted simply: you see "{{ui:tariffs.card.saved}}" or "{{ui:tariffs.card.deleted}}". The only version of a tariff cannot be deleted ("{{ui:problem.TARIFF_LAST_VERSION}}"): archive the tariff by switching off its plots, or add another version.
+While a version has no charges, it can be corrected or deleted simply: you see "{{ui:tariffs.card.saved}}" or "{{ui:tariffs.card.deleted}}". The only version of a tariff cannot be deleted ("{{ui:problem.TARIFF_LAST_VERSION}}"): add another version or, if the tariff is no longer needed, delete it (while it has no charges) or archive it.
 
 If a version already has charges, a hint "{{ui:tariffs.card.inUse}}" stands next to it. Then:
 
@@ -98,6 +98,18 @@ The "{{ui:tariffs.delete.action}}" button is shown only to people with the "{{ui
 3. The tariff disappears from the list together with all its versions. The change log gets the entry "{{ui:audit.action.TARIFF_DELETED}}".
 
 If the tariff is already used in charges, the system says: "{{ui:problem.TARIFF_IN_USE}}" Such a tariff can only be archived.
+
+### Archiving a tariff
+
+The "{{ui:tariffs.archive.action}}" button is shown only to people with the "{{ui:permission.TARIFFS_MANAGE.name}}" permission, and only for a tariff that already has charges (instead of "{{ui:tariffs.delete.action}}").
+
+1. Click "{{ui:tariffs.archive.action}}". The dialog "{{ui:tariffs.archive.title}}" opens.
+2. In the "{{ui:tariffs.archive.endsOn}}" field choose a date. The hint says: "{{ui:tariffs.archive.endsOnHint}}"
+3. Click "{{ui:tariffs.archive.confirm}}".
+
+The date must be after the start of the tariff's last version ("{{ui:validation.TARIFF_END_BEFORE_LAST_VERSION}}") and after the last day for which the tariff already has charges ("{{ui:problem.TARIFF_CHARGED_AFTER_END}}").
+
+From that date the tariff charges nothing: neither in the month run nor in other calculations. Charges before it stay. The tariff leaves the "{{ui:tariffs.list.active}}" list and appears under "{{ui:tariffs.list.archived}}" on the [Tariffs](help:tariffs) screen. The card shows the mark "{{ui:tariffs.archivedBadge}}" and "Valid until" with a date: the last day it applies, the day before the chosen date. The version history is read-only, and no new versions or plot changes are possible ("{{ui:problem.TARIFF_ARCHIVED}}"). Archiving cannot be undone. The change log gets the entry "{{ui:audit.action.TARIFF_ARCHIVED}}".
 
 ### The block "{{ui:tariffs.card.newVersion}}"
 

@@ -22,10 +22,12 @@ import org.jspecify.annotations.Nullable;
  * The days of an interval run from the day after the previous point to the day of the reading, both included
  * ({@code N} days). The consumption is spread evenly over them: each version of the tariff that is charged by the meter
  * ({@code PER_KWH} for electricity, {@code PER_M3} for water) gets {@code consumption x d / N} for the {@code d}
- * applicable days it is valid on, priced at its rate. Every part stays exact and the sum
- * {@code (sum of rate x d x numerator) / (N x denominator)} is rounded once by {@link Money#ofQuotient}; rounding each
- * part would give a different amount (7 kWh at 4.3250 and 1 kWh at 4.3350 is 34.61, not 34.62). Days that are not
- * applicable (for water: the days the plot is not connected) are dropped with their share of the consumption.
+ * applicable days it is valid on, priced at its rate (a version is valid until the day before the next one starts, the
+ * last one until the end of an archived tariff, {@link VersionTerms#lastDayOf}; days after that end are not covered).
+ * Every part stays exact and the sum {@code (sum of rate x d x numerator) / (N x denominator)} is rounded once by
+ * {@link Money#ofQuotient}; rounding each part would give a different amount (7 kWh at 4.3250 and 1 kWh at 4.3350 is
+ * 34.61, not 34.62). Days that are not applicable (for water: the days the plot is not connected) are dropped with
+ * their share of the consumption.
  * <p>
  * Fixed-percentage losses are a second amount over the same parts: {@code percent / 100} of each part's quantity at the
  * same rate, added exactly and rounded once on their own.
@@ -115,7 +117,7 @@ final class ReadingChargeCalculator {
         long covered = 0;
         for (int i = 0; i < sorted.size(); i++) {
             VersionTerms terms = sorted.get(i);
-            LocalDate validTo = i + 1 < sorted.size() ? sorted.get(i + 1).validFrom().minusDays(1) : null;
+            LocalDate validTo = VersionTerms.lastDayOf(sorted, i);
             LocalDate from = terms.validFrom().isAfter(first) ? terms.validFrom() : first;
             LocalDate to = validTo == null || validTo.isAfter(readingOn) ? readingOn : validTo;
             long days = applicable.count(from, to);

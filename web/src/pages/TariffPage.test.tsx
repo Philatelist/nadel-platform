@@ -12,6 +12,7 @@ const mutate = vi.fn();
 const updateMutate = vi.fn();
 const deleteMutate = vi.fn();
 const deleteTariffMutate = vi.fn();
+const archiveMutate = vi.fn();
 const navigate = vi.fn();
 let deleteTariffOptions: { mutation: { onError: (e: unknown) => void } };
 let options: { mutation: { onError: (e: unknown) => void } };
@@ -37,6 +38,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     deleteTariffOptions = o;
     return { mutate: deleteTariffMutate, isPending: false };
   },
+  useArchiveTariff: () => ({ mutate: archiveMutate, isPending: false }),
   useAddTariffVersion: (o: typeof options) => {
     options = o;
     return { mutate, isPending: false };
@@ -296,5 +298,36 @@ describe('TariffPage', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
     act(() => deleteTariffOptions.mutation.onError(new ApiError(409, { code: 'TARIFF_IN_USE' })));
     expect(screen.getByText(/already used in charges — it can only be archived/)).toBeInTheDocument();
+  });
+
+  it('offers archiving for a used tariff with TARIFFS_MANAGE and opens the dialog', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Delete tariff' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('hides archiving without TARIFFS_MANAGE and for a deletable tariff', () => {
+    permissions = ['TARIFFS_VIEW'];
+    const { unmount } = renderPage();
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    unmount();
+    permissions = ['TARIFFS_VIEW', 'TARIFFS_MANAGE'];
+    tariff = { ...tariff, deletable: true };
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+  });
+
+  it('shows an archived tariff read-only with its last day', () => {
+    tariff = { ...tariff, archivedAt: '2027-01-10T08:00:00Z', validUntil: '2027-02-28' };
+    renderPage();
+    expect(screen.getByText('Valid until 28 Feb 2027')).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+    for (const name of ['Archive', 'Delete tariff', 'Edit', 'Delete']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('form', { name: 'New version' })).not.toBeInTheDocument();
+    expect(screen.queryByText('New version')).not.toBeInTheDocument();
   });
 });

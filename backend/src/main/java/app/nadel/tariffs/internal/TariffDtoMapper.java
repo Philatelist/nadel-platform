@@ -1,6 +1,9 @@
 package app.nadel.tariffs.internal;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,10 +32,27 @@ final class TariffDtoMapper {
             LocalDate today, List<TariffScopePlot> selectedPlots, List<TariffExclusion> exclusions,
             @Nullable Long plotCount, List<TariffConflict> conflicts, boolean deletable) {
         var dto = new Tariff(tariff.getId(), tariff.getName(), ChargeTypeDtoMapper.toDto(chargeType),
-                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today), selectedPlots, exclusions,
-                conflicts, deletable);
+                scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, tariff.getValidUntil(), today),
+                selectedPlots, exclusions, conflicts, deletable);
         dto.setPlotCount(plotCount);
+        dto.setValidUntil(tariff.getValidUntil());
+        dto.setArchivedAt(archivedAt(tariff));
         return dto;
+    }
+
+    /** When the tariff was archived, in UTC; null for an active tariff. */
+    static @Nullable OffsetDateTime archivedAt(TariffRecord tariff) {
+        Instant archivedAt = tariff.getArchivedAt();
+        return archivedAt == null ? null : archivedAt.atOffset(ZoneOffset.UTC);
+    }
+
+    /**
+     * The last day of the version at {@code index}: the day before the next version starts; for the last version the
+     * tariff's {@code validUntil} (null while the tariff is active).
+     */
+    static @Nullable LocalDate validTo(List<TariffVersionRecord> oldestFirst, int index,
+            @Nullable LocalDate validUntil) {
+        return index + 1 < oldestFirst.size() ? oldestFirst.get(index + 1).getValidFrom().minusDays(1) : validUntil;
     }
 
     /** Index of the version valid on {@code today}, else of the earliest later one. {@code oldestFirst} is not empty. */
@@ -52,19 +72,19 @@ final class TariffDtoMapper {
 
     /**
      * The versions newest first. A version applies until the day before the next version starts, so its end is derived
-     * from the list and never stored.
+     * from the list and never stored; the last one ends on {@code validUntil} of an archived tariff (null: no end).
      */
-    static List<TariffVersion> versionsNewestFirst(List<TariffVersionRecord> oldestFirst, LocalDate today) {
+    static List<TariffVersion> versionsNewestFirst(List<TariffVersionRecord> oldestFirst,
+            @Nullable LocalDate validUntil, LocalDate today) {
         List<TariffVersion> result = new ArrayList<>(oldestFirst.size());
         for (int i = 0; i < oldestFirst.size(); i++) {
-            LocalDate validTo = i + 1 < oldestFirst.size() ? oldestFirst.get(i + 1).getValidFrom().minusDays(1) : null;
-            result.add(version(oldestFirst.get(i), validTo, today));
+            result.add(version(oldestFirst.get(i), validTo(oldestFirst, i, validUntil), today));
         }
         Collections.reverse(result);
         return result;
     }
 
-    static TariffVersion version(TariffVersionRecord version, LocalDate validTo, LocalDate today) {
+    static TariffVersion version(TariffVersionRecord version, @Nullable LocalDate validTo, LocalDate today) {
         var dto = new TariffVersion(version.getId(), version.getValidFrom(),
                 Basis.fromValue(version.getBasis().name()), Frequency.fromValue(version.getFrequency().name()),
                 version.getRate().toString(), version.getValidFrom().isBefore(today));

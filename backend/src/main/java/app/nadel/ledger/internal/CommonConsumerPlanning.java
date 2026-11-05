@@ -305,7 +305,7 @@ final class CommonConsumerPlanning {
             List<VersionTerms> versions = tariff.terms();
             for (int i = 0; i < versions.size(); i++) {
                 VersionTerms version = versions.get(i);
-                LocalDate validTo = i + 1 < versions.size() ? versions.get(i + 1).validFrom().minusDays(1) : null;
+                LocalDate validTo = VersionTerms.lastDayOf(versions, i);
                 if (version.basis() == Basis.PER_KWH && !version.validFrom().isAfter(to)
                         && (validTo == null || !validTo.isBefore(from))) {
                     return false;

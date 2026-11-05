@@ -128,6 +128,41 @@ class ReadingChargeCalculatorTests {
     }
 
     @Test
+    void daysAfterTheEndOfAnArchivedTariffAreNotCovered() {
+        // 02.10-31.10 (30 days); the tariff ends on 16.10 (feature 020): 15 days after it have no version
+        Result result = ReadingChargeCalculator.price(date("2026-10-01"), date("2026-10-31"),
+                consumption("1000", "1300"), List.of(kwh("2026-01-01", "4.3200").endingOn(date("2026-10-16"))),
+                Basis.PER_KWH, DaySet.ALL, null);
+
+        assertThat(result).isEqualTo(new NotCovered(15));
+    }
+
+    @Test
+    void anIntervalUpToTheEndOfAnArchivedTariffIsPricedAsBefore() {
+        // 02.10-16.10 (15 days), the tariff ends on 16.10: 150 kWh x 4.32 = 648.00
+        Priced priced = priced(ReadingChargeCalculator.price(date("2026-10-01"), date("2026-10-16"),
+                consumption("1000", "1150"), List.of(kwh("2026-01-01", "4.3200").endingOn(date("2026-10-16"))),
+                Basis.PER_KWH, DaySet.ALL, null));
+
+        assertThat(priced.amount()).hasToString("648.00");
+        assertThat(priced.parts()).singleElement().satisfies(part -> {
+            assertThat(part.days()).isEqualTo(15);
+            assertThat(part.to()).isEqualTo(date("2026-10-16"));
+        });
+    }
+
+    @Test
+    void theEndOfTheLastVersionKeepsAnEarlierVersionChange() {
+        // 4.32 until 16.10, 5.00 from 17.10 ending 31.10: the interval 02.10-31.10 is covered, 1 398.00 as before
+        Priced priced = priced(ReadingChargeCalculator.price(date("2026-10-01"), date("2026-10-31"),
+                consumption("1000", "1300"), List.of(kwh("2026-01-01", "4.3200"),
+                        kwh("2026-10-17", "5.0000").endingOn(date("2026-10-31"))),
+                Basis.PER_KWH, DaySet.ALL, null));
+
+        assertThat(priced.amount()).hasToString("1398.00");
+    }
+
+    @Test
     void aTariffNotChargedByTheMeterDoesNotApply() {
         Result result = ReadingChargeCalculator.price(date("2026-09-19"), date("2026-10-05"),
                 consumption("100", "160"), List.of(new VersionTerms(date("2026-01-01"), Basis.PER_PLOT,
