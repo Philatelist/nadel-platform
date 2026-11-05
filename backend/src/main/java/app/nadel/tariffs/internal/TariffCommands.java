@@ -18,11 +18,16 @@ import app.nadel.tariffs.TariffVersionUsage;
 import app.nadel.tariffs.VersionTerms;
 import app.nadel.tariffs.VersionTerms.Violation;
 import jakarta.persistence.EntityManager;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,11 +64,15 @@ import org.springframework.transaction.annotation.Transactional;
  * The changes themselves ({@link #add}, {@link #update}, {@link #delete}) run in the caller's transaction and return
  * the audit entry unpublished, so {@link TariffVersionChangeService} (a version change booked with a recalculation,
  * feature 012) applies them with the same locks and validation, without the use check.
+ * <p>
+ * A whole tariff is deleted ({@link #deleteTariff}) only while no charge was ever made from it ({@link TariffUsages},
+ * feature 020).
  */
 @Service
 class TariffCommands {
 
     private static final String DATE_INDEX = "tariff_version_valid_from_uq";
+    private static final String FOREIGN_KEY_VIOLATION = "23503";
     /** The audited fields of a version, in the order they are written. */
     private static final List<String> VERSION_FIELDS = List.of("validFrom", "basis", "frequency", "rate", "dueDate",
             "note");
@@ -78,10 +87,12 @@ class TariffCommands {
     private final EntityManager entityManager;
     private final Clock clock;
     private final List<TariffVersionUsage> usages;
+    private final TariffUsages tariffUsages;
 
     TariffCommands(TariffRepository tariffs, TariffVersionRepository versions, TariffScopePlotRepository scopePlots,
             ChargeTypeRepository chargeTypes, PlotCatalog plots, TariffAssembler assembler,
-            TariffAuditPublisher audit, EntityManager entityManager, Clock clock, List<TariffVersionUsage> usages) {
+            TariffAuditPublisher audit, EntityManager entityManager, Clock clock, List<TariffVersionUsage> usages,
+            TariffUsages tariffUsages) {
         this.tariffs = tariffs;
         this.versions = versions;
         this.scopePlots = scopePlots;
@@ -92,6 +103,7 @@ class TariffCommands {
         this.entityManager = entityManager;
         this.clock = clock;
         this.usages = usages;
+        this.tariffUsages = tariffUsages;
     }
 
     @Transactional
@@ -165,6 +177,67 @@ class TariffCommands {
         TariffVersionRecord version = version(tariff, versionId);
         checkUnused(version, actor);
         publish(delete(tariff, version, false, actor));
+    }
+
+    /**
+     * Deletes a tariff entered by mistake, with its scope rows and every version, softly deleted ones included
+     * (feature 020). Order: the tariff row {@code FOR UPDATE} (404 when missing or foreign); the use check through
+     * {@link TariffUsages} (409 {@code TARIFF_IN_USE} when any charge was ever made from it, a reversed one included);
+     * the scope rows, the versions, the tariff. The {@code ON DELETE RESTRICT} foreign keys of {@code charge} and
+     * {@code charge_part} are the last guard: their violation (SQLSTATE 23503) is the same 409. The charge type is not
+     * locked: deleting changes nothing a charge type or a month run reads, and a run that charges from the tariff holds
+     * it {@code FOR SHARE}, so this waits for it and then sees its charges. The audit entry {@code TARIFF_DELETED}
+     * holds the name.
+     */
+    @Transactional
+    void deleteTariff(UUID id, AccessProfile actor) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        TariffRecord tariff = lockTariff(id, actor);
+        if (tariffUsages.everCharged(tenantId, tariff.getId())) {
+            throw tariffInUse();
+        }
+        try {
+            scopePlots.deleteAllOfTariff(tariff.getId());
+            versions.deleteAllOfTariff(tariff.getId());
+            tariffs.delete(tariff);
+            tariffs.flush();
+        } catch (DataIntegrityViolationException e) {
+            if (isForeignKeyViolation(e)) {
+                throw tariffInUse();
+            }
+            throw e;
+        }
+        publish(actor, "TARIFF_DELETED", tariff, List.of(new FieldChange("name", tariff.getName(), null)));
+    }
+
+    private static ApiProblemException tariffInUse() {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_IN_USE,
+                "A charge was made from this tariff, so it cannot be deleted.");
+    }
+
+    /** Whether the failure, or anything it wraps, is a foreign key violation (SQLSTATE 23503). */
+    static boolean isForeignKeyViolation(Throwable failure) {
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Throwable> pending = new ArrayDeque<>();
+        pending.add(failure);
+        while (!pending.isEmpty()) {
+            Throwable t = pending.poll();
+            if (!seen.add(t)) {
+                continue;
+            }
+            if (t instanceof SQLException sql) {
+                if (FOREIGN_KEY_VIOLATION.equals(sql.getSQLState())) {
+                    return true;
+                }
+                if (sql.getNextException() != null) {
+                    pending.add(sql.getNextException());
+                }
+            }
+            if (t.getCause() != null) {
+                pending.add(t.getCause());
+            }
+        }
+        return false;
     }
 
     // ---- the changes themselves, shared with TariffVersionChanges (feature 012): in the caller's transaction

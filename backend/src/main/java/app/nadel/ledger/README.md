@@ -1179,6 +1179,12 @@ reversal of those charges it is free again. An adjustment writes the parts of it
 count as used too. It replaces the stub `tariffs/internal/NoChargesYetUsage`. A used version is changed only together
 with a recalculation (`TARIFF_VERSION_*` causes, `tariffs.TariffVersionChanges`, which skips this check).
 
+`LedgerTariffUsage` implements `tariffs.TariffUsage` (feature 020) for whole tariffs, from the ledger's tables only (the
+caller passes the version ids, softly deleted ones included): `everCharged` is any `charge` row naming the tariff or any
+`charge_part` priced by one of its versions, reversed charges and reversals included, so a tariff ever charged from is
+never deleted (409 `TARIFF_IN_USE`); `lastChargedDay` is the latest `service_to` of the regular charges made from it that
+no reversal cancels (the archive date check). Tests: `TariffDeleteTests`, `internal.LedgerTariffUsageTests`.
+
 ## Plot status
 
 `PlotStatusRefresher` listens to `ChargesBooked` and `PaymentsChanged` with the ADR 0007 pattern (`@Async

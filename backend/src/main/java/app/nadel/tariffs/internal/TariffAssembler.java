@@ -43,21 +43,24 @@ class TariffAssembler {
     private final PlotCatalog plots;
     private final MeterCatalog meters;
     private final TariffConflicts conflicts;
+    private final TariffUsages usages;
     private final Clock clock;
 
     TariffAssembler(TariffVersionRepository versions, TariffScopePlotRepository scopePlots, PlotCatalog plots,
-            MeterCatalog meters, TariffConflicts conflicts, Clock clock) {
+            MeterCatalog meters, TariffConflicts conflicts, TariffUsages usages, Clock clock) {
         this.versions = versions;
         this.scopePlots = scopePlots;
         this.plots = plots;
         this.meters = meters;
         this.conflicts = conflicts;
+        this.usages = usages;
         this.clock = clock;
     }
 
     /**
-     * The tariff with every version newest first, its scope in natural order of the plot numbers, the count and its
-     * conflicts with other tariffs of the charge type.
+     * The tariff with every version newest first, its scope in natural order of the plot numbers, the count, its
+     * conflicts with other tariffs of the charge type and {@code deletable} (no charge was ever made from it,
+     * {@link TariffUsages}).
      */
     Tariff assemble(TariffRecord tariff, ChargeTypeRecord chargeType) {
         LocalDate today = LocalDate.now(clock);
@@ -85,8 +88,9 @@ class TariffAssembler {
                     oldestFirst.get(TariffDtoMapper.shownIndex(oldestFirst, today)).getBasis());
             count = new Counter().count(tariff, resource, rows, facts);
         }
+        boolean deletable = !usages.everCharged(tariff.getTenantId(), tariff.getId());
         return TariffDtoMapper.toDto(tariff, chargeType, oldestFirst, today, selected, excluded, count,
-                conflicts.of(List.of(tariff.getId())).get(tariff.getId()));
+                conflicts.of(List.of(tariff.getId())).get(tariff.getId()), deletable);
     }
 
     /**

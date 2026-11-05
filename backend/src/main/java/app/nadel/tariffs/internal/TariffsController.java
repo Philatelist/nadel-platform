@@ -61,6 +61,13 @@ class TariffsController implements TariffsApi {
 
     @Override
     @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
+    public ResponseEntity<Void> deleteTariff(UUID id) {
+        commands.deleteTariff(id, currentUser.profile());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('PERM_TARIFFS_VIEW') and hasAuthority('PERM_TARIFFS_MANAGE')")
     public ResponseEntity<TariffVersion> addTariffVersion(UUID id, TariffVersionCreate tariffVersionCreate) {
         TariffVersion created = commands.addVersion(id, tariffVersionCreate, currentUser.profile());
         return ResponseEntity.created(URI.create("/api/v1/tariffs/" + id)).body(created);

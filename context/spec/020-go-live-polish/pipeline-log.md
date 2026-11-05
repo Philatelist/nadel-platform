@@ -57,3 +57,7 @@
 - Functional spec written (Creation Mode, no markers left).
 - Tech: specialists spring-backend, react-frontend, devops-infra drafted in parallel (exploration from Phase 1 Agent B reused). Assumptions (TC §5): client id `nadel-backend-admin`; Keycloak tests via GenericContainer (no new dependency); stored access state; first-chairman command not limited to prod/staging profiles; archived = archived_at set; no un-archive; separate V35 (tariffs) and V36 (invitations).
 - Tasks: 9 slices; no per-slice Verify (user instruction; same pattern as 019); Feature Testing & Regression → testing-expert. No staffing gaps. `<!-- not-user-reviewed -->` marker not written (pipeline removes it; Phase 1 answers stand in for review).
+- Slice 1: 4ef6f02, tests not run (user instruction), review round 1 running
+- Slice 4 realm/infra: `infra/stand/.env.example` could not be read by the builder (permission denied). Not worked around; left as a proposal for the owner (add `NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=` written by stand-init.sh; note `STAND_USER_PASSWORD` ≥ 8 chars).
+- AUTO: stand compose uses `${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:-}` instead of `:?` (compose interpolates all services before stand-init.sh writes the secret). Backend must treat a blank secret as missing (fail fast outside dev; never fall back to the dev secret when the env var is set but blank).
+- Slice 2 note: no index on charge.tariff_id (used by tariff list deletable check); acceptable at cooperative scale — follow-up candidate.

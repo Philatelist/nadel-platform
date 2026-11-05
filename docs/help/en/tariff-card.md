@@ -66,7 +66,7 @@ The button "{{ui:tariffs.scope.edit}}" (chairman only) opens the editor:
 Editor errors: "{{ui:tariffs.scope.errors.TARIFF_COMMON_LAND}}", "{{ui:tariffs.scope.errors.PLOT_ARCHIVED}}", "{{ui:tariffs.scope.errors.UNKNOWN_PLOT}}", "{{ui:tariffs.scope.errors.DUPLICATE}}" (the plot is given twice) and "{{ui:tariffs.scope.errors.TOO_LONG}}". Correct the row next to which they appear.
 
 > [!important]
-> A tariff cannot be deleted. If a tariff was created by mistake, switch it off: choose "{{ui:tariffs.scope.selected}}" and add no plot, or exclude all plots. Then it is charged to nobody.
+> If a tariff was created by mistake and has never produced a charge, you can delete it (see below). If it has produced charges, it can only be archived.
 
 > [!important]
 > Two tariffs of one type cannot apply to the same plot on the same day. Tariffs per kWh and per m³ apply only to plots that have a meter of that resource: on the plot card, where there is none, you see "{{ui:tariffs.expected.noMeter}}".
@@ -88,6 +88,16 @@ If a version already has charges, a hint "{{ui:tariffs.card.inUse}}" stands next
 
 - the chairman who can recalculate (the "{{ui:permission.RECALCULATION_RUN.name}}" permission), after "{{ui:tariffs.card.save}}" or the delete confirmation, sees the recalculation preview step: what will change in past charges. The version change and the recalculation are saved together or not at all. The action is completed by the button "{{ui:recalculation.step.book}}" after entering the reason. More on the page [New recalculation](help:recalculation-new);
 - without that permission the system says "{{ui:problem.TARIFF_VERSION_IN_USE}}" and changes nothing.
+
+### Deleting a tariff
+
+The "{{ui:tariffs.delete.action}}" button is shown only to people with the "{{ui:permission.TARIFFS_MANAGE.name}}" permission, and only for a tariff that has never produced a charge. Reversed charges count too: if a charge ever existed, the tariff is already used.
+
+1. Click "{{ui:tariffs.delete.action}}".
+2. Confirm: "Delete tariff "name" with all its versions? This cannot be undone." The name in the question is the name of your tariff.
+3. The tariff disappears from the list together with all its versions. The change log gets the entry "{{ui:audit.action.TARIFF_DELETED}}".
+
+If the tariff is already used in charges, the system says: "{{ui:problem.TARIFF_IN_USE}}" Such a tariff can only be archived.
 
 ### The block "{{ui:tariffs.card.newVersion}}"
 

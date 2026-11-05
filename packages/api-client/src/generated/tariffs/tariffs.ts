@@ -372,7 +372,85 @@ export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TErr
 
 
 
-export const getAddTariffVersionUrl = (id: string,) => {
+export const getDeleteTariffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}`
+}
+
+/**
+ * Deletes a tariff entered by mistake together with all its versions and its scope (selected and excluded plots).
+ * Only a tariff from which no charge was ever made can be deleted (`deletable`): a charge or a charge part made
+ * from any of its versions, a reversed one included, refuses it with 409 `TARIFF_IN_USE` (archive the tariff
+ * instead). A tariff of another cooperative or an unknown id is 404. Requires `TARIFFS_VIEW` and
+ * `TARIFFS_MANAGE`; the deletion is written to the audit log (`TARIFF_DELETED`, with the tariff's name).
+ * @summary Delete a tariff that was never charged
+ */
+export const deleteTariff = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeleteTariffUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTariffMutationKey = () => ['deleteTariff'] as const;
+
+export const getDeleteTariffMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTariffMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTariff>>, DeleteTariffMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTariff(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTariffMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTariff>>>
+
+    export type DeleteTariffMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type DeleteTariffMutationVariables = {id: string}
+
+    /**
+ * @summary Delete a tariff that was never charged
+ */
+export const useDeleteTariff = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTariff>>,
+        TError,
+        DeleteTariffMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTariffMutationOptions(options), queryClient);
+    }
+    export const getAddTariffVersionUrl = (id: string,) => {
 
 
 

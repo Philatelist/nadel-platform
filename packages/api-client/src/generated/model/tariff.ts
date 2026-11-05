@@ -34,4 +34,6 @@ export interface Tariff {
   plotCount?: number;
   /** As in the list */
   conflicts: TariffConflict[];
+  /** As in the list */
+  deletable: boolean;
 }

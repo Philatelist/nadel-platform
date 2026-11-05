@@ -532,4 +532,49 @@ test.describe('tariffs: acceptance', () => {
       await archiveLeftovers(page, plots, [], kyivDay(0));
     }
   });
+
+  test('a tariff without charges is deleted from its page, a demo tariff with charges has no delete button', async ({
+    page,
+  }) => {
+    const stamp = Date.now().toString(36);
+    const typeName = `E2E тип ${stamp}`;
+    const tariffName = `E2E тариф ${stamp}`;
+    let typeId: string | undefined;
+    let tariffId: string | undefined;
+    await signIn(page, 'chairman@demo.local', 'uk');
+    try {
+      typeId = await newType(page, typeName);
+      tariffId = await newTariff(page, typeId, tariffName, {
+        validFrom: '2099-01-01',
+        basis: 'PER_PLOT',
+        frequency: 'YEARLY',
+        rate: '50',
+      });
+      await page.goto(`/tariffs/${tariffId}`);
+      await expect(page.getByRole('heading', { level: 1, name: tariffName })).toBeVisible();
+      await main(page).getByRole('button', { name: 'Видалити тариф', exact: true }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toContainText(`Видалити тариф «${tariffName}» разом з усіма версіями?`);
+      await dialog.getByRole('button', { name: 'Видалити', exact: true }).click();
+      await expect(page).toHaveURL(/\/tariffs$/);
+      await expect(main(page).getByText(tariffName)).toHaveCount(0);
+      const gone = await api(page, 'GET', `/tariffs/${tariffId}`);
+      expect(gone.status).toBe(404);
+      tariffId = undefined;
+
+      // a demo tariff that already has charges is not deletable
+      const listed = expectCreated<{ id: string; deletable: boolean }[]>(
+        await api(page, 'GET', '/tariffs'),
+        200,
+      );
+      const used = listed.find((x) => !x.deletable);
+      expect(used).toBeTruthy();
+      await page.goto(`/tariffs/${used!.id}`);
+      await expect(main(page).getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(main(page).getByRole('button', { name: 'Видалити тариф', exact: true })).toHaveCount(0);
+    } finally {
+      if (tariffId) await api(page, 'DELETE', `/tariffs/${tariffId}`).catch(() => undefined);
+      if (typeId) await api(page, 'POST', `/charge-types/${typeId}/archive`).catch(() => undefined);
+    }
+  });
 });

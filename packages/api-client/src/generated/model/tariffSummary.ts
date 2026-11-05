@@ -26,4 +26,6 @@ export interface TariffSummary {
   plotCount?: number;
   /** The other tariffs of the same charge type that apply to some of the same active plots, ordered by name; empty when there is no conflict or the charge type is inactive */
   conflicts: TariffConflict[];
+  /** True when no charge was ever made from any version of the tariff (a reversed one counts as made), so it may be deleted (`DELETE /tariffs/{id}`); otherwise it is archived instead */
+  deletable: boolean;
 }

@@ -164,7 +164,7 @@ problem.
 - `Permission` enum + `MEMBERS_INVITE`. `AuditAction` + `MEMBER_INVITED`, `MEMBER_INVITE_RESENT`,
   `MEMBER_ACCESS_DISABLED`, `TARIFF_DELETED`, `TARIFF_ARCHIVED`. `ProblemCodes` gets the new codes.
 
-### 2.5 Database — `V35__member_invitations_and_tariff_archive.sql`
+### 2.5 Database — `V35__tariff_delete_and_archive.sql` (tariff rows) and `V36__member_invitations.sql` (the rest)
 
 | Table / object | Key columns | Notes |
 |---|---|---|

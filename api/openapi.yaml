@@ -2362,6 +2362,35 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    delete:
+      tags: [tariffs]
+      operationId: deleteTariff
+      summary: Delete a tariff that was never charged
+      description: |
+        Deletes a tariff entered by mistake together with all its versions and its scope (selected and excluded plots).
+        Only a tariff from which no charge was ever made can be deleted (`deletable`): a charge or a charge part made
+        from any of its versions, a reversed one included, refuses it with 409 `TARIFF_IN_USE` (archive the tariff
+        instead). A tariff of another cooperative or an unknown id is 404. Requires `TARIFFS_VIEW` and
+        `TARIFFS_MANAGE`; the deletion is written to the audit log (`TARIFF_DELETED`, with the tariff's name).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /tariffs/{id}/versions:
     post:
       tags: [tariffs]
@@ -7614,7 +7643,8 @@ components:
         `CHARGE_TYPE_ORDER_STALE`), a tariff version with the same start date exists (code
         `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), a tariff version is corrected or deleted
         although a charge uses it (code `TARIFF_VERSION_IN_USE`), the only version of a tariff is deleted (code
-        `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
+        `TARIFF_LAST_VERSION`), or a tariff from which a charge was made (a reversed one included) is deleted (code
+        `TARIFF_IN_USE`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
         changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a plot that has a meter is
         deleted or turned into common land, or a plot with an active meter is archived (code `PLOT_HAS_METER`, with
         `errors[{field: kind}]` for the update), or a plot with a lasting water connection is archived or turned into
@@ -8443,6 +8473,7 @@ components:
         - TARIFF_SCOPE_CHANGED
         - TARIFF_EXCLUSION_ADDED
         - TARIFF_EXCLUSION_REMOVED
+        - TARIFF_DELETED
         - METER_REGISTERED
         - METER_UPDATED
         - METER_REMOVED
@@ -10107,7 +10138,7 @@ components:
     TariffSummary:
       type: object
       description: A tariff in the list, with the version that is shown
-      required: [id, name, chargeTypeId, scopeKind, version, conflicts]
+      required: [id, name, chargeTypeId, scopeKind, version, conflicts, deletable]
       properties:
         id:
           type: string
@@ -10134,11 +10165,16 @@ components:
             empty when there is no conflict or the charge type is inactive
           items:
             $ref: '#/components/schemas/TariffConflict'
+        deletable:
+          type: boolean
+          description: >-
+            True when no charge was ever made from any version of the tariff (a reversed one counts as made), so it
+            may be deleted (`DELETE /tariffs/{id}`); otherwise it is archived instead
 
     Tariff:
       type: object
       description: A tariff with its charge type, all versions and its scope
-      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts]
+      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts, deletable]
       properties:
         id:
           type: string
@@ -10176,6 +10212,9 @@ components:
           description: As in the list
           items:
             $ref: '#/components/schemas/TariffConflict'
+        deletable:
+          type: boolean
+          description: As in the list
 
     ExpectedChargeStatus:
       type: string

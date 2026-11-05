@@ -13,7 +13,9 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 | `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version; `deleted_at` (V19) marks a used version deleted softly by a recalculation (feature 012), and the unique start date applies only to versions that are not deleted |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
-All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`.
+All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type`;
+on `tariff` V35 (feature 020) grants `DELETE`, so a tariff no charge was ever made from can be deleted (see Deleting a
+tariff), and `TRUNCATE` stays revoked.
 `tariff_version` had no `UPDATE`/`DELETE` in V10; V11 grants both so a version can be corrected or deleted until a charge
 uses it (see Correcting a version). `TRUNCATE` stays revoked on all four, and RLS limits both statements to the caller's
 cooperative.
@@ -23,7 +25,7 @@ cooperative.
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
 `Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), `DaySet` (pure: sorted disjoint
 closed date ranges, `ALL`, `NONE`, `of`, `count`, `intersect`, `contains`, `first`, `last`), `TariffResolver` (pure),
-the port `TariffVersionUsage`, the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
+the ports `TariffVersionUsage` and `TariffUsage` (feature 020, see Deleting a tariff), the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
 (implemented by `JpaTariffBook`), the facade `TariffVersionChanges` (feature 012, see Correcting a used version), and
 the read facade of the reports `ExpectedAmounts` with `YearExpectation` and `VersionShare` (feature 013, see Expected
 amounts of a year); everything else is in `internal`. Feature 011 (the ledger) calls the same
@@ -68,6 +70,7 @@ Tag `tariffs` (`TariffsController`):
 | `GET /tariffs` | `listTariffs` | `TARIFFS_VIEW` |
 | `POST /tariffs` | `createTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
+| `DELETE /tariffs/{id}` | `deleteTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `PUT /tariffs/{id}/versions/{versionId}` | `updateTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `DELETE /tariffs/{id}/versions/{versionId}` | `deleteTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
@@ -96,8 +99,10 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 ## Tariffs and versions
 
 - A tariff is created together with its first version (`TariffCommands.create`, one transaction) and applies to all
-  plots until its scope is changed. Tariffs are never renamed or deleted. A change of rate is a new version; a mistake in a
-  version is corrected or the version deleted until a charge uses it (below).
+  plots until its scope is changed. Tariffs are never renamed. A tariff from which no charge was ever made (a reversed
+  charge counts as made) may be deleted as a whole, with its versions and scope (see Deleting a tariff); any other tariff
+  stays. A change of rate is a new version; a mistake in a version is corrected or the version deleted until a charge
+  uses it (below).
 - `VersionTerms` (module root) holds the terms of a version and enforces `FIXED_ONE_TIME` iff `ONE_OFF` iff a due date.
   The controller maps its violations to field codes of `400 VALIDATION_FAILED`: `frequency` `FREQUENCY_BASIS_MISMATCH`,
   `dueDate` `REQUIRED` (a one-time amount without a due date) and `dueDate` `INVALID` (a due date with any other
@@ -196,6 +201,45 @@ tenant-aware transaction with the tariff row locked `FOR UPDATE`; the ledger wri
 `FOR SHARE` (`TariffBook.lockShared`), so a correction waits for a run and then sees its charges. The
 `TARIFF_VERSION_IN_USE` tests against the real implementation are `ledger.TariffVersionUsageTests`; here a test bean
 stands in (`TariffVersionCorrectionTests`).
+
+## Deleting a tariff (feature 020)
+
+`DELETE /tariffs/{id}` (`TariffCommands.deleteTariff`, one transaction) removes a tariff entered by mistake, answering
+204. The rule: a tariff can be deleted only while no charge was ever made from it, from any of its versions; a reversed
+charge counts (the ledger is append-only and keeps it, and the audit trail must stay explainable). A used tariff is
+archived instead (slice 3).
+
+- **Order.** The tariff row `FOR UPDATE` (404 when unknown or of another cooperative; RLS); the use check through
+  `TariffUsages` (409 `TARIFF_IN_USE`); then the scope rows (`tariff_scope_plot`), every version (`tariff_version`,
+  native, so the softly deleted ones go too) and the tariff. The charge type is not locked and may be archived: the
+  delete changes nothing a charge type reads.
+- **Last guard.** The `ON DELETE RESTRICT` foreign keys `charge.tariff_id` → `tariff` and `charge_part.tariff_version_id`
+  → `tariff_version` refuse the delete of anything a charge points at; their violation (SQLSTATE 23503, found anywhere in
+  the failure's causes) is the same 409 `TARIFF_IN_USE`.
+- **Race.** The month run, a retry and every other path that writes a charge from a tariff hold it `FOR SHARE`
+  (`TariffBook.lockShared`) until they commit, so a delete waits for them and then sees their charges.
+- **`deletable`** on `TariffSummary` (the list, one batched question for all tariffs) and on `Tariff` (the card, and the
+  answers of `POST /tariffs` and `PUT .../scope`) is the opposite of the use check, so the web offers the delete only
+  where it would succeed.
+- **Audit.** `TARIFF_DELETED` (entity type `TARIFF`, label and field `name` = the tariff's name as the old value).
+- Tests: `ledger.TariffDeleteTests` (against the ledger's real answer: unused deleted with its rows and the audit entry;
+  refused after the month run, after a reversal and for a softly deleted version's charge part; `deletable`; who may;
+  another cooperative), `ledger.internal.LedgerTariffUsageTests`, `TariffForeignKeyViolationTests`.
+
+### The port `TariffUsage`
+
+`TariffUsage` (module root, feature 020) asks about whole tariffs, where `TariffVersionUsage` asks about one version:
+
+- `everCharged(tenantId, Map<tariffId, Set<versionId>>)` returns the tariffs that a `charge` row names
+  (`charge.tariff_id`) or that have a version pricing a `charge_part`, reversed charges and reversal rows included.
+  The map carries every version, softly deleted ones included, so the implementation never reads the tariff tables.
+- `lastChargedDay(tenantId, tariffId, versionIds)` returns the latest `service_to` of the regular charges made from the
+  tariff (by `tariff_id` or by a part of a version) that no reversal cancels; for the archive of slice 3.
+
+`TariffUsages` (internal) reads the version ids (`TariffVersionRepository.findAllVersionIdsOf`, native, past the
+`deleted_at` restriction), asks **every** bean of the type and joins the answers. The ledger implements it in
+`ledger.internal.LedgerTariffUsage` from its own tables (two batched queries for `everCharged`: the tariffs a charge
+names, then the parts of the remaining tariffs' versions). Both methods run in the caller's transaction, under RLS.
 
 ## Charging (feature 011): `TariffBook` and `TariffResolver`
 
@@ -317,8 +361,9 @@ version, so the report compares it with `ledger.LedgerReadModel.chargedInYear` w
 
 ## Audit
 
-`TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED` and `TARIFF_VERSION_DELETED` (entity type `TARIFF`,
-label = the tariff name, user content). The first lists `name`, `chargeType` (a charge type name token, see below) and the
+`TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED`, `TARIFF_VERSION_DELETED` and `TARIFF_DELETED`
+(feature 020) (entity type `TARIFF`, label = the tariff name, user content). `TARIFF_DELETED` lists `name` (old value:
+the name; new is empty). The first lists `name`, `chargeType` (a charge type name token, see below) and the
 version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals), `dueDate` and `note` (the last two only
 when set). `TARIFF_VERSION_UPDATED` lists the changed fields only, each as old to new, in the order `validFrom`, `basis`,
 `frequency`, `rate`, `dueDate`, `note` (a field that was or becomes unset has no old or no new value; a request that
@@ -363,6 +408,6 @@ narrow exception to "everything in the repository is English", of the same kind 
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`, `findChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
 `Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `DaySet`, `TariffBook`, `TariffResolver`,
-`TariffVersionUsage`, `ChargeTypeCatalog`, `TariffVersionChanges` and `ExpectedAmounts` (with `YearExpectation` and
-`VersionShare`), which `reports` reads. The ledger (feature 011) depends on this module and implements
-`TariffVersionUsage`.
+`TariffVersionUsage`, `TariffUsage`, `ChargeTypeCatalog`, `TariffVersionChanges` and `ExpectedAmounts` (with
+`YearExpectation` and `VersionShare`), which `reports` reads. The ledger (feature 011) depends on this module and
+implements `TariffVersionUsage` and `TariffUsage` (feature 020).

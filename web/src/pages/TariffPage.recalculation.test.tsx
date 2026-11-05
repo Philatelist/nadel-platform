@@ -80,6 +80,7 @@ describe('TariffPage: correcting versions through a recalculation', () => {
       selectedPlots: [],
       exclusions: [],
       conflicts: [],
+      deletable: false,
       chargeType: {
         id: 'c1',
         code: 'MEMBERSHIP',

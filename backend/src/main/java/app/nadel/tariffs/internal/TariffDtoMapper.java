@@ -22,14 +22,15 @@ final class TariffDtoMapper {
 
     /**
      * The tariff with all versions, newest first; {@code versionsOldestFirst} is every version of the tariff. The
-     * scope lists, the plot count and the conflicts come ready from the caller.
+     * scope lists, the plot count, the conflicts and whether it may be deleted (no charge was ever made from it) come
+     * ready from the caller.
      */
     static Tariff toDto(TariffRecord tariff, ChargeTypeRecord chargeType, List<TariffVersionRecord> versionsOldestFirst,
             LocalDate today, List<TariffScopePlot> selectedPlots, List<TariffExclusion> exclusions,
-            @Nullable Long plotCount, List<TariffConflict> conflicts) {
+            @Nullable Long plotCount, List<TariffConflict> conflicts, boolean deletable) {
         var dto = new Tariff(tariff.getId(), tariff.getName(), ChargeTypeDtoMapper.toDto(chargeType),
                 scopeKind(tariff), versionsNewestFirst(versionsOldestFirst, today), selectedPlots, exclusions,
-                conflicts);
+                conflicts, deletable);
         dto.setPlotCount(plotCount);
         return dto;
     }

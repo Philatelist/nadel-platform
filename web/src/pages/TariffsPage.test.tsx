@@ -162,6 +162,7 @@ function summary(
     scopeKind: 'ALL_PLOTS',
     plotCount,
     conflicts: [],
+    deletable: false,
     version: {
       id: `v-${id}`,
       validFrom: '2026-11-01',

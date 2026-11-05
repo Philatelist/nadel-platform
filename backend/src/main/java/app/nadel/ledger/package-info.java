@@ -43,7 +43,9 @@
  * pure {@code LossesCalculator} and {@code LossesPlanning}), the common consumer runs ({@code CommonConsumerRuns},
  * {@code CommonConsumerBillings}; the pure {@code CommonConsumerSplitCalculator} and {@code CommonConsumerPlanning}),
  * the queue ({@code NotChargedQueue}), the
- * implementations of the ports {@link app.nadel.tariffs.TariffVersionUsage} ({@code LedgerTariffVersionUsage}) and
+ * implementations of the ports {@link app.nadel.tariffs.TariffVersionUsage} ({@code LedgerTariffVersionUsage}),
+ * {@link app.nadel.tariffs.TariffUsage} ({@code LedgerTariffUsage}, feature 020: a tariff ever charged from is never
+ * deleted) and
  * {@link app.nadel.meters.ReadingUsage} ({@code LedgerReadingUsage}), the listener
  * {@code PlotStatusRefresher} (the debt behind the plot status, through {@link app.nadel.plots.PlotDebtCache}), the
  * plot guard {@code LedgerPlotGuard} (an implementation of {@link app.nadel.plots.PlotChangeGuard}: a plot with charges

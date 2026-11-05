@@ -790,6 +790,12 @@ export const en = {
       deletedRecalculated: 'Version deleted, recalculation booked',
       inUse: 'This version is already used in charges — correct it through a recalculation',
     },
+    delete: {
+      action: 'Delete tariff',
+      title: 'Delete the tariff?',
+      text: 'Delete the tariff "{name}" with all its versions? This cannot be undone.',
+      confirm: 'Delete',
+    },
     scope: {
       title: 'Plots',
       all: 'All plots',
@@ -895,6 +901,7 @@ export const en = {
       TARIFF_SCOPE_CHANGED: 'Tariff plots changed',
       TARIFF_EXCLUSION_ADDED: 'Tariff exclusion added',
       TARIFF_EXCLUSION_REMOVED: 'Tariff exclusion removed',
+      TARIFF_DELETED: 'Tariff deleted',
       METER_REGISTERED: 'Meter registered',
       METER_UPDATED: 'Meter updated',
       METER_REMOVED: 'Meter removed',
@@ -3534,6 +3541,7 @@ export const en = {
     CHARGE_TYPE_ORDER_STALE: 'The list of charge types has changed. It was reloaded, try again.',
     CHARGE_TYPE_ARCHIVED: 'This charge type is archived.',
     TARIFF_VERSION_DATE_TAKEN: 'A version with this date already exists',
+    TARIFF_IN_USE: 'The tariff is already used in charges — it can only be archived.',
     TARIFF_VERSION_IN_USE: 'This version is already used in charges — correct it through a recalculation',
     TARIFF_LAST_VERSION: 'A tariff must have at least one version',
     ROLE_IN_USE: 'This role is assigned to members and cannot be deleted.',
