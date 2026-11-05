@@ -143,11 +143,10 @@ Numbering: a feature document `docs/features/NNN-name.md` and its AWOS spec fold
 
 **Guides**
 
-- `docs/guide/` holds two guides for people, each in Ukrainian (`uk/`) and English (`en/`): the board guide
-  (part I: working in the system; part II: how the system calculates, with worked examples) and the platform
-  owner's manual (architecture, local run, Keycloak, creating cooperatives, every screen and button, security,
-  deployment, development, troubleshooting). They are the only repository text that is not English-only.
-- A feature that changes a screen, a button, a permission, a calculation rule or how the platform is run updates
-  the affected guides in both languages in the same pull request: the HTML text, the screenshot list in
-  `docs/guide/scripts/capture-screens.mjs` for a new screen, and the PDFs (`make guide-shots` with the app running,
-  then `make guide`). A part marked "planned" becomes "works" in the feature that delivers it.
+- `docs/help/<lang>/` (Ukrainian `uk/`, English `en/`) holds the help pages for people: one Markdown page per screen
+  with front matter (routes, permissions, shots). They are shown in the app («?» and /help) and build the board guide
+  PDF. `docs/guide/` keeps the owner's manual and the PDF build. They are the only repository text that is not
+  English-only.
+- A feature that adds or changes a screen, a button, a permission or a calculation rule adds or updates its help
+  pages in both languages and their screenshots in the same pull request (`make help-shots ID=<page>` or
+  `make guide-shots` with the app running, then `make guide`). The help completeness check in the web build must pass.
