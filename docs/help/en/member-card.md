@@ -20,6 +20,11 @@ shots:
     open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
     steps:
       - { click: Edit roles }
+  - name: member-card-access
+    user: chairman
+    path: /members
+    open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
+    element: { heading: System access }
 ---
 
 ## What the screen is for
@@ -99,6 +104,8 @@ Another example: Polishchuk Oksana, who keeps the member list, has, besides the 
 ![Member card: contacts, roles, plots](shot:member-card)
 
 ![Choosing roles on the member card](shot:member-card-roles)
+
+![The system access block on the member card](shot:member-card-access)
 
 ## Related pages
 

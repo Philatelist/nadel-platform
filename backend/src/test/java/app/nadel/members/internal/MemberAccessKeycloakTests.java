@@ -141,6 +141,10 @@ class MemberAccessKeycloakTests extends KeycloakIntegrationTest {
 
         http.inspect(oldToken).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("INVITATION_INVALID"));
         await().atMost(Duration.ofSeconds(20)).until(() -> mailpit.lettersTo(newEmail).size() == 1);
+        // the letter is out before the link is marked as sent (the second phase commits after it): wait for the mark
+        await().atMost(Duration.ofSeconds(20)).until(() -> ownerJdbc().queryForObject("select count(*) from "
+                + "member_invitation where member_id = ? and sent_at is not null and used_at is null "
+                + "and revoked_at is null", Integer.class, member) == 1);
         String newToken = InvitationRequests.tokenOfLetterTo(newEmail);
         http.inspect(newToken).andExpect(status().isOk()).andExpect(jsonPath("$.email").value(newEmail));
         http.accept(newToken, PASSWORD).andExpect(status().isNoContent());

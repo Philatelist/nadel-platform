@@ -45,8 +45,11 @@ public abstract class IntegrationTest {
     protected static final UUID DEMO_TENANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     protected static final UUID OTHER_TENANT = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
+    // max_connections: every cached Spring context keeps its own pool, and the Keycloak and command contexts of feature
+    // 020 made the suite hold more contexts than the default of 100 connections allows
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(TestPostgis.image())
-            .withInitScript("db/test-init.sql");
+            .withInitScript("db/test-init.sql")
+            .withCommand("postgres", "-c", "max_connections=400");
 
     /** The personal data master key of this JVM's contexts: random per run, never written anywhere. */
     protected static final String MASTER_KEY = randomMasterKey();

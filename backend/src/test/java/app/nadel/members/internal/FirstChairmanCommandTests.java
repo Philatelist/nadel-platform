@@ -10,6 +10,7 @@ import app.nadel.DemoLedgerData;
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
 import app.nadel.identity.FakeSignInAccounts;
+import app.nadel.problem.ApiProblemException;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -315,6 +317,31 @@ class FirstChairmanCommandTests extends IntegrationTest {
         assertThat(output.getErr()).contains("MEMBER_NOT_CHAIRMAN");
         assertThat(ownerJdbc().queryForList("select role_id from member_role where member_id = ?", chairman))
                 .as("the command never gives a role to an existing member").isEmpty();
+    }
+
+    @Test
+    void aProblemOrAnUnexpectedErrorOfTheWorkIsAnErrorCodeAndNeverTheStackTrace(CapturedOutput output) throws Exception {
+        FirstChairman failing = Mockito.mock(FirstChairman.class);
+        Mockito.doThrow(ApiProblemException.notFound()).doThrow(new IllegalStateException("secret detail"))
+                .when(failing).run(Mockito.any(), Mockito.any());
+        MockEnvironment environment = new MockEnvironment().withProperty("nadel.command", "first-chairman");
+
+        for (int run = 0; run < 2; run++) {
+            new FirstChairmanCommand(failing, environment, jdbc, transactionManager, exitCodes::add)
+                    .run(new DefaultApplicationArguments());
+        }
+
+        assertThat(exitCodes).containsExactly(FirstChairmanCommand.FAILED, FirstChairmanCommand.FAILED);
+        assertThat(output.getErr()).contains("Error: IllegalStateException. See the application log.")
+                .doesNotContain("secret detail");
+    }
+
+    @Test
+    void theArgumentsNeverPrintTheirPersonalValues() {
+        FirstChairman.Arguments arguments = new FirstChairman.Arguments("СТ «Секрет»", "private@coop.example",
+                "Іваненко", "Петро", true);
+
+        assertThat(arguments.toString()).isEqualTo("Arguments[resend=true]");
     }
 
     @Test

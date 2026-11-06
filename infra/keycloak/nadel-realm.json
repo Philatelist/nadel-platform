@@ -7,6 +7,7 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "loginWithEmailAllowed": true,
+  "editUsernameAllowed": true,
   "duplicateEmailsAllowed": false,
   "internationalizationEnabled": true,
   "supportedLocales": ["uk", "en"],
@@ -110,6 +111,14 @@
       "webOrigins": []
     }
   ],
+  "clientScopeMappings": {
+    "realm-management": [
+      {
+        "client": "nadel-backend-admin",
+        "roles": ["manage-users", "view-users", "query-users"]
+      }
+    ]
+  },
   "users": [
     {
       "username": "chairman@demo.local",
@@ -121,7 +130,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"4kXXtCkJXSwIFgxkmwBG72UamWukFEOu8eDHb/xqG+KIOzqwfkUKvSwsXhts1eoPJDhYfxwxaSsW1em2oWV+wA==\",\"salt\":\"+4pvlpjBiJ9tQNVgYc8GZA==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -139,7 +149,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"LoGGAqXkTw8WI5guTQtqEep2vSgNJaj3BVpX0pUommuwdau3oQc4rjVC7ab0SmzBUDy5Nc2zfYKA1YhzKu6GeQ==\",\"salt\":\"WNyjIcussb8jMgqZ0V/cSw==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -157,7 +168,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"0LJhWXP5v9T2T+ScD6rYnNFGnXdfJhqtAoa0LsemFVByyEkSN7wLrqiBWg0YUGgtNdhkqgvHjTOX8yHAmxMozg==\",\"salt\":\"rtEPTYZp2wA4ElahDgvYZg==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -175,7 +187,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"X4Dm5sg6rh/lh6bS0c3LYHNrJYN+TDyRsBE54iYH3qxI4oY44dZpZNb1a8Bky1vguGyAFgoZionQ/jBv1dgAvg==\",\"salt\":\"ctkNqwbXTuoBk8s7pMnMoQ==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -193,7 +206,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"QlXclutrZfyNzXt9dlgQ79qJk5fvrfDgvV7gKd5BtbxkbGPRx385L6UlANo3QPwYmaSlTIfOW63ljNX4ZhK7bw==\",\"salt\":\"amOlVnP7AU4xjBiTVCjVGw==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -211,7 +225,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"KVmGg7wnolA02EN2u1M2MlKSussyZTCXwiWQ3FDmwAVH2NXR6pmI3iKUr7BHfs3uW47rii8/RCUQ7nRQiVVohw==\",\"salt\":\"nMMNbalOzlwh5v0Pzrrz/A==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],

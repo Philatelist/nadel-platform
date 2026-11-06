@@ -63,7 +63,7 @@ class InvitationTenantFunctionTests extends IntegrationTest {
 
     @Test
     void isSecurityDefinerStableWithAFixedSearchPath() {
-        List<String> flags = ownerJdbc().queryForList("select prosecdef::text || '|' || provolatile || '|' "
+        List<String> flags = ownerJdbc().queryForList("select prosecdef::text || '|' || provolatile::text || '|' "
                 + "|| array_to_string(proconfig, ',') from pg_proc where proname = 'members_invitation_tenant'",
                 String.class);
 

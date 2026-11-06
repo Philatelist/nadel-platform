@@ -33,9 +33,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -48,6 +51,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * invites the member again with a letter to the new address, the listener retries only what may pass, and the last
  * sign-in is stored once per interval. {@code MemberAccessKeycloakTests} runs the main flows against a real Keycloak.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class MemberAccessTests extends IntegrationTest {
 
     private static final String PASSWORD = "correct-horse-battery";
@@ -537,6 +541,40 @@ class MemberAccessTests extends IntegrationTest {
     }
 
     @Test
+    void aDeliveryThatBreaksRevokesTheLinkAndChangesNothing() throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        AccessProfile chairman = chairmanProfile();
+        MemberInvitations racing = racing(() -> {
+            throw new IllegalStateException("the delivery broke");
+        });
+
+        assertThatThrownBy(() -> TenantContext.runAs(DEMO_TENANT, () -> racing.invite(member, chairman)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("the delivery broke");
+
+        assertThat(state(member)).as("the member was never invited").isEqualTo("NONE");
+        assertThat(openLinks(member)).as("the link made for the letter is revoked").isZero();
+        Thread.sleep(500); // an audit event, if one were published, would be written within this time
+        assertThat(audited(member, "MEMBER_INVITED")).isZero();
+    }
+
+    @Test
+    void aLinkPrinterThatBreaksRevokesTheLinkAndChangesNothing() {
+        UUID member = invitee(freshEmail());
+        AccessProfile chairman = chairmanProfile();
+
+        assertThatThrownBy(() -> TenantContext.runAs(DEMO_TENANT, () -> memberInvitations.issueForCommand(member,
+                chairman, false, (link, expiresAt) -> {
+                    throw new IllegalStateException("the printer broke");
+                }))).isInstanceOf(IllegalStateException.class).hasMessageContaining("the printer broke");
+
+        assertThat(state(member)).isEqualTo("NONE");
+        assertThat(ownerJdbc().queryForObject("select count(*) from member_invitation where member_id = ? "
+                + "and revoked_at is not null and sent_at is null", Integer.class, member)).isEqualTo(1);
+    }
+
+    @Test
     void aDisableWhileTheResentLetterIsOnItsWayWins() throws Exception {
         http.mailboxOnMailpit();
         String email = freshEmail();
@@ -688,6 +726,28 @@ class MemberAccessTests extends IntegrationTest {
         Timestamp old = lastSignIn(member);
         http.me(bearer).andExpect(status().isOk());
         assertThat(lastSignIn(member)).isAfter(old);
+    }
+
+    @Test
+    void aLastSignInThatCannotBeStoredNeverStopsTheSignIn(CapturedOutput output) throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        String subject = activate(member, email);
+        String bearer = TestTokens.bearer(DEMO_TENANT, subject, email);
+        ownerJdbc().execute("create function test_refuse_sign_in() returns trigger language plpgsql as "
+                + "$$ begin raise exception 'refused by the test'; end $$");
+        ownerJdbc().execute("create trigger test_refuse_sign_in before update on member_access "
+                + "for each row execute function test_refuse_sign_in()");
+        try {
+            http.me(bearer).andExpect(status().isOk());
+        } finally {
+            ownerJdbc().execute("drop trigger test_refuse_sign_in on member_access");
+            ownerJdbc().execute("drop function test_refuse_sign_in()");
+        }
+
+        assertThat(lastSignIn(member)).isNull();
+        assertThat(output.getAll()).contains("not stored").doesNotContain(email);
     }
 
     @Test

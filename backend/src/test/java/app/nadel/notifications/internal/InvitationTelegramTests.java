@@ -97,6 +97,25 @@ class InvitationTelegramTests extends DeliveryTestSupport {
     }
 
     @Test
+    void aBotWhoseStoredTokenCannotBeReadNeverFailsTheInvitation(CapturedOutput output) throws Exception {
+        mailbox(Mailpit.PASSWORD);
+        bot();
+        String email = "invitee-" + UUID.randomUUID() + "@delivery.test";
+        UUID member = member("Телеграм", "EMAIL", email);
+        long chat = link(member);
+        ownerJdbc().update("update delivery_settings set bot_token_enc = decode('00ff00ff00ff00ff00ff00ff00ff00ff"
+                + "00ff00ff00ff00ff00ff00ff00ff00ff', 'hex') where tenant_id = ?", tenant);
+
+        InvitationDeliveryResult result = letters.deliver(tenant, member, email, LINK, EXPIRES);
+
+        assertThat(result.isSent()).isTrue();
+        assertThat(result.channels()).containsExactly(DeliveryChannel.EMAIL);
+        assertThat(telegram.sent(chat)).isEmpty();
+        assertThat(output.getAll()).contains("by the bot failed").doesNotContain(LINK.toString())
+                .doesNotContain("tgLINK123");
+    }
+
+    @Test
     void aLetterThatIsNotSentSendsNothingByTheBot() throws Exception {
         mailbox(Mailpit.PASSWORD);
         bot();

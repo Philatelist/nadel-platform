@@ -6,12 +6,12 @@
 The test stand on one server (Caddy, HTTPS, the first-chairman command) is described in
 [`infra/stand/README.md`](stand/README.md).
 
-| Service         | Port(s)      | What it is                                                           |
-| --------------- | ------------ | -------------------------------------------------------------------- |
-| `postgres`      | 5432 (`NADEL_DB_PORT`) | PostgreSQL 17 + PostGIS                                              |
-| `keycloak`      | 8180         | Keycloak, realm `nadel`                                              |
-| `mailpit`       | 1025, 8025   | Test mail server: SMTP on 1025, web UI and API on 8025 (in memory)   |
-| `fake-telegram` | 8091         | Fake Telegram Bot API (`fake-telegram/server.mjs`), no real network  |
+| Service         | Port(s)                | What it is                                                          |
+| --------------- | ---------------------- | ------------------------------------------------------------------- |
+| `postgres`      | 5432 (`NADEL_DB_PORT`) | PostgreSQL 17 + PostGIS                                             |
+| `keycloak`      | 8180                   | Keycloak, realm `nadel`                                             |
+| `mailpit`       | 1025, 8025             | Test mail server: SMTP on 1025, web UI and API on 8025 (in memory)  |
+| `fake-telegram` | 8091                   | Fake Telegram Bot API (`fake-telegram/server.mjs`), no real network |
 
 ## Mailpit (e-mail)
 
@@ -74,6 +74,11 @@ The realm also has the confidential client `nadel-backend-admin` (service accoun
 `view-users`, `query-users`; dev secret `nadel-backend-admin-dev-secret`) that the backend uses for the Keycloak
 Admin API, and the password policy `length(8)`. After pulling a change of the realm file run
 `docker compose -f infra/docker-compose.yml down -v` so it is re-imported.
+
+The demo users' password `nadel` is shorter than the policy, and Keycloak validates a plain `value` credential on
+import, so the realm file stores each demo password as a pre-hashed credential (`credentialData`/`secretData`,
+pbkdf2-sha512). The client's token only carries the `realm-management` roles named in `clientScopeMappings`
+(`fullScopeAllowed` is off), and `editUsernameAllowed` lets the Admin API change a member's login with their e-mail.
 
 `down -v` deletes all local data (Postgres volume included). Cooperative roles are not Keycloak roles
 (ADR 0009); the realm only keeps `PLATFORM_OPERATOR`.

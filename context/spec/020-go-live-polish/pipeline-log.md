@@ -1,7 +1,7 @@
 # Pipeline log — 020 go-live polish
 
 - Status: running
-- Phase: 3 (implement, slice 1)
+- Phase: 3 (implement, slice 9 — feature testing and the single verification)
 - Branch: 020-go-live-polish (planned) · Base: main @ b324146
 - Requirement: docs/features/020-go-live-polish.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -73,3 +73,7 @@
 - Slices 6/7 were built concurrently; shared files (MemberInvitations.java, members/identity READMEs, application.yml) went into the slice 6 commit with the slice 7 hunks included.
 - Slice 6: 71e116a, tests not run, review r1 running
 - Slice 7: 8e795f1, tests not run, review r1 running
+- Slice 8: 58c7a5c, tests not run, review r1 running
+- Owner removed infra/stand/ from .git/info/exclude and asked to include it. Checked 7 files (only 127.0.0.1, 203.0.113.10, example.com/org; secrets from env); owner checked and edited .env.example (NADEL_NOINDEX=true, NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=, STAND_USER_PASSWORD comment). Committed 01e564a chore(infra): test stand on one server (+ infra/README.md pointer). Fix-review r1 running.
+- Stand fix-review r1: PASS (minors in review-log, not fixed by rule).
+- Slice 9 (testing-expert): `make check` EXIT 0 (backend 4360 tests, 0 failures; JaCoCo 0.9771 vs floor 0.977 — thin margin); e2e after `down -v`: feature specs 102 passed, `@smoke` 23 passed, "creation to archive" ×10 passed. RED/GREEN for invite/accept, disable/archive race, tariff delete audit, archive month run, payer default, duplicate attachment. Fixes found by the run (tests/config only, no `src/main`): realm import (pre-hashed demo passwords vs `length(8)`), `clientScopeMappings` for the admin client (403 without them), `editUsernameAllowed` (login change 400), test Postgres `max_connections=400`, isolation test updated for the V35 tariff DELETE grant, RoleLogicTests index, InvitationTenantFunctionTests cast, PaymentForm payer tests made RED-sensitive, flaky MemberAccessKeycloakTests wait, extra tests for coverage, `member-card-access` shot. The stand imports the same realm file (deploy.sh rsyncs it), so the realm fixes apply there. Not done: a `set-password` screenshot (topic, no shot).

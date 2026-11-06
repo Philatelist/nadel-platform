@@ -229,6 +229,38 @@ class KeycloakAdminClientFailureTests {
     }
 
     @Test
+    void aSearchThatIsNotAnsweredWith200IsUnavailable() {
+        keycloak.reply("GET", "/admin/realms/nadel/users", 500, "{}");
+
+        assertThatThrownBy(() -> client.findByLogin(EMAIL)).isInstanceOf(ApiProblemException.class)
+                .hasMessageContaining("could not be reached");
+    }
+
+    @Test
+    void anAccountWithoutAValidIdIsRefusedAndNeverReturned() {
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, "{\"id\":\"bad id!\",\"username\":\"x\"}");
+
+        assertThatThrownBy(() -> client.get(USER_ID)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("without a valid id");
+    }
+
+    @Test
+    void theCooperativeOfAnAccountIsReadFromAnArrayOrAStringAndNothingElse() {
+        String other = "4f3d9f6c-0000-4000-8000-000000000002";
+        String third = "4f3d9f6c-0000-4000-8000-000000000003";
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, "{\"id\":\"" + USER_ID
+                + "\",\"username\":\"a\",\"attributes\":{\"tenant_id\":\"" + TENANT + "\"}}");
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + other, 200, "{\"id\":\"" + other
+                + "\",\"username\":\"b\",\"attributes\":{\"tenant_id\":[\"" + TENANT + "\",\"" + OTHER + "\"]}}");
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + third, 200, "{\"id\":\"" + third
+                + "\",\"username\":\"c\",\"attributes\":{\"tenant_id\":7}}");
+
+        assertThat(client.get(USER_ID).orElseThrow().tenantId()).as("a plain string").isEqualTo(TENANT);
+        assertThat(client.get(other).orElseThrow().tenantId()).as("two values are no cooperative").isNull();
+        assertThat(client.get(third).orElseThrow().tenantId()).as("a number is no cooperative").isNull();
+    }
+
+    @Test
     void anUnknownOrMalformedIdIsAMissingAccount() {
         keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 404, "");
 

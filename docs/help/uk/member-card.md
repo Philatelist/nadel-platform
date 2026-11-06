@@ -20,6 +20,11 @@ shots:
     open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
     steps:
       - { click: Змінити ролі }
+  - name: member-card-access
+    user: chairman
+    path: /members
+    open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
+    element: { heading: Доступ до системи }
 ---
 
 ## Для чого цей екран
@@ -99,6 +104,8 @@ shots:
 ![Картка члена: контакти, ролі, ділянки](shot:member-card)
 
 ![Вибір ролей на картці члена](shot:member-card-roles)
+
+![Блок доступу до системи на картці члена](shot:member-card-access)
 
 ## Пов’язані сторінки
 

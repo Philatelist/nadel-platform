@@ -305,13 +305,20 @@ describe('PaymentForm', () => {
     it('preselects the only owner of the plot', async () => {
       currentOwners = [ivan];
       renderForm();
-      expect(await screen.findByText('Іван Петренко')).toBeInTheDocument();
+      // chosen, not only offered: the picker shows the member with a change button and the owners are not offered
+      expect(await screen.findByRole('button', { name: 'Змінити' })).toBeInTheDocument();
+      expect(screen.getByText('Іван Петренко')).toBeInTheDocument();
+      expect(screen.queryByText('Власники ділянки')).not.toBeInTheDocument();
+      expect(screen.queryByText('Не вказано')).not.toBeInTheDocument();
     });
 
     it('leaves the payer empty with two owners and offers them first', () => {
       currentOwners = [ivan, olga];
       renderForm();
-      expect(screen.queryByText('Іван Петренко')).not.toBeInTheDocument();
+      // nobody is chosen: the picker has no "Змінити" button, the owners are only offered as buttons
+      expect(screen.queryByRole('button', { name: 'Змінити' })).not.toBeInTheDocument();
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
+      expect(screen.getByText('Власники ділянки')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Іван Петренко' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Ольга Коваль' })).toBeInTheDocument();
     });
@@ -320,11 +327,13 @@ describe('PaymentForm', () => {
       const user = userEvent.setup();
       currentOwners = [ivan];
       renderForm();
-      await screen.findByText('Іван Петренко');
+      await screen.findByRole('button', { name: 'Змінити' });
       await user.click(screen.getByRole('button', { name: 'Змінити' }));
-      expect(screen.queryByText('Іван Петренко')).not.toBeInTheDocument();
+      // cleared: the owner is offered again, not selected
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
       await typeAmount(user, '5');
-      expect(screen.queryByText('Іван Петренко')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Змінити' })).not.toBeInTheDocument();
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
     });
 
     it('applies the default again when the plot changes', async () => {
@@ -332,11 +341,14 @@ describe('PaymentForm', () => {
       currentOwners = [ivan];
       ownersByPlot.p10 = [olga];
       renderForm();
-      await screen.findByText('Іван Петренко');
+      await screen.findByRole('button', { name: 'Змінити' });
+      expect(screen.getByText('Іван Петренко')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Змінити ділянку' }));
-      await user.type(screen.getByRole('combobox'), '10');
+      await user.type(screen.getByPlaceholderText('Номер ділянки'), '10');
       await user.click(await screen.findByRole('option', { name: /10/ }, wait));
-      expect(await screen.findByText('Ольга Коваль')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText('Іван Петренко')).not.toBeInTheDocument());
+      expect(screen.getByText('Ольга Коваль')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Змінити' })).toBeInTheDocument();
     });
   });
 });

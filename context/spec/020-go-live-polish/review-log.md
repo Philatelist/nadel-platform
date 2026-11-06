@@ -41,6 +41,7 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `579d6ad..71e116a` | MAJOR_ISSUES | M1 complete() can undo a concurrent disable/archive/e-mail change | minor: pre-check race leaves INVITED without link (README), listener 4xx leaves INVITED without link, check BotChat logging on 403 |
+| 2 | + `1a30d0a` | PASS | M1 resolved | offline compile OK; minor: completeOrRevoke catches only ApiProblemException |
 
 ## Slice 7 — First chairman command, ADR and owner documentation
 
@@ -53,3 +54,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `8e795f1..58c7a5c` | PASS | — | minor: restoreElectrician PUT results unchecked (warn), redundant toHaveCount, duplicate role id constant |
+
+## Fix — test stand on one server (`chore(infra)`, owner request)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `1a30d0a..01e564a` | PASS | — | minor (owner to decide): stand-init order Keycloak-then-.env without recovery hint; append without trailing newline; secrets in argv; first-chairman.sh missing-value handling and `${}` in names; link in Docker json log if interrupted; personal data in shell history; JVM memory; master realm login publicly proxied |
