@@ -1,12 +1,12 @@
 # Pipeline log — 020 go-live polish
 
-- Status: running
-- Phase: 5 (publish — push the spec branch, open the PR, watch checks)
-- Branch: 020-go-live-polish (planned) · Base: main @ b324146
+- Status: finished
+- Phase: 6 done (review run up)
+- Branch: 020-go-live-polish · Base: main @ b324146
 - Requirement: docs/features/020-go-live-polish.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
-- Review run: on (pending)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/71 · Checks: green (d26c7b8)
+- Review run: running at http://localhost:5173 and :8080 (make up PID 32152, backend 32648, vite 32537; PIDs in the session scratchpad review-run.pid)
 
 ## User instruction for this run
 
@@ -83,3 +83,4 @@
 - Verify fix 1: 7cfa226 (controllers read Accept-Language per call; FirstChairmanJarCommandTests RED→GREEN; 777 module tests green; real-jar smoke exit 0). Fix-review r1 running. Criterion 2.1 first-chairman now [x]; 32 [x], 1 [?] (2.3 360 px). Spec and tech Status → Completed. Product context: architecture.md already updated in slice 7; nothing else to suggest.
 - Verify fix 1 review r1: PASS. Full suite: make check EXIT 0 in slice 9 (before the fix); after the fix only the touched modules (777 tests) — CI runs the full suite. Phase 4 done; worktrees: main only. Phase 5 started.
 - CI round 1 on PR #71: Backend red (JaCoCo 0.97698 < 0.977, 1 line short; the child-JVM command test is not counted), Security red (gitleaks generic-api-key on a fake test token). Fixes: ab28ff0 gitleaks allowlist for the two fake test tokens (local gitleaks on 17 commits: no leaks); deaa33e tests for 27 CI-missed lines in feature classes (47 tests green, 3 mutations caught). Pushed; fix-review running.
+- CI round 2: all 6 checks green on d26c7b8. CI fix review r1: PASS. Phase 6: down -v (realm re-import, clears verify test users), make up detached; smoke: backend health 200, web 200, realm 200, Mailpit 200, public inspect bogus token 404, members unauthenticated 401, /set-password 200. Run finished.

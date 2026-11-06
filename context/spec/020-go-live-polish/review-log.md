@@ -76,3 +76,7 @@ Minors (non-blocking, not fixed by rule):
 - `FirstChairmanJarCommandTests.java:76-79` the "Cooperative created" and token-count assertions print the raw child output on failure (unmasked token of a throwaway test user); assert on `masked(printed)`.
 - `FirstChairmanJarCommandTests.java:72-73` wrap the child in try/finally with `destroyForcibly` for an interrupted wait.
 - Three identical `acceptLanguage()` helpers in ImportsController, ReportsController, ReportTemplatesController.
+
+## CI fixes round 1 (ab28ff0, deaa33e) — PASS
+
+Minors (non-blocking): gitleaks regexes are unanchored (fine for 14-char fixed strings; could be path-restricted); `FirstChairmanCommandExitTests.theApplicationRunnerDoesNothingUntilItRuns` adds little beyond coverage; its `warnings()` helper returns all events (rename to `messages()`).
