@@ -12,7 +12,7 @@ import { format, formatDateTime } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useLocale, useT } from '../../i18n';
-import { useCan } from '../../me';
+import { useCan, useMe } from '../../me';
 import { problemCode, problemMessage } from '../../problem';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Button, Notice, Panel } from '../ui';
@@ -33,6 +33,8 @@ export function MemberAccess({ member, access }: { member: Member; access: Membe
   const t = useT();
   const { locale } = useLocale();
   const canInvite = useCan('MEMBERS_INVITE');
+  // nobody turns off their own access (the server refuses it with OWN_ACCESS)
+  const ownCard = useMe().memberId === member.id;
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string }>();
@@ -56,7 +58,9 @@ export function MemberAccess({ member, access }: { member: Member; access: Membe
       text:
         problemCode(error) === 'INVITATION_NOT_SENT' && reason !== undefined
           ? format(c.notSent, { reason })
-          : problemMessage(t, error),
+          : problemCode(error) === 'LAST_CHAIRMAN'
+            ? c.lastChairman
+            : problemMessage(t, error),
     });
   };
   const invite = useInviteMember({ mutation: { onSuccess: () => refresh(c.invited), onError: fail } });
@@ -119,7 +123,7 @@ export function MemberAccess({ member, access }: { member: Member; access: Membe
                 {c.resend}
               </Button>
             )}
-            {(access.status === 'INVITED' || access.status === 'ACTIVE') && (
+            {(access.status === 'INVITED' || access.status === 'ACTIVE') && !ownCard && (
               <Button
                 variant="secondary"
                 disabled={busy}

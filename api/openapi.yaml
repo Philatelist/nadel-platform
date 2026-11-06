@@ -300,8 +300,9 @@ paths:
       description: |
         Moves the member to the archive; the member keeps their history but is hidden from the default list and
         can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
-        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), and neither can a member who currently
-        owns a plot (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), nor the last active chairman whose access
+        is on (`INVITED` or `ACTIVE`; also 409 `LAST_CHAIRMAN`), and neither can a member who currently owns a plot
+        (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
         Archiving turns off the member's access to the system (feature 020): a member with access or an open
         invitation becomes `DISABLED`, the open link stops working and the sign-in account is turned off.
       parameters:
@@ -543,8 +544,10 @@ paths:
         Turns off the access of an invited member or a member with access: their open invitation link stops working
         and they can no longer sign in. The member card and all the member's data stay. Requires `MEMBERS_VIEW` and
         `MEMBERS_INVITE`. An unknown id or a member of another cooperative is 404. Access that is already `DISABLED`
-        is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. Answers the
-        member's access (`DISABLED`). Written to the audit log (`MEMBER_ACCESS_DISABLED`).
+        is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. A member cannot
+        turn off their own access (409 `OWN_ACCESS`), and the access of the last active chairman whose access is on
+        (`INVITED` or `ACTIVE`) cannot be turned off (409 `LAST_CHAIRMAN`). Answers the member's access (`DISABLED`).
+        Written to the audit log (`MEMBER_ACCESS_DISABLED`).
       parameters:
         - name: id
           in: path
@@ -580,6 +583,8 @@ paths:
         the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
         `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
         expired, or of a member whose access was turned off or who was archived): the answer never says which.
+        429 `TOO_MANY_REQUESTS` when the limit of the public invitation endpoints is reached (see
+        `InvitationRateLimited`).
       security: []
       requestBody:
         required: true
@@ -598,6 +603,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/InvitationInvalid'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
 
   /public/invitations/accept:
     post:
@@ -611,8 +618,8 @@ paths:
 
         400 `VALIDATION_FAILED` with `errors[{field: password}]`: `TOO_SHORT` under 8 characters, `TOO_LONG` over 128,
         `PASSWORD_POLICY` the sign-in service refused it by its own rules. 404 `INVITATION_INVALID` as in
-        `inspectInvitation`. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link
-        stays usable.
+        `inspectInvitation`. 429 `TOO_MANY_REQUESTS` as in `inspectInvitation`; nothing changed. 503
+        `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link stays usable.
       security: []
       requestBody:
         required: true
@@ -627,6 +634,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/InvitationInvalid'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
         '503':
           $ref: '#/components/responses/SignInServiceUnavailable'
 
@@ -8012,8 +8021,9 @@ components:
         access (code `ACCESS_ALREADY_ACTIVE`), the e-mail is already a login in another cooperative (code
         `EMAIL_IN_OTHER_COOPERATIVE`, never saying which), the sign-in account with the e-mail is linked to another
         member of this cooperative (code `SIGN_IN_ACCOUNT_IN_USE`), the invitation is sent again for a member who is
-        not invited (code `NOT_INVITED`), or access is turned off for a member who was never invited (code
-        `ACCESS_NOT_GRANTED`)
+        not invited (code `NOT_INVITED`), access is turned off for a member who was never invited (code
+        `ACCESS_NOT_GRANTED`), a member turns off their own access (code `OWN_ACCESS`), or the access of the last active
+        chairman whose access is on is turned off (code `LAST_CHAIRMAN`)
       content:
         application/problem+json:
           schema:
@@ -8049,6 +8059,18 @@ components:
       description: >-
         The invitation link cannot be used (code `INVITATION_INVALID`): it is unknown, already used, replaced by a newer
         one, expired, or the member's access was turned off or the member was archived. The answer never says which
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationRateLimited:
+      description: >-
+        Too many requests to the public invitation endpoints (code `TOO_MANY_REQUESTS`): by default more than 5 within
+        15 minutes from one client address, or for the e-mail of one invitation, counted for each endpoint. Nothing was
+        checked or changed; the request can be tried again after the window
       content:
         application/problem+json:
           schema:

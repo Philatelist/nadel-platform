@@ -128,4 +128,25 @@ describe('SetPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
     await waitFor(() => expect(screen.getByText(/The link is invalid or has expired/)).toBeInTheDocument());
   });
+
+  it('says to wait, not that the link is invalid, when inspecting is over the limit', () => {
+    open('?token=abc');
+    inspect.mockImplementation((_v, o) => o.onError(new ApiError(429, { code: 'TOO_MANY_REQUESTS' })));
+    renderWithApp(<SetPasswordPage />);
+    expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/The link is invalid or has expired/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the form and says to wait when saving is over the limit', async () => {
+    open('?token=abc');
+    accept.mockImplementation((_v, o) => o.onError(new ApiError(429, { code: 'TOO_MANY_REQUESTS' })));
+    renderWithApp(<SetPasswordPage />);
+    fireEvent.change(password(), { target: { value: 'long-enough-1' } });
+    fireEvent.change(confirm(), { target: { value: 'long-enough-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
+    await waitFor(() =>
+      expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Save password' })).toBeInTheDocument();
+  });
 });

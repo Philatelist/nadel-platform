@@ -484,8 +484,9 @@ export const useUpdateMember = <TError = BadRequestResponse | UnauthorizedRespon
 /**
  * Moves the member to the archive; the member keeps their history but is hidden from the default list and
  * can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
- * The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), and neither can a member who currently
- * owns a plot (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+ * The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), nor the last active chairman whose access
+ * is on (`INVITED` or `ACTIVE`; also 409 `LAST_CHAIRMAN`), and neither can a member who currently owns a plot
+ * (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
  * Archiving turns off the member's access to the system (feature 020): a member with access or an open
  * invitation becomes `DISABLED`, the open link stops working and the sign-in account is turned off.
  * @summary Archive a member

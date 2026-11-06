@@ -7,6 +7,7 @@ import { renderWithApp } from '../../test/render';
 import { MemberAccess } from './MemberAccess';
 
 let permissions: Permission[] = ['MEMBERS_VIEW', 'MEMBERS_INVITE'];
+let myMemberId = 'me';
 type Opts = { mutation: { onError: (e: unknown) => void } };
 const invite = vi.fn();
 const resend = vi.fn();
@@ -17,6 +18,7 @@ let disableOptions: Opts;
 
 vi.mock('../../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
+  useMe: () => ({ memberId: myMemberId }),
 }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -54,6 +56,7 @@ const button = (name: string) => screen.queryByRole('button', { name });
 describe('MemberAccess', () => {
   beforeEach(() => {
     permissions = ['MEMBERS_VIEW', 'MEMBERS_INVITE'];
+    myMemberId = 'me';
     vi.clearAllMocks();
   });
 
@@ -151,5 +154,27 @@ describe('MemberAccess', () => {
     show({ status: 'ACTIVE' });
     act(() => disableOptions.mutation.onError(new ApiError(409, { code: 'ACCESS_NOT_GRANTED' })));
     expect(screen.getByText('This member has no access.')).toBeInTheDocument();
+  });
+
+  it('on the own card there is no turn off button', () => {
+    myMemberId = 'm1';
+    show({ status: 'ACTIVE' });
+    expect(button('Turn off access')).toBeNull();
+  });
+
+  it('shows the refusal when turning off their own access', () => {
+    show({ status: 'ACTIVE' });
+    act(() => disableOptions.mutation.onError(new ApiError(409, { code: 'OWN_ACCESS' })));
+    expect(screen.getByText('You cannot turn off your own access.')).toBeInTheDocument();
+  });
+
+  it('shows the refusal when turning off the access of the last chairman with access', () => {
+    show({ status: 'ACTIVE' });
+    act(() => disableOptions.mutation.onError(new ApiError(409, { code: 'LAST_CHAIRMAN' })));
+    expect(
+      screen.getByText(
+        'This is the last chairman with access. Give another member the Chairman role and access first.',
+      ),
+    ).toBeInTheDocument();
   });
 });

@@ -221,8 +221,10 @@ export const useResendMemberInvitation = <TError = BadRequestResponse | Unauthor
  * Turns off the access of an invited member or a member with access: their open invitation link stops working
  * and they can no longer sign in. The member card and all the member's data stay. Requires `MEMBERS_VIEW` and
  * `MEMBERS_INVITE`. An unknown id or a member of another cooperative is 404. Access that is already `DISABLED`
- * is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. Answers the
- * member's access (`DISABLED`). Written to the audit log (`MEMBER_ACCESS_DISABLED`).
+ * is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. A member cannot
+ * turn off their own access (409 `OWN_ACCESS`), and the access of the last active chairman whose access is on
+ * (`INVITED` or `ACTIVE`) cannot be turned off (409 `LAST_CHAIRMAN`). Answers the member's access (`DISABLED`).
+ * Written to the audit log (`MEMBER_ACCESS_DISABLED`).
  * @summary Turn a member's access off
  */
 export const disableMemberAccess = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberAccess> => {

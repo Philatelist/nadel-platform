@@ -163,6 +163,7 @@ export * from './invitationConflictResponse';
 export * from './invitationInfo';
 export * from './invitationInvalidResponse';
 export * from './invitationNotSentResponse';
+export * from './invitationRateLimitedResponse';
 export * from './invitationTokenInput';
 export * from './inviteBlockedReason';
 export * from './invoiceBuild';

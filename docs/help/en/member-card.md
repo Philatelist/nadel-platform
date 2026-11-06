@@ -81,6 +81,8 @@ Other rules:
 
 - an e-mail that a member of another cooperative already uses is refused;
 - archiving a member switches their access off, and restoring does not switch it on: invite the person again;
+- nobody can switch off their own access: their own card has no "{{ui:memberAccess.disable}}" button;
+- the access of the last chairman who has access cannot be switched off, and that chairman cannot be archived either: the system says "{{ui:memberAccess.lastChairman}}";
 - when the e-mail of a member who has access is changed, a new link is sent to the new address.
 
 Invitations, resends and switching access off are written to the [change log](help:audit).

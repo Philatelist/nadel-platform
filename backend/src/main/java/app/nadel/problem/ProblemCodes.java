@@ -179,6 +179,8 @@ public final class ProblemCodes {
     public static final String NOT_INVITED = "NOT_INVITED";
     /** 409: access is turned off for a member who was never invited (feature 020). */
     public static final String ACCESS_NOT_GRANTED = "ACCESS_NOT_GRANTED";
+    /** 409: a member turns off their own access; another holder of the permission must do it (feature 020). */
+    public static final String OWN_ACCESS = "OWN_ACCESS";
     /**
      * 502: the invitation letter could not be sent; the problem carries the delivery failure in {@code failureCode},
      * the access status is unchanged and an earlier link still works (feature 020).
@@ -191,6 +193,11 @@ public final class ProblemCodes {
      * off or the member is archived; one code for every case, so nothing leaks (feature 020).
      */
     public static final String INVITATION_INVALID = "INVITATION_INVALID";
+    /**
+     * 429 of the public invitation endpoints: too many requests from one client address, or for one invitation e-mail,
+     * within the window ({@code nadel.invitations.rate-limit.*}, feature 020); nothing was checked or changed.
+     */
+    public static final String TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS";
     /**
      * 400: an announcement's text is longer than 2000 characters (Unicode code points, after the surrounding spaces are
      * removed; feature 017 §2.6); also with the field code {@code TOO_LONG} of {@code text} in {@code errors[]}.

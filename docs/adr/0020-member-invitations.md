@@ -58,6 +58,24 @@ any further one needs one); cross-module side effects go through the outbox (ADR
   invites again. A disabled or invited member is refused in `MemberAuthenticationConverter`.
 - Invite, resend, disable and enable need the permission `MEMBERS_INVITE` (the thirty-second, Chairman only by
   default) and are audited without the link or the password.
+- A cooperative never locks its board out: nobody turns off their own access (409 `OWN_ACCESS`), and neither the
+  disable action nor the archive turns off the access of the last active chairman whose access is on (`INVITED` or
+  `ACTIVE`; 409 `LAST_CHAIRMAN`, under the same per-cooperative advisory lock as the other last-chairman checks).
+
+### Rate limit of the public endpoints
+- `inspect` and `accept` are public, so each is limited: at most 5 requests within 15 minutes from one client address
+  and for the e-mail of one invitation (`nadel.invitations.rate-limit.*`; the e-mail is found from the token hash and
+  counted by the cooperative and its blind index; a token of no link meets only the address limit). Over a limit the
+  answer is 429 `TOO_MANY_REQUESTS` before anything else runs, and the refused request is not counted.
+- The client address is `request.getRemoteAddr()`. Behind Caddy, `server.forward-headers-strategy: native` lets
+  Tomcat's `RemoteIpValve` take it from `X-Forwarded-For`, but only from a proxy on a private or loopback address; the
+  application never reads that header itself.
+- The counters are a bounded sliding log in the memory of the instance (at most `max-keys` keys, the least recently
+  used dropped first). No new dependency and no table: one backend instance runs per stand. With several instances
+  each counts on its own, so the effective limit is multiplied by the number of instances; a shared store (the
+  database or a cache) is the change to make then. A restart clears the counters.
+- A per-e-mail limit lets whoever holds a link delay that member for one window by repeating its requests; links
+  cannot be guessed (256-bit tokens), so the address limit is the main guard against floods.
 
 ### First chairman
 - `infra/stand/first-chairman.sh` runs the backend jar once (`docker compose run --rm --no-deps`, profile `command`,

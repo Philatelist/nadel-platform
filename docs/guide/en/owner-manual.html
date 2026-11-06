@@ -464,6 +464,13 @@ curl -s -X POST localhost:8091/control/reset</pre>
           older one stops working) or disable access.
         </li>
       </ol>
+      <p>
+        Nobody can disable their own access, and the access of the last chairman who has access can be neither
+        disabled nor removed by archiving: a cooperative always keeps a chairman who can sign in. The set-password
+        page takes at most 5 requests within 15 minutes from one address and for the e-mail of one invitation
+        (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>, <code>NADEL_INVITATIONS_RATE_LIMIT_WINDOW</code>);
+        the counters live in the backend's memory and are cleared by a restart.
+      </p>
       <h3>The platform's own Keycloak client</h3>
       <p>
         To create users the backend signs in to Keycloak as a separate <strong>confidential</strong> client,

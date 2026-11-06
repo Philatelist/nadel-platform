@@ -93,6 +93,9 @@ class MemberAccessTests extends IntegrationTest {
     MemberAccessRevocation revocation;
 
     @Autowired
+    LastChairmanGuard lastChairmanGuard;
+
+    @Autowired
     Clock clock;
 
     @Autowired
@@ -532,7 +535,8 @@ class MemberAccessTests extends IntegrationTest {
                 new StaticListableBeanFactory(Map.of("racingDelivery", racingDelivery))
                         .getBeanProvider(InvitationDelivery.class));
         return new MemberInvitations(memberRepository, memberCrypto, accessState, invitationRows, racingDeliveries,
-                signInAccounts, memberAudit, revocation, clock, transactionManager, webUrl, invitationTtl);
+                signInAccounts, memberAudit, revocation, lastChairmanGuard, clock, transactionManager, webUrl,
+                invitationTtl);
     }
 
     private AccessProfile chairmanProfile() {

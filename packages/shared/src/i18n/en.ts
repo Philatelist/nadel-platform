@@ -85,6 +85,8 @@ export const en = {
       MAILBOX_NOT_CONFIGURED: 'Set up the cooperative mailbox',
     },
     notSent: 'The invitation was not sent: {reason}. Try again.',
+    lastChairman:
+      'This is the last chairman with access. Give another member the Chairman role and access first.',
   },
   setPassword: {
     title: 'Set a password',
@@ -3608,6 +3610,8 @@ export const en = {
     SIGN_IN_ACCOUNT_IN_USE: 'A different account is already linked to this e-mail. Use another e-mail.',
     NOT_INVITED: 'This member has not been invited yet.',
     ACCESS_NOT_GRANTED: 'This member has no access.',
+    OWN_ACCESS: 'You cannot turn off your own access.',
+    TOO_MANY_REQUESTS: 'Too many attempts. Wait a few minutes and try again.',
     INVITATION_NOT_SENT: 'The invitation was not sent. Try again.',
     SIGN_IN_SERVICE_UNAVAILABLE:
       'The sign-in service is temporarily unavailable. Try again in a few minutes.',

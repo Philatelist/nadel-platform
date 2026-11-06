@@ -7,7 +7,7 @@ import { problemCode, problemFieldErrors, problemMessage } from '../problem';
 
 const MIN_LENGTH = 8;
 
-type Phase = 'loading' | 'invalid' | 'form' | 'done';
+type Phase = 'loading' | 'invalid' | 'tooMany' | 'form' | 'done';
 
 /** Keeps the page's link token out of the Referer of anything it loads, while the page is shown. */
 function useNoReferrer(): void {
@@ -54,7 +54,8 @@ export function SetPasswordPage() {
           setEmail(info.email);
           setPhase('form');
         },
-        onError: () => setPhase('invalid'),
+        // over the limit of the public endpoints (429) the link may still be fine: say so, not that it is invalid
+        onError: (error) => setPhase(problemCode(error) === 'TOO_MANY_REQUESTS' ? 'tooMany' : 'invalid'),
       },
     );
     // inspect once on mount
@@ -90,6 +91,7 @@ export function SetPasswordPage() {
       <h1 className="font-serif text-2xl font-semibold text-ink">{c.title}</h1>
       {phase === 'loading' && <p className="text-ink-muted">{c.loading}</p>}
       {phase === 'invalid' && <Notice tone="danger">{c.invalid}</Notice>}
+      {phase === 'tooMany' && <Notice tone="danger">{t.problem.TOO_MANY_REQUESTS}</Notice>}
       {phase === 'form' && (
         <Panel>
           <form className="flex flex-col gap-4" onSubmit={submit} noValidate>

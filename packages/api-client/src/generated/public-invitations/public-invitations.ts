@@ -24,6 +24,7 @@ import type {
   InvitationAcceptInput,
   InvitationInfo,
   InvitationInvalidResponse,
+  InvitationRateLimitedResponse,
   InvitationTokenInput,
   SignInServiceUnavailableResponse
 } from '../model';
@@ -48,6 +49,8 @@ export const getInspectInvitationUrl = () => {
  * the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
  * `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
  * expired, or of a member whose access was turned off or who was archived): the answer never says which.
+ * 429 `TOO_MANY_REQUESTS` when the limit of the public invitation endpoints is reached (see
+ * `InvitationRateLimited`).
  * @summary Check an invitation link
  */
 export const inspectInvitation = async (invitationTokenInput: InvitationTokenInput, options?: Parameters<typeof nadelFetch>[1]): Promise<InvitationInfo> => {
@@ -81,7 +84,7 @@ return nadelFetch<InvitationInfo>(getInspectInvitationUrl(),
 
 export const getInspectInvitationMutationKey = () => ['inspectInvitation'] as const;
 
-export const getInspectInvitationMutationOptions = <TError = BadRequestResponse | InvitationInvalidResponse,
+export const getInspectInvitationMutationOptions = <TError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inspectInvitation>>, TError,InspectInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof inspectInvitation>>, TError,InspectInvitationMutationVariables, TContext> => {
 
@@ -110,13 +113,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type InspectInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof inspectInvitation>>>
     export type InspectInvitationMutationBody = InvitationTokenInput
-    export type InspectInvitationMutationError = BadRequestResponse | InvitationInvalidResponse
+    export type InspectInvitationMutationError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse
     export type InspectInvitationMutationVariables = {data: InvitationTokenInput}
 
     /**
  * @summary Check an invitation link
  */
-export const useInspectInvitation = <TError = BadRequestResponse | InvitationInvalidResponse,
+export const useInspectInvitation = <TError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inspectInvitation>>, TError,InspectInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof inspectInvitation>>,
@@ -141,8 +144,8 @@ export const useInspectInvitation = <TError = BadRequestResponse | InvitationInv
  *
  * 400 `VALIDATION_FAILED` with `errors[{field: password}]`: `TOO_SHORT` under 8 characters, `TOO_LONG` over 128,
  * `PASSWORD_POLICY` the sign-in service refused it by its own rules. 404 `INVITATION_INVALID` as in
- * `inspectInvitation`. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link
- * stays usable.
+ * `inspectInvitation`. 429 `TOO_MANY_REQUESTS` as in `inspectInvitation`; nothing changed. 503
+ * `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link stays usable.
  * @summary Set the password with an invitation link
  */
 export const acceptInvitation = async (invitationAcceptInput: InvitationAcceptInput, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
@@ -176,7 +179,7 @@ return nadelFetch<void>(getAcceptInvitationUrl(),
 
 export const getAcceptInvitationMutationKey = () => ['acceptInvitation'] as const;
 
-export const getAcceptInvitationMutationOptions = <TError = BadRequestResponse | InvitationInvalidResponse | SignInServiceUnavailableResponse,
+export const getAcceptInvitationMutationOptions = <TError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,AcceptInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,AcceptInvitationMutationVariables, TContext> => {
 
@@ -205,13 +208,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AcceptInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptInvitation>>>
     export type AcceptInvitationMutationBody = InvitationAcceptInput
-    export type AcceptInvitationMutationError = BadRequestResponse | InvitationInvalidResponse | SignInServiceUnavailableResponse
+    export type AcceptInvitationMutationError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse | SignInServiceUnavailableResponse
     export type AcceptInvitationMutationVariables = {data: InvitationAcceptInput}
 
     /**
  * @summary Set the password with an invitation link
  */
-export const useAcceptInvitation = <TError = BadRequestResponse | InvitationInvalidResponse | SignInServiceUnavailableResponse,
+export const useAcceptInvitation = <TError = BadRequestResponse | InvitationInvalidResponse | InvitationRateLimitedResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptInvitation>>, TError,AcceptInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof acceptInvitation>>,

@@ -128,6 +128,21 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
     List<UUID> findActiveChairmanIds(@Param("tenantId") UUID tenantId);
 
     /**
+     * Ids of the active chairmen whose access to the system is on (feature 020): {@code INVITED} or {@code ACTIVE} in
+     * {@code member_access}, or linked to a sign-in account before invitations existed and without an access row (read
+     * as {@code ACTIVE}, see {@link MemberAccessState#status}).
+     */
+    @Query(value = """
+            select distinct m.id from member m
+            join member_role mr on mr.member_id = m.id
+            join role r on r.id = mr.role_id
+            left join member_access a on a.member_id = m.id
+            where m.tenant_id = :tenantId and m.archived_at is null and r.base_code = 'CHAIRMAN'
+              and (a.state in ('INVITED', 'ACTIVE') or (a.member_id is null and m.keycloak_subject is not null))
+            """, nativeQuery = true)
+    List<UUID> findActiveChairmanIdsWithAccess(@Param("tenantId") UUID tenantId);
+
+    /**
      * Takes a transaction-scoped advisory lock for the cooperative (released at commit or rollback). Two requests
      * that change who the chairmen are serialise here, so both cannot see "another chairman remains".
      * Returns 1; the select only exists to run the function.

@@ -126,8 +126,13 @@ the application may set only those three times and deletes nothing; one open sen
   `disabled_at`, every unused link is revoked (`MemberInvitationRows.revokeUnused`) and `MemberAccessRevoked(tenantId,
   memberId)` is published (`MemberAccessRevocation`); audited as `MEMBER_ACCESS_DISABLED` (no fields). Already
   `DISABLED` is 200 without an audit entry; never invited is 409 `ACCESS_NOT_GRANTED`. The answer is the `MemberAccess`.
+  The actor's own access is 409 `OWN_ACCESS` (checked first, nothing read), and the access of the last active chairman
+  whose access is on is 409 `LAST_CHAIRMAN` (`LastChairmanGuard.ensureNotLastWithAccess`, chairman lock before the
+  member row, as the archive does), so a cooperative never locks its board out. The web card hides the button on the
+  member's own card.
 - **Archive and restore**: archiving a member with access or an open invitation does the same as disable (in the
-  archive transaction, audited as `MEMBER_ARCHIVED` only); a member never invited gets no row. Restore leaves access as
+  archive transaction, audited as `MEMBER_ARCHIVED` only); a member never invited gets no row. Because the archive
+  turns access off, it also refuses the last active chairman whose access is on (409 `LAST_CHAIRMAN`). Restore leaves access as
   it is: `DISABLED` stays, the board invites again.
 - **E-mail change** (`PUT /members/{id}`, `MemberCommands.update`): for a member with access or an open invitation
   (`INVITED`, `ACTIVE`, legacy included) whose e-mail changes to another address, `MemberLoginGuard` first asks Keycloak
@@ -136,8 +141,13 @@ the application may set only those three times and deletes nothing; one open sen
   is 503 (nothing changed). Members without access, archived members and unchanged e-mails never ask Keycloak. Then
   the update transaction (member locked `FOR UPDATE`) stores `INVITED`, revokes the unused links and publishes
   `MemberLoginChanged(tenantId, memberId)`. Removing the e-mail of such a member does the same (the card then shows
-  `inviteBlockedBy: EMAIL_MISSING`). The Excel import does not apply these rules: an e-mail it changes leaves the Keycloak login and the
-  access state as they were (an open link of the old e-mail still dies by its blind index).
+  `inviteBlockedBy: EMAIL_MISSING`). The Excel import never changes a login, so it needs none of this: a row with an
+  e-mail matches only the member who has that e-mail (case ignored; `MemberData` stores e-mails in lower case, so a
+  case-only difference is `UNCHANGED`), a blank e-mail keeps the stored one, and a row with a new e-mail and the name
+  and first phone of an existing member is a new member. The `email_bidx` of a matched member therefore never changes
+  through `MemberImport.apply`, no Keycloak call is needed, and the access and an open link stay as they were
+  (`ImportMemberLoginTests`). A change to the matching that let a row change an e-mail must route it through
+  `MemberLoginGuard` and `MemberLoginChanged` as `MemberCommands.update` does.
 - **`MemberAccessListener`** (ADR 0007: `@Async @TransactionalEventListener`, `TenantContext.runAs`, a read-only
   `TransactionTemplate` that re-reads the member, Keycloak calls outside any transaction). The events are internal to
   the module and carry ids only (never the e-mail or a link). `MemberAccessRevoked`: only while the access is still
@@ -159,6 +169,15 @@ the application may set only those three times and deletes nothing; one open sen
   link e-mail = the member's current `email_bidx`), sets the password (`reset-password`, a refused one is 400
   `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true`, then
   `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
+- **Rate limit of the public endpoints** (`InvitationRateLimiter`, ADR 0020): before anything else each request is
+  counted by the client address (`request.getRemoteAddr()`, the client behind Caddy through
+  `server.forward-headers-strategy: native`) and, when the token belongs to a link
+  (`MemberInvitations.rateLimitKey`: the cooperative and the link's e-mail blind index, never the e-mail), by that
+  e-mail; each endpoint counts apart. Over `nadel.invitations.rate-limit.max-requests` (5) within `window` (15 min)
+  the answer is 429 `TOO_MANY_REQUESTS` and is not counted. The counters are in memory (`max-keys`, 10,000, least
+  recently used dropped): with several instances each counts on its own, and a restart clears them. The tests raise
+  the limit (`nadel.test.invitation-rate-limit`), `make e2e` and the CI e2e job set
+  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000`.
 - **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
   no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
 - **Last sign-in** (`lastSignInAt` on the card): when a linked member's row is `ACTIVE` and `last_sign_in_at` is missing
@@ -244,7 +263,8 @@ the application may set only those three times and deletes nothing; one open sen
     `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks with the stored blind index.
   - Archive order of work (`MemberCommands.archive`): take the chairman lock (below), lock the member row `FOR UPDATE`
     (`MemberRepository.findByIdForUpdate`; 404 when missing or of another cooperative), and for a member who is not
-    archived yet run `LastChairmanGuard.ensureNotLast` and then every `MemberArchiveGuard`. The row lock serialises the
+    archived yet run `LastChairmanGuard.ensureNotLast`, `LastChairmanGuard.ensureNotLastWithAccess` and then every
+    `MemberArchiveGuard`. The row lock serialises the
     archive with a change of owner that adds the member (it holds `FOR SHARE` through `MemberDirectory.lockActive`): the
     archive sees the committed owner and answers `MEMBER_OWNS_PLOT`, or the change finds the member archived and answers
     `MEMBER_ARCHIVED`; an archived current owner cannot result. The chairman lock comes before the row lock because
@@ -252,7 +272,10 @@ the application may set only those three times and deletes nothing; one open sen
     opposite order would deadlock.
   - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
     transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
-    it.
+    it. `ensureNotLastWithAccess` takes the same lock and refuses (409 `LAST_CHAIRMAN`) to turn off the access of the
+    only active chairman whose access is on (`member_access` `INVITED` or `ACTIVE`, or linked without a row; a chairman
+    who is `DISABLED` or never invited does not count). Disable and archive use it; a role change does not turn access
+    off and keeps the plain rule.
   - `notes` need `MEMBERS_VIEW`: a `PUT` by an editor without it keeps the stored notes, a `POST` stores none.
   - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.

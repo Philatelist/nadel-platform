@@ -131,7 +131,8 @@ class MemberCommands {
     /**
      * Archives a member. The member row is locked first ({@code FOR UPDATE}): a concurrent change of owner that adds
      * this member holds a {@code FOR SHARE} lock on it, so the two serialise, and whichever runs second sees the
-     * other's result. Then the last-chairman check and every {@link MemberArchiveGuard} run. The chairman lock is
+     * other's result. Then the last-chairman checks (the last active chairman, and the last active chairman whose
+     * access is on, because the archive turns access off) and every {@link MemberArchiveGuard} run. The chairman lock is
      * taken before the row lock, the order a role change already uses (see {@link LastChairmanGuard#lock}).
      */
     @Transactional
@@ -141,6 +142,7 @@ class MemberCommands {
         OpenedContacts contacts = crypto.open(member);
         if (!member.isArchived()) {
             lastChairman.ensureNotLast(actor.tenantId(), member.getId());
+            lastChairman.ensureNotLastWithAccess(actor.tenantId(), member.getId()); // the archive turns access off
             archiveGuards.forEach(guard -> guard.ensureCanArchive(member.getId()));
             MemberSnapshot before = MemberSnapshot.of(member, contacts);
             Instant now = Instant.now();

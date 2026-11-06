@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -90,6 +91,7 @@ class MemberInvitations {
     private final SignInAccounts accounts;
     private final MemberAuditPublisher audit;
     private final MemberAccessRevocation revocation;
+    private final LastChairmanGuard lastChairman;
     private final Clock clock;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
@@ -98,8 +100,8 @@ class MemberInvitations {
 
     MemberInvitations(MemberRepository members, MemberCrypto crypto, MemberAccessState access,
             MemberInvitationRows invitations, InvitationDeliveries deliveries, SignInAccounts accounts,
-            MemberAuditPublisher audit, MemberAccessRevocation revocation, Clock clock,
-            PlatformTransactionManager transactionManager,
+            MemberAuditPublisher audit, MemberAccessRevocation revocation, LastChairmanGuard lastChairman,
+            Clock clock, PlatformTransactionManager transactionManager,
             @Value("${nadel.web.url}") String webUrl, @Value("${nadel.invitations.ttl}") Duration ttl) {
         this.members = members;
         this.crypto = crypto;
@@ -109,6 +111,7 @@ class MemberInvitations {
         this.accounts = accounts;
         this.audit = audit;
         this.revocation = revocation;
+        this.lastChairman = lastChairman;
         this.clock = clock;
         this.reading = new TransactionTemplate(transactionManager);
         this.reading.setReadOnly(true);
@@ -183,16 +186,25 @@ class MemberInvitations {
      * legacy link included) becomes {@code DISABLED}, the open links are revoked and {@link MemberAccessRevoked} asks
      * {@link MemberAccessListener} to turn the Keycloak account off. Already {@code DISABLED} is a no-op without an
      * audit entry; never invited is 409 {@code ACCESS_NOT_GRANTED}. Audited as {@code MEMBER_ACCESS_DISABLED}.
+     * <p>
+     * The actor's own access is 409 {@code OWN_ACCESS}, and the access of the last active chairman whose access is on
+     * is 409 {@code LAST_CHAIRMAN} ({@link LastChairmanGuard#ensureNotLastWithAccess}): a cooperative never locks its
+     * board out. The chairman lock is taken before the member row, the order of the archive and of a role change.
      */
     nadel.contract.model.MemberAccess disable(UUID memberId, AccessProfile actor) {
         UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
+        if (memberId.equals(actor.memberId())) {
+            throw conflict(ProblemCodes.OWN_ACCESS, "A member cannot turn off their own access.");
+        }
         nadel.contract.model.MemberAccess answer = writing.execute(status -> {
+            lastChairman.lock(tenantId);
             Member member = members.findByIdForUpdate(memberId).orElseThrow(ApiProblemException::notFound);
             MemberAccessStatus current = MemberAccessState.status(member, access.find(memberId));
             if (current == MemberAccessStatus.NOT_INVITED) {
                 throw conflict(ProblemCodes.ACCESS_NOT_GRANTED, "The member was never invited.");
             }
             if (current != MemberAccessStatus.DISABLED) {
+                lastChairman.ensureNotLastWithAccess(tenantId, memberId);
                 revocation.revoke(member, clock.instant());
                 audit.publish(tenantId, actorOf(actor), DISABLED_ACTION, member, List.of());
                 log.info("Access of member {} of cooperative {} disabled", memberId, tenantId);
@@ -255,6 +267,19 @@ class MemberInvitations {
                 List.of(new FieldChange("channels", null, channels)), actor, purpose);
         log.info("Invitation ({}) of member {} of cooperative {} sent", purpose, memberId, tenantId);
         return answer;
+    }
+
+    /**
+     * The key the e-mail limit of the public endpoints counts a link under ({@link InvitationRateLimiter}): the
+     * cooperative and the blind index of the e-mail the link was made for, so every link of one e-mail shares it. Empty
+     * for a token no link has. Never the e-mail itself, and never logged.
+     */
+    Optional<String> rateLimitKey(String token) {
+        byte[] hash = InvitationTokens.hash(token);
+        Optional<UUID> tenantId = Objects.requireNonNull(reading.execute(status -> invitations.tenantOf(hash)));
+        return tenantId.flatMap(tenant -> Objects.requireNonNull(TenantContext.runAs(tenant,
+                () -> reading.execute(status -> invitations.findByHash(hash))))
+                .map(invitation -> tenant + "|" + HexFormat.of().formatHex(invitation.emailBidx())));
     }
 
     /** The e-mail a usable link was sent to (the login); 404 {@code INVITATION_INVALID} for every other link. */

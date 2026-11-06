@@ -55,6 +55,9 @@ spring:
     default-property-inclusion: non_null
 
 server:
+  # Behind Caddy (infra/stand) the client address comes from X-Forwarded-For, which Tomcat's RemoteIpValve honours only
+  # from a proxy on a private or loopback address; request.getRemoteAddr() is then the client (the invitation rate limit)
+  forward-headers-strategy: native
   tomcat:
     # An upload over the limit is read to the end (up to this size) so that the client receives the 413 answer
     # instead of a broken connection; at least the multipart request limit above
@@ -90,6 +93,13 @@ nadel:
   invitations:
     # How long an invitation link works (feature 020: 72 hours, once)
     ttl: 72h
+    # The public set-password endpoints (inspect, accept): at most max-requests per window from one client address and
+    # for the e-mail of one invitation, counted per endpoint; over it 429 TOO_MANY_REQUESTS. Kept in memory of this
+    # instance (at most max-keys counters, the least recently used go first), see ADR 0020
+    rate-limit:
+      max-requests: 5
+      window: 15m
+      max-keys: 10000
   privacy:
     # Personal data master key: 32 random bytes in base64 (openssl rand -base64 32), from the environment only. Every
     # profile except dev refuses to start without it; see backend/src/main/java/app/nadel/privacy/README.md
