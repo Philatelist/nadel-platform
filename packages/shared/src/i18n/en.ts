@@ -95,6 +95,7 @@ export const en = {
     confirm: 'Repeat the password',
     hintLength: 'At least 8 characters',
     hintMatch: 'The passwords match',
+    hintMismatch: 'The passwords differ',
     submit: 'Save password',
     done: 'Password set',
     doneText: 'You can sign in now.',

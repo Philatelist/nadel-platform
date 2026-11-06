@@ -101,6 +101,7 @@ export const uk: Messages = {
     confirm: 'Повторіть пароль',
     hintLength: 'Щонайменше 8 символів',
     hintMatch: 'Паролі збігаються',
+    hintMismatch: 'Паролі не збігаються',
     submit: 'Зберегти пароль',
     done: 'Пароль задано',
     doneText: 'Тепер можна увійти в систему.',

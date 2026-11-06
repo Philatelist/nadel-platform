@@ -64,6 +64,18 @@ describe('SetPasswordPage', () => {
     expect(save).toBeEnabled();
   });
 
+  it('shows the match hint only once the confirmation is typed', () => {
+    open('?token=abc');
+    renderWithApp(<SetPasswordPage />);
+    expect(screen.queryByText('The passwords match')).not.toBeInTheDocument();
+    expect(screen.queryByText('The passwords differ')).not.toBeInTheDocument();
+    fireEvent.change(confirm(), { target: { value: 'abc' } });
+    expect(screen.getByText('The passwords differ')).toBeInTheDocument();
+    fireEvent.change(password(), { target: { value: 'abc' } });
+    expect(screen.getByText('The passwords match')).toBeInTheDocument();
+    expect(screen.queryByText('The passwords differ')).not.toBeInTheDocument();
+  });
+
   it('sets the password and offers sign-in', () => {
     open('?token=abc');
     accept.mockImplementation((_v, o) => o.onSuccess());

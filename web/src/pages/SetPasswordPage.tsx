@@ -111,7 +111,11 @@ export function SetPasswordPage() {
             />
             <ul className="text-[13px]">
               <li className={longEnough ? 'text-success-ink' : 'text-ink-subtle'}>{c.hintLength}</li>
-              <li className={matches ? 'text-success-ink' : 'text-ink-subtle'}>{c.hintMatch}</li>
+              {confirm !== '' && (
+                <li className={matches ? 'text-success-ink' : 'text-danger'}>
+                  {matches ? c.hintMatch : c.hintMismatch}
+                </li>
+              )}
             </ul>
             {formError && <Notice tone="danger">{formError}</Notice>}
             <div>
