@@ -62,6 +62,7 @@ function MemberView({ member }: { member: Member }) {
   );
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [accessOff, setAccessOff] = useState(false);
 
   const options = {
     onSuccess: async (updated: Member) => {
@@ -69,6 +70,7 @@ function MemberView({ member }: { member: Member }) {
       await queryClient.invalidateQueries({ queryKey: getListMembersQueryKey() });
       setConfirming(false);
       setSaved(true);
+      setAccessOff(updated.archived && updated.access?.status === 'DISABLED');
     },
     onError: (error: unknown) => {
       setConfirming(false);
@@ -135,7 +137,7 @@ function MemberView({ member }: { member: Member }) {
         badge={member.archived && <Badge tone="neutral">{t.members.archived}</Badge>}
         actions={actions}
       />
-      {saved && <Notice tone="success">{c.saved}</Notice>}
+      {saved && <Notice tone="success">{accessOff ? `${c.saved}. ${c.archivedAccessOff}` : c.saved}</Notice>}
       {actionError && <Notice tone="danger">{actionError}</Notice>}
 
       {editing ? (
@@ -143,6 +145,7 @@ function MemberView({ member }: { member: Member }) {
           member={member}
           onSaved={() => {
             setEditing(false);
+            setAccessOff(false);
             setSaved(true);
           }}
           onCancel={() => setEditing(false)}
@@ -169,7 +172,13 @@ function MemberView({ member }: { member: Member }) {
       {confirming && (
         <ConfirmDialog
           title={member.archived ? c.restoreTitle : c.archiveTitle}
-          message={member.archived ? c.restoreText : c.archiveText}
+          message={
+            member.archived
+              ? member.access && member.access.status !== 'NOT_INVITED'
+                ? `${c.restoreText} ${c.restoreAccessNote}`
+                : c.restoreText
+              : c.archiveText
+          }
           confirmLabel={member.archived ? c.restore : c.archive}
           busy={isToggling}
           onConfirm={() => (member.archived ? restore : archive).mutate({ id: member.id })}

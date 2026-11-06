@@ -75,6 +75,17 @@ class MemberAccessState {
     }
 
     /**
+     * Records a sign-in of a member whose row is {@code ACTIVE}, at most once per interval: only when the stored last
+     * sign-in is missing or before {@code dueBefore}. A member without a row (linked by the legacy sign-in) gets none.
+     * Answers whether the row was written.
+     */
+    boolean recordSignIn(UUID memberId, Instant at, Instant dueBefore) {
+        return jdbc.update("update member_access set last_sign_in_at = ? where member_id = ? and state = 'ACTIVE' "
+                + "and (last_sign_in_at is null or last_sign_in_at < ?)", at.atOffset(ZoneOffset.UTC), memberId,
+                dueBefore.atOffset(ZoneOffset.UTC)) > 0;
+    }
+
+    /**
      * The {@code access} of the member card and of the invitation endpoints. {@code inviteBlockedBy} is set while an
      * invitation (or a new one) is possible by the status but cannot be sent now: no e-mail (it is the login) before no
      * mailbox. {@code mailboxReady} is asked only when the member has an e-mail.

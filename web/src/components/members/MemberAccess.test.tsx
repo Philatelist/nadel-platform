@@ -12,6 +12,8 @@ const invite = vi.fn();
 const resend = vi.fn();
 const disable = vi.fn();
 let inviteOptions: Opts;
+let resendOptions: Opts;
+let disableOptions: Opts;
 
 vi.mock('../../me', () => ({
   useCan: (p: Permission) => permissions.includes(p),
@@ -22,8 +24,14 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     inviteOptions = options;
     return { mutate: invite, isPending: false };
   },
-  useResendMemberInvitation: () => ({ mutate: resend, isPending: false }),
-  useDisableMemberAccess: () => ({ mutate: disable, isPending: false }),
+  useResendMemberInvitation: (options: Opts) => {
+    resendOptions = options;
+    return { mutate: resend, isPending: false };
+  },
+  useDisableMemberAccess: (options: Opts) => {
+    disableOptions = options;
+    return { mutate: disable, isPending: false };
+  },
 }));
 
 const member = {
@@ -131,5 +139,17 @@ describe('MemberAccess', () => {
       ),
     );
     expect(screen.getByText(/The invitation was not sent: .+\. Try again\./)).toBeInTheDocument();
+  });
+
+  it('shows the refusal when resending to a member who was not invited', () => {
+    show({ status: 'INVITED' });
+    act(() => resendOptions.mutation.onError(new ApiError(409, { code: 'NOT_INVITED' })));
+    expect(screen.getByText('This member has not been invited yet.')).toBeInTheDocument();
+  });
+
+  it('shows the refusal when turning off access that was never granted', () => {
+    show({ status: 'ACTIVE' });
+    act(() => disableOptions.mutation.onError(new ApiError(409, { code: 'ACCESS_NOT_GRANTED' })));
+    expect(screen.getByText('This member has no access.')).toBeInTheDocument();
   });
 });

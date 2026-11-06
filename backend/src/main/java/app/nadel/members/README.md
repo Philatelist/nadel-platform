@@ -113,11 +113,42 @@ the application may set only those three times and deletes nothing; one open sen
   `member_tenant_subject_uq` maps to `SIGN_IN_ACCOUNT_IN_USE`) and inserts the link unsent; (4) outside any transaction
   `InvitationDelivery.deliver` with `{nadel.web.url}/set-password?token=…`, valid `nadel.invitations.ttl` (72 h);
   (5) a transaction revokes the member's older open links, marks the new one sent, sets `INVITED` + `invited_at` and
-  publishes the audit event `MEMBER_INVITED` (entity `MEMBER`, field `channels` only: `EMAIL`, later `EMAIL, TELEGRAM`).
+  publishes the audit event `MEMBER_INVITED` (entity `MEMBER`, field `channels` only: `EMAIL` or `EMAIL, TELEGRAM`).
   A letter that is not sent revokes the unsent link in a compensating transaction and answers 502
   `INVITATION_NOT_SENT` with `failureCode` (`NOT_CONFIGURED` is 409 `DELIVERY_NOT_CONFIGURED`): the state stays, nothing
-  is audited, an earlier link still works. Keycloak failures are 503 `SIGN_IN_SERVICE_UNAVAILABLE`. Resend and disable
-  answer 501 until slice 6.
+  is audited, an earlier link still works. Keycloak failures are 503 `SIGN_IN_SERVICE_UNAVAILABLE`.
+- **Resend** (`POST /members/{id}/invitation/resend`, same permissions; `MemberInvitations.resend`): the same five steps
+  for a member who is `INVITED` (otherwise 409 `NOT_INVITED`; archived 409 `MEMBER_ARCHIVED`) with a new token; only a
+  sent letter revokes the older links, so a 502 `INVITATION_NOT_SENT` leaves the previous link working. Audited as
+  `MEMBER_INVITE_RESENT` (field `channels`).
+- **Disable** (`POST /members/{id}/access/disable`, same permissions; `MemberInvitations.disable`): under the member's
+  lock, `INVITED` or `ACTIVE` (a legacy link without a row included: a `DISABLED` row is written) becomes `DISABLED` +
+  `disabled_at`, every unused link is revoked (`MemberInvitationRows.revokeUnused`) and `MemberAccessRevoked(tenantId,
+  memberId)` is published (`MemberAccessRevocation`); audited as `MEMBER_ACCESS_DISABLED` (no fields). Already
+  `DISABLED` is 200 without an audit entry; never invited is 409 `ACCESS_NOT_GRANTED`. The answer is the `MemberAccess`.
+- **Archive and restore**: archiving a member with access or an open invitation does the same as disable (in the
+  archive transaction, audited as `MEMBER_ARCHIVED` only); a member never invited gets no row. Restore leaves access as
+  it is: `DISABLED` stays, the board invites again.
+- **E-mail change** (`PUT /members/{id}`, `MemberCommands.update`): for a member with access or an open invitation
+  (`INVITED`, `ACTIVE`, legacy included) whose e-mail changes to another address, `MemberLoginGuard` first asks Keycloak
+  outside any transaction (`findByLogin`): a login of another cooperative is 409 `EMAIL_IN_OTHER_COOPERATIVE` on the
+  field `email`, an account of this cooperative that is not the member's is 409 `SIGN_IN_ACCOUNT_IN_USE`, Keycloak down
+  is 503 (nothing changed). Members without access, archived members and unchanged e-mails never ask Keycloak. Then
+  the update transaction (member locked `FOR UPDATE`) stores `INVITED`, revokes the unused links and publishes
+  `MemberLoginChanged(tenantId, memberId)`. Removing the e-mail of such a member does the same (the card then shows
+  `inviteBlockedBy: EMAIL_MISSING`). The Excel import does not apply these rules: an e-mail it changes leaves the Keycloak login and the
+  access state as they were (an open link of the old e-mail still dies by its blind index).
+- **`MemberAccessListener`** (ADR 0007: `@Async @TransactionalEventListener`, `TenantContext.runAs`, a read-only
+  `TransactionTemplate` that re-reads the member, Keycloak calls outside any transaction). The events are internal to
+  the module and carry ids only (never the e-mail or a link). `MemberAccessRevoked`: only while the access is still
+  `DISABLED`, the account is turned off (`enabled: false`) and logged out; a missing account needs nothing.
+  `MemberLoginChanged`: only while still `INVITED`, the account's user name and e-mail become the current e-mail with
+  `emailVerified: false` and its sessions end; then, when the mailbox is set up and no open link exists for that e-mail
+  yet, `MemberInvitations.sendForNewLogin` issues and sends a new link through the resend steps (no actor, no audit
+  entry of its own: the change is `MEMBER_UPDATED`). Without a mailbox the member stays `INVITED` without a link until
+  the board resends. Failures that may pass (503, 502) are thrown so the outbox resubmits the publication (each retry a
+  new token); refusals that will not pass (409: the account belongs to another cooperative or the login is taken) are
+  logged and the publication completes.
 - **Tokens** (`InvitationTokens`): 32 bytes of `SecureRandom`, base64url without padding; stored as SHA-256 of the
   text. The token, the link and the password never reach the audit log, the outbox, a log line or an exception.
 - **Public endpoints** (`PublicInvitationController`, `/api/v1/public/**` open in `identity`'s `SecurityConfiguration`,
@@ -130,6 +161,45 @@ the application may set only those three times and deletes nothing; one open sen
   `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
 - **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
   no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
+- **Last sign-in** (`lastSignInAt` on the card): when a linked member's row is `ACTIVE` and `last_sign_in_at` is missing
+  or older than `nadel.identity.last-sign-in-interval` (default 1 h, by the application `Clock`), `resolve` runs
+  `update member_access set last_sign_in_at = :now where member_id = ? and state = 'ACTIVE' and (last_sign_in_at is
+  null or last_sign_in_at < :now - interval)` in its own short transaction; the usual request writes nothing, and a
+  failed write never refuses the sign-in. A member linked by the legacy path without a row gets no row and no time.
+
+## First-chairman command (feature 020)
+
+`java -jar nadel-backend.jar --spring.profiles.include=command --nadel.command=first-chairman
+--nadel.first-chairman.cooperative="…" --nadel.first-chairman.email=… --nadel.first-chairman.last-name=…
+--nadel.first-chairman.first-name=… --nadel.first-chairman.resend=true|false` (run once by
+`infra/stand/first-chairman.sh` with `docker compose run --rm --no-deps backend`).
+
+- **Profile `command`** (`application.yml`): `spring.main.web-application-type=none` (no web server; `identity`'s
+  `SecurityConfiguration` is servlet-only), no JobRunr job server, `nadel.telegram.bot-enabled=false` (no bot polling,
+  no delivery sweep), no resubmission of the backend's outstanding events at start. It works together with `dev` (the
+  stand) or any other profile.
+- **`FirstChairmanCommand`** (`ApplicationRunner`, `@ConditionalOnProperty(nadel.command=first-chairman)`, first of all
+  runners, so the `dev` demo runners never run in a command): reads the arguments, runs `FirstChairman`, waits up to
+  30 s until the outbox publications made since its start are processed (a count of `event_publication` rows, never
+  their payload), then stops the JVM with `SpringApplication.exit`: exit code 0 done or nothing to do, 1 a step
+  failed, 2 invalid arguments. Errors go to standard error as a problem code or an exception class name only.
+- **`FirstChairman`** (the work): validates the arguments with the contract's `MemberInput` constraints (names 1..100,
+  e-mail format and length) plus a required e-mail and a cooperative name of 1..200 characters (refusal
+  `INVALID_ARGUMENTS` names the fields only). Cooperative id `UUID.nameUUIDFromBytes("nadel:cooperative:" + e-mail)`
+  (trimmed, lower-cased), created by `tenancy.TenantProvisioning.ensure`. Then, with the cooperative bound, one
+  transaction finds the active member with the e-mail (blind index) or creates it with `MemberCommands.create` (names,
+  e-mail, `PAPER`) and gives it the Chairman role with `MemberRoleCommands.setRoles`; an active member with the e-mail
+  without the Chairman role is refused (`MEMBER_NOT_CHAIRMAN`: the board gives roles, the command never does). Then the
+  access: `ACTIVE` prints "already has access"; `INVITED` prints the invitation date and issues nothing unless `resend`;
+  otherwise (and `INVITED` with `resend`) `MemberInvitations.issueForCommand` runs the invite (or resend) steps.
+- **The link**: without a mailbox (a new cooperative has none) the link goes to the command's printer instead of a
+  letter and is printed once to standard output by `println` (never a logger, the audit log or the outbox); with a
+  mailbox the letter is sent as for the board. The HTTP invite never has a printer, so without a mailbox it still answers
+  409 `DELIVERY_NOT_CONFIGURED`. A link printed but not marked sent (the last transaction failed) never works; the
+  command then exits 1 and a re-run issues a new one.
+- **Audit**: `MEMBER_CREATED`, `MEMBER_ROLES_CHANGED` and `MEMBER_INVITED` / `MEMBER_INVITE_RESENT` by the actor
+  subject `system:first-chairman` without a member (the audit page shows «Система»); a printed link's entry has no
+  `channels` field. A re-run that issues nothing writes nothing.
 
 ## What is here
 
@@ -160,6 +230,8 @@ the application may set only those three times and deletes nothing; one open sen
 
 - Writes (`MemberCommands`, one transaction each, `@PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")` on the controller):
   `POST /members` (201 with `Location`), `PUT /members/{id}`, `POST /members/{id}/archive`, `POST /members/{id}/restore`.
+  A `PUT` first runs the login pre-check of feature 020 outside the transaction (above); an archive also switches access
+  off and a restore leaves it (above).
   The cooperative comes from the caller's profile, never from the request. Archiving an archived member and restoring an
   active one are no-ops (the card is returned, no audit event); a `PUT` that changes nothing writes no event either.
   - `MemberData.from` validates and normalises: names trimmed and required (`REQUIRED`), phones through `PhoneNumber`
@@ -280,4 +352,5 @@ roles have no base code. Electrician is no longer a base role.
   the same contacts again; a listed member that does not exist is skipped. The demo users sign in by e-mail through
   `email_bidx`.
 
-Depends on `identity`, `problem`, `audit`, `privacy` and `tenancy`.
+Depends on `identity`, `problem`, `audit`, `privacy` and `tenancy` (`TenantContext`, and `TenantProvisioning` for the
+first-chairman command).

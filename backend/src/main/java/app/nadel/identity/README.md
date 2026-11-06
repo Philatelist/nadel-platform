@@ -15,7 +15,7 @@ and whether they are the `PLATFORM_OPERATOR`; everything else is data in the dat
 | `AccessProfileSource` | SPI implemented by `members`. Keeps the dependency one-way: `members` -> `identity`, never the opposite |
 | `OwnedPlotsSource`, `OwnedPlot` | SPI implemented by `plots`: the plots the signed-in member owns now, returned as `ownedPlots` by `GET /me` (empty for the platform operator). Keeps the dependency one-way: `plots` -> `identity` |
 | `Roles.PLATFORM_OPERATOR` | The only role name left in code |
-| `SignInAccounts`, `SignInAccount`, `SignInAccountChange`, `SignInAccountMissingException` | Port (feature 020) to the Keycloak accounts of members, used by `members` to invite them: `findByLogin`, `create`, `get`, `update`, `resetPassword`, `logout`. Implemented by `KeycloakAdminClient` (below) |
+| `SignInAccounts`, `SignInAccount`, `SignInAccountChange`, `SignInAccountMissingException` | Port (feature 020) to the Keycloak accounts of members, used by `members` to invite them: `findByLogin`, `create`, `get`, `update` (`SignInAccountChange.enable()`, `disable()`, `newLogin(e-mail)`, `activated()`), `resetPassword`, `logout`. Implemented by `KeycloakAdminClient` (below) |
 
 ## Authentication flow
 
@@ -41,6 +41,9 @@ Security failures are written with `ProblemWriter`: 401 `UNAUTHENTICATED` (with 
 Feature 020: `members` refuses a member whose stored access is `INVITED` (no password yet) or `DISABLED` in step 3,
 whatever Keycloak says (403 `MEMBER_NOT_LINKED`). `/api/v1/public/**` is open without a token (`SecurityConfiguration`,
 before `/api/**`): the set-password page of an invitation calls it with the invitation token in the body.
+`SecurityConfiguration` (with method security) exists only in a servlet web application: the one-shot commands of the
+profile `command` (`spring.main.web-application-type=none`, the first-chairman command in `members`) have no HTTP
+surface.
 
 `GET /me` is served here from the `AccessProfile`.
 

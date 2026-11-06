@@ -81,6 +81,9 @@ nadel:
       client-secret: ${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:}
       connect-timeout: 5s
       read-timeout: 10s
+  identity:
+    # How often a member's last sign-in (the member card, feature 020) is stored at most: once per interval
+    last-sign-in-interval: 1h
   web:
     # Where the web application is: the base of the set-password link in an invitation letter ({url}/set-password)
     url: ${NADEL_WEB_URL:http://localhost:5173}
@@ -172,6 +175,27 @@ nadel:
     admin:
       # The dev secret of infra/keycloak/nadel-realm.json; only when NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET is not set
       client-secret: ${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:nadel-backend-admin-dev-secret}
+
+---
+# One-shot operations commands (feature 020): java -jar nadel-backend.jar --spring.profiles.include=command
+# --nadel.command=first-chairman ... (infra/stand/first-chairman.sh). No web server and no HTTP security, no JobRunr
+# job server, no bot polling or delivery sweep, no resubmission of the backend's outstanding events; the command's
+# runner stops the application with its exit code when it is done (members/README.md).
+spring:
+  config:
+    activate:
+      on-profile: command
+  main:
+    web-application-type: none
+  modulith:
+    events:
+      republish-outstanding-events-on-restart: false
+nadel:
+  telegram:
+    bot-enabled: false
+jobrunr:
+  background-job-server:
+    enabled: false
 
 ---
 # Production. The personal data master key has no fallback: start-up fails without NADEL_PD_MASTER_KEY or with a

@@ -55,6 +55,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code INVITATION_NOT_SENT} with the failure code: the access state is unchanged, nothing is audited and an earlier
  * link still works.
  * <p>
+ * <b>Resend</b> runs the same steps for a member who is {@code INVITED} ({@code MEMBER_INVITE_RESENT}); after an e-mail
+ * change {@link MemberAccessListener} runs them without an actor and without an audit entry. <b>Disable</b> stores
+ * {@code DISABLED}, revokes the open links and leaves the Keycloak account to the listener
+ * ({@link MemberAccessRevocation}).
+ * <p>
  * <b>Accept</b> (public, no token): the SHA-256 of the token finds the cooperative ({@code members_invitation_tenant}),
  * which is bound with {@code TenantContext.runAs}; one transaction locks the member and the link, checks the link
  * (sent, not used, not revoked, not expired by the {@link Clock}, the member active and {@code INVITED}, the e-mail
@@ -71,6 +76,8 @@ class MemberInvitations {
     private static final Logger log = LoggerFactory.getLogger(MemberInvitations.class);
 
     static final String INVITED_ACTION = "MEMBER_INVITED";
+    static final String RESENT_ACTION = "MEMBER_INVITE_RESENT";
+    static final String DISABLED_ACTION = "MEMBER_ACCESS_DISABLED";
     private static final String SUBJECT_INDEX = "member_tenant_subject_uq";
 
     private final MemberRepository members;
@@ -80,6 +87,7 @@ class MemberInvitations {
     private final InvitationDeliveries deliveries;
     private final SignInAccounts accounts;
     private final MemberAuditPublisher audit;
+    private final MemberAccessRevocation revocation;
     private final Clock clock;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
@@ -88,7 +96,8 @@ class MemberInvitations {
 
     MemberInvitations(MemberRepository members, MemberCrypto crypto, MemberAccessState access,
             MemberInvitationRows invitations, InvitationDeliveries deliveries, SignInAccounts accounts,
-            MemberAuditPublisher audit, Clock clock, PlatformTransactionManager transactionManager,
+            MemberAuditPublisher audit, MemberAccessRevocation revocation, Clock clock,
+            PlatformTransactionManager transactionManager,
             @Value("${nadel.web.url}") String webUrl, @Value("${nadel.invitations.ttl}") Duration ttl) {
         this.members = members;
         this.crypto = crypto;
@@ -97,6 +106,7 @@ class MemberInvitations {
         this.deliveries = deliveries;
         this.accounts = accounts;
         this.audit = audit;
+        this.revocation = revocation;
         this.clock = clock;
         this.reading = new TransactionTemplate(transactionManager);
         this.reading.setReadOnly(true);
@@ -107,13 +117,100 @@ class MemberInvitations {
     }
 
     /**
+     * Where the first-chairman command puts a link when the cooperative has no mailbox ({@link FirstChairman}): the
+     * operator's terminal. Called at most once per link, never with a logger.
+     */
+    @FunctionalInterface
+    interface LinkPrinter {
+        void print(URI link, Instant expiresAt);
+    }
+
+    /** Why a link is issued: the first invitation, the board's resend, or the listener after an e-mail change. */
+    enum Purpose {
+        /** {@code POST /members/{id}/invitation}: never invited, or access turned off. */
+        INVITE,
+        /** {@code POST /members/{id}/invitation/resend}: still {@code INVITED}. */
+        RESEND,
+        /** {@link MemberAccessListener} after the e-mail changed: {@code INVITED}, no audit entry of its own. */
+        NEW_LOGIN
+    }
+
+    /**
      * Invites the member of the actor's cooperative and answers the member's new access ({@code INVITED}). The actor
      * holds {@code MEMBERS_VIEW} and {@code MEMBERS_INVITE} (checked on the controller).
      */
     nadel.contract.model.MemberAccess invite(UUID memberId, AccessProfile actor) {
+        return issue(Objects.requireNonNull(actor.tenantId(), "tenantId"), memberId, actor, Purpose.INVITE, null);
+    }
+
+    /**
+     * The invitation of the first-chairman command ({@link FirstChairman}), with the cooperative bound by the caller:
+     * {@link #invite}, or {@link #resend} when {@code resend}, with one difference. When the cooperative's mailbox is
+     * not set up (a new cooperative never has one) the link goes to {@code printer} instead of a letter, and the audit
+     * entry has no {@code channels} field; with a mailbox the letter is sent as usual. The HTTP endpoints never pass a
+     * printer, so without a mailbox they still answer 409 {@code DELIVERY_NOT_CONFIGURED}.
+     */
+    nadel.contract.model.MemberAccess issueForCommand(UUID memberId, AccessProfile actor, boolean resend,
+            LinkPrinter printer) {
+        return issue(Objects.requireNonNull(actor.tenantId(), "tenantId"), memberId, actor,
+                resend ? Purpose.RESEND : Purpose.INVITE, Objects.requireNonNull(printer, "printer"));
+    }
+
+    /**
+     * Sends an invited member a new link (feature 020, technical considerations 2.4): the same two phases as
+     * {@link #invite}; the member must be {@code INVITED} (409 {@code NOT_INVITED}). Only a sent letter revokes the
+     * older links, so when it fails (502 {@code INVITATION_NOT_SENT}) the previous link still works. Audited as
+     * {@code MEMBER_INVITE_RESENT} with the channels.
+     */
+    nadel.contract.model.MemberAccess resend(UUID memberId, AccessProfile actor) {
+        return issue(Objects.requireNonNull(actor.tenantId(), "tenantId"), memberId, actor, Purpose.RESEND, null);
+    }
+
+    /**
+     * The new link after the member's e-mail changed ({@link MemberAccessListener}), with the cooperative bound by the
+     * caller: the same two phases as {@link #resend}, without an actor and without an audit entry (the e-mail change
+     * itself is audited as {@code MEMBER_UPDATED}). Throws like {@link #resend}.
+     */
+    void sendForNewLogin(UUID tenantId, UUID memberId) {
+        issue(tenantId, memberId, null, Purpose.NEW_LOGIN, null);
+        log.info("New login link sent to member {} of cooperative {}", memberId, tenantId);
+    }
+
+    /**
+     * Turns the member's access off (feature 020, technical considerations 2.1): {@code INVITED} or {@code ACTIVE} (a
+     * legacy link included) becomes {@code DISABLED}, the open links are revoked and {@link MemberAccessRevoked} asks
+     * {@link MemberAccessListener} to turn the Keycloak account off. Already {@code DISABLED} is a no-op without an
+     * audit entry; never invited is 409 {@code ACCESS_NOT_GRANTED}. Audited as {@code MEMBER_ACCESS_DISABLED}.
+     */
+    nadel.contract.model.MemberAccess disable(UUID memberId, AccessProfile actor) {
         UUID tenantId = Objects.requireNonNull(actor.tenantId(), "tenantId");
-        Candidate candidate = reading.execute(status -> candidate(tenantId, memberId));
-        if (!deliveries.emailReady(tenantId)) {
+        nadel.contract.model.MemberAccess answer = writing.execute(status -> {
+            Member member = members.findByIdForUpdate(memberId).orElseThrow(ApiProblemException::notFound);
+            MemberAccessStatus current = MemberAccessState.status(member, access.find(memberId));
+            if (current == MemberAccessStatus.NOT_INVITED) {
+                throw conflict(ProblemCodes.ACCESS_NOT_GRANTED, "The member was never invited.");
+            }
+            if (current != MemberAccessStatus.DISABLED) {
+                revocation.revoke(member, clock.instant());
+                audit.publish(tenantId, actorOf(actor), DISABLED_ACTION, member, List.of());
+                log.info("Access of member {} of cooperative {} disabled", memberId, tenantId);
+            }
+            String email = crypto.email(member);
+            return access.view(member, email != null && !email.isBlank(), () -> deliveries.emailReady(tenantId));
+        });
+        return Objects.requireNonNull(answer);
+    }
+
+    /**
+     * Both phases of a new link; see the class comment. {@code actor} is null only for {@link Purpose#NEW_LOGIN};
+     * {@code printer} is set only by {@link #issueForCommand} and takes the link instead of a letter when there is no
+     * mailbox.
+     */
+    private nadel.contract.model.MemberAccess issue(UUID tenantId, UUID memberId, @Nullable AccessProfile actor,
+            Purpose purpose, @Nullable LinkPrinter printer) {
+        Candidate candidate = reading.execute(status -> candidate(tenantId, memberId, purpose));
+        boolean mailboxReady = deliveries.emailReady(tenantId);
+        if (!mailboxReady && printer == null) {
             throw notConfigured();
         }
         String accountId = ensureAccount(candidate);
@@ -122,12 +219,25 @@ class MemberInvitations {
         Instant created = clock.instant();
         Instant expiresAt = created.plus(ttl);
         UUID invitationId = writing.execute(status -> prepare(candidate, accountId,
-                InvitationTokens.hash(token), created, expiresAt, actor));
+                InvitationTokens.hash(token), created, expiresAt, actor, purpose));
 
+        URI link = URI.create(setPasswordUrl + "?token=" + token);
+        if (!mailboxReady) {
+            try {
+                Objects.requireNonNull(printer).print(link, expiresAt);
+            } catch (RuntimeException e) {
+                revoke(invitationId);
+                throw e;
+            }
+            nadel.contract.model.MemberAccess answer = writing.execute(status -> complete(tenantId, memberId,
+                    invitationId, List.of(), actor, purpose));
+            log.info("Invitation ({}) of member {} of cooperative {} handed to the operator", purpose, memberId,
+                    tenantId);
+            return answer;
+        }
         InvitationDeliveryResult result;
         try {
-            result = deliveries.deliver(tenantId, memberId, candidate.email(),
-                    URI.create(setPasswordUrl + "?token=" + token), expiresAt);
+            result = deliveries.deliver(tenantId, memberId, candidate.email(), link, expiresAt);
         } catch (RuntimeException e) {
             revoke(invitationId);
             throw e;
@@ -138,9 +248,10 @@ class MemberInvitations {
             throw result.failure() == InvitationDeliveryResult.Failure.NOT_CONFIGURED ? notConfigured()
                     : ApiProblemException.invitationNotSent(result.failure().name());
         }
+        String channels = result.channels().stream().map(Enum::name).sorted().collect(Collectors.joining(", "));
         nadel.contract.model.MemberAccess answer = writing.execute(status -> complete(tenantId, memberId,
-                invitationId, result, actor));
-        log.info("Invited member {} of cooperative {}", memberId, tenantId);
+                invitationId, List.of(new FieldChange("channels", null, channels)), actor, purpose));
+        log.info("Invitation ({}) of member {} of cooperative {} sent", purpose, memberId, tenantId);
         return answer;
     }
 
@@ -192,9 +303,9 @@ class MemberInvitations {
     }
 
     /** Step 1: the member as it can be invited now, or the reason it cannot. */
-    private Candidate candidate(UUID tenantId, UUID memberId) {
+    private Candidate candidate(UUID tenantId, UUID memberId, Purpose purpose) {
         Member member = members.findById(memberId).orElseThrow(ApiProblemException::notFound);
-        requireInvitable(member, access.find(memberId));
+        requireIssuable(member, access.find(memberId), purpose);
         String email = PhoneIndexValues.normalisedEmail(crypto.email(member));
         if (email == null || member.getEmailBidx() == null) {
             throw conflict(ProblemCodes.MEMBER_EMAIL_MISSING, "The member has no e-mail; it is the login.");
@@ -245,10 +356,10 @@ class MemberInvitations {
 
     /** Step 3: under the member's lock, checks again, links the account and inserts the unsent link. */
     private UUID prepare(Candidate candidate, String accountId, byte[] tokenHash, Instant created, Instant expiresAt,
-            AccessProfile actor) {
+            @Nullable AccessProfile actor, Purpose purpose) {
         Member member = members.findByIdForUpdate(candidate.memberId()).orElseThrow(ApiProblemException::notFound);
         Optional<Row> row = access.find(member.getId());
-        requireInvitable(member, row);
+        requireIssuable(member, row, purpose);
         if (!accountId.equals(member.getKeycloakSubject())) {
             if (!Objects.equals(member.getKeycloakSubject(), candidate.subject())) {
                 throw accountInUse(); // linked meanwhile by a sign-in
@@ -268,20 +379,28 @@ class MemberInvitations {
             access.set(candidate.tenantId(), member.getId(), State.NONE, created);
         }
         return invitations.insertPending(candidate.tenantId(), member.getId(), tokenHash, candidate.emailBidx(),
-                created, expiresAt, actor.memberId());
+                created, expiresAt, actor == null ? null : actor.memberId());
     }
 
-    /** Step 5: the letter went out. */
+    /**
+     * Step 5: the letter went out (or the command printed the link). {@code changes} are the audit fields:
+     * {@code channels} for a letter, none for a printed link.
+     */
     private nadel.contract.model.MemberAccess complete(UUID tenantId, UUID memberId, UUID invitationId,
-            InvitationDeliveryResult result, AccessProfile actor) {
+            List<FieldChange> changes, @Nullable AccessProfile actor, Purpose purpose) {
         Member member = members.findByIdForUpdate(memberId).orElseThrow(ApiProblemException::notFound);
         Instant now = clock.instant();
         invitations.markSent(invitationId, memberId, now);
         access.set(tenantId, memberId, State.INVITED, now);
-        String channels = result.channels().stream().map(Enum::name).sorted().collect(Collectors.joining(", "));
-        audit.publish(tenantId, new Actor(actor.memberId(), actor.subject(), actor.displayName()), INVITED_ACTION,
-                member, List.of(new FieldChange("channels", null, channels)));
+        if (actor != null && purpose != Purpose.NEW_LOGIN) {
+            audit.publish(tenantId, actorOf(actor), purpose == Purpose.RESEND ? RESENT_ACTION : INVITED_ACTION,
+                    member, changes);
+        }
         return access.view(member, true, () -> deliveries.emailReady(tenantId));
+    }
+
+    private static Actor actorOf(AccessProfile actor) {
+        return new Actor(actor.memberId(), actor.subject(), actor.displayName());
     }
 
     private void revoke(UUID invitationId) {
@@ -305,9 +424,15 @@ class MemberInvitations {
         }
     }
 
-    private static void requireInvitable(Member member, Optional<Row> row) {
+    private static void requireIssuable(Member member, Optional<Row> row, Purpose purpose) {
         if (member.isArchived()) {
             throw conflict(ProblemCodes.MEMBER_ARCHIVED, "The member is archived.");
+        }
+        if (purpose != Purpose.INVITE) {
+            if (MemberAccessState.status(member, row) != MemberAccessStatus.INVITED) {
+                throw conflict(ProblemCodes.NOT_INVITED, "The member is not invited; invite them instead.");
+            }
+            return;
         }
         switch (MemberAccessState.status(member, row)) {
             case INVITED -> throw conflict(ProblemCodes.INVITATION_PENDING,

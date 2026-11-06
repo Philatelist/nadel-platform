@@ -10,6 +10,7 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +18,9 @@ import nadel.contract.model.MemberInput;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Creates, edits, archives and restores members. Every method is one transaction that also publishes the
@@ -26,6 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * The cooperative always comes from the caller's {@link AccessProfile}, never from the request. The caller must hold
  * {@code MEMBERS_EDIT} (checked on the controller).
+ * <p>
+ * Access to the system (feature 020): archiving a member with access or an open invitation stores {@code DISABLED}
+ * and revokes the links ({@link MemberAccessRevocation}); restoring leaves access as it is. A new e-mail of such a
+ * member is checked in Keycloak before the update transaction ({@link MemberLoginGuard}), then stores {@code INVITED}
+ * so the new address is confirmed through a new link. The Keycloak account follows through the id-only events and
+ * {@link MemberAccessListener}.
  */
 @Service
 class MemberCommands {
@@ -38,16 +47,23 @@ class MemberCommands {
     private final MemberAuditPublisher audit;
     private final MemberCrypto crypto;
     private final MemberCards cards;
+    private final MemberAccessRevocation access;
+    private final MemberLoginGuard loginGuard;
+    private final TransactionTemplate writing;
 
     MemberCommands(MemberRepository members, LastChairmanGuard lastChairman,
             List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto,
-            MemberCards cards) {
+            MemberCards cards, MemberAccessRevocation access, MemberLoginGuard loginGuard,
+            PlatformTransactionManager transactionManager) {
         this.members = members;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
         this.audit = audit;
         this.crypto = crypto;
         this.cards = cards;
+        this.access = access;
+        this.loginGuard = loginGuard;
+        this.writing = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -69,10 +85,22 @@ class MemberCommands {
         return card(member, contacts, actor);
     }
 
-    @Transactional
+    /**
+     * Edits a member: first, outside any transaction, the pre-check of a new login ({@link MemberLoginGuard}, which may
+     * ask Keycloak), then one transaction that applies the change, publishes the audit event and, when the e-mail of a
+     * member with access or an open invitation changed, stores {@code INVITED} and publishes
+     * {@link MemberLoginChanged}.
+     */
     nadel.contract.model.Member update(UUID id, MemberInput input, AccessProfile actor) {
         MemberData data = MemberData.from(input);
-        Member member = find(id);
+        loginGuard.ensureLoginFree(actor.tenantId(), id, data.email());
+        return writing.execute(status -> apply(id, data, actor));
+    }
+
+    private nadel.contract.model.Member apply(UUID id, MemberData input, AccessProfile actor) {
+        MemberData data = input;
+        // locked like an invitation locks it: the access decision below sees the committed state
+        Member member = members.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
         OpenedContacts stored = crypto.open(member);
         if (!actor.can(Permission.MEMBERS_VIEW)) {
             data = withNotes(data, stored.notes()); // keep what is stored: the editor cannot see it
@@ -81,16 +109,21 @@ class MemberCommands {
             ensureEmailFree(actor.tenantId(), data.email(), member.getId());
         }
         MemberSnapshot before = MemberSnapshot.of(member, stored);
+        byte[] emailBefore = member.getEmailBidx();
         member.apply(data);
         OpenedContacts contacts = crypto.seal(member, stored, data);
         List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts));
         if (!changes.isEmpty()) {
-            member.touch(Instant.now());
+            Instant now = Instant.now();
+            member.touch(now);
             save(member);
             if (!contacts.phones().equals(stored.phones())) {
                 crypto.replacePhoneIndex(member, contacts.phones());
             }
             publish(actor, "MEMBER_UPDATED", member, changes);
+            if (!member.isArchived() && !Arrays.equals(emailBefore, member.getEmailBidx())) {
+                access.loginChanged(member, now);
+            }
         }
         return card(member, contacts, actor);
     }
@@ -110,8 +143,10 @@ class MemberCommands {
             lastChairman.ensureNotLast(actor.tenantId(), member.getId());
             archiveGuards.forEach(guard -> guard.ensureCanArchive(member.getId()));
             MemberSnapshot before = MemberSnapshot.of(member, contacts);
-            member.archive(Instant.now());
+            Instant now = Instant.now();
+            member.archive(now);
             save(member);
+            access.revoke(member, now); // restore leaves it DISABLED: the board invites again
             publish(actor, "MEMBER_ARCHIVED", member,
                     MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts)));
         }

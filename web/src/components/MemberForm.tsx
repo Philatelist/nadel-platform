@@ -179,6 +179,11 @@ export function MemberForm({
           <TextField
             label={f.email}
             error={errors.email}
+            hint={
+              member?.access?.status === 'INVITED' || member?.access?.status === 'ACTIVE'
+                ? t.memberForm.emailChangeHint
+                : undefined
+            }
             type="email"
             value={email}
             maxLength={254}

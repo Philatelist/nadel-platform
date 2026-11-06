@@ -48,6 +48,37 @@ final class InvitationRequests {
         return mvc.perform(post("/api/v1/members/" + member + "/invitation").header(HttpHeaders.AUTHORIZATION, bearer));
     }
 
+    ResultActions resend(String bearer, UUID member) throws Exception {
+        return mvc.perform(post("/api/v1/members/" + member + "/invitation/resend")
+                .header(HttpHeaders.AUTHORIZATION, bearer));
+    }
+
+    ResultActions disable(String bearer, UUID member) throws Exception {
+        return mvc.perform(post("/api/v1/members/" + member + "/access/disable")
+                .header(HttpHeaders.AUTHORIZATION, bearer));
+    }
+
+    ResultActions archive(String bearer, UUID member) throws Exception {
+        return mvc.perform(post("/api/v1/members/" + member + "/archive").header(HttpHeaders.AUTHORIZATION, bearer));
+    }
+
+    ResultActions restore(String bearer, UUID member) throws Exception {
+        return mvc.perform(post("/api/v1/members/" + member + "/restore").header(HttpHeaders.AUTHORIZATION, bearer));
+    }
+
+    /** {@code PUT /members/{id}} with the names and the e-mail only (the other fields are cleared). */
+    ResultActions update(String bearer, UUID member, String lastName, String firstName, String email)
+            throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("lastName", lastName);
+        body.put("firstName", firstName);
+        if (email != null) {
+            body.put("email", email);
+        }
+        return mvc.perform(put("/api/v1/members/" + member).header(HttpHeaders.AUTHORIZATION, bearer)
+                .contentType(MediaType.APPLICATION_JSON).content(JsonMapper.shared().writeValueAsString(body)));
+    }
+
     ResultActions card(String bearer, UUID member) throws Exception {
         return mvc.perform(get("/api/v1/members/" + member).header(HttpHeaders.AUTHORIZATION, bearer));
     }

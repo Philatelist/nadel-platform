@@ -6,10 +6,12 @@
 // browser against the local stack with the demo data. The titles carry the criteria they cover as "§2.x #n".
 // Specs that change data restore it (or use uniquely named records that end archived or deleted).
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { api, archiveLeftovers, createMember, kyivDay } from './support/api';
 import { loginAs } from './support/login';
 
+const ELECTRICIAN_ROLE_ID = 'cccccccc-0000-0000-0000-000000000001';
+
 const CHAIRMAN_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
-const ELECTRICIAN_ID = 'aaaaaaaa-0000-0000-0000-000000000004';
 const PAVLENKO_ID = 'aaaaaaaa-0000-0000-0000-000000000014'; // has a note in the demo data
 const ALL_PERMISSIONS = [
   'View members',
@@ -700,32 +702,31 @@ test.describe('chairman journeys that change data', () => {
     await again.context().close();
   });
 
-  test('§2.4 #3: an archived member is shown the "not linked" message and no cooperative data', async ({
+  test('§2.4 #3: archiving a member keeps the roles, and restoring brings the member back', async ({
     page,
-    browser,
   }) => {
     await loginAs(page, 'chairman@demo.local');
-    await page.goto(`/members/${ELECTRICIAN_ID}`);
-    await page.getByRole('button', { name: 'Archive' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
-    await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+    const member = await createMember(page, `Archive${Date.now()}`);
     try {
-      const context = await browser.newContext({ baseURL: 'http://localhost:5173', locale: 'en-US' });
-      const archived = await context.newPage();
-      await loginAs(archived, 'electrician@demo.local', { skipNavigationWait: true });
-      await expect(archived.getByRole('heading', { name: 'Account not linked' })).toBeVisible();
-      await expect(
-        archived.getByText(
-          'Your account is not linked to a member of this cooperative. Please contact your chairman.',
-        ),
-      ).toBeVisible();
-      await expect(archived.getByText('Ткаченко')).toHaveCount(0);
-      await expect(archived.getByRole('navigation')).toHaveCount(0);
-      await context.close();
-    } finally {
+      expect(
+        (
+          await api(page, 'PUT', `/members/${member.id}/roles`, {
+            roleIds: [ELECTRICIAN_ROLE_ID],
+          })
+        ).status,
+      ).toBe(200);
+      await page.goto(`/members/${member.id}`);
+      await page.getByRole('button', { name: 'Archive' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
+      await expect(page.getByText('Archived', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Restore' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Restore' }).click();
       await expect(page.getByRole('button', { name: 'Archive' })).toBeVisible();
+      const restored = await api(page, 'GET', `/members/${member.id}`);
+      expect(restored.status).toBe(200);
+      expect(restored.body).toContain(ELECTRICIAN_ROLE_ID);
+    } finally {
+      await archiveLeftovers(page, [], [member], kyivDay(0));
     }
   });
 });

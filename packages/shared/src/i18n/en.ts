@@ -438,7 +438,10 @@ export const en = {
     archiveTitle: 'Archive this member?',
     archiveText: 'The member is hidden from the default list and cannot sign in. History is kept.',
     restoreTitle: 'Restore this member?',
-    restoreText: 'The member returns to the list and can sign in again.',
+    restoreText: 'The member returns to the list.',
+    archivedAccessOff: 'Access to the system is turned off.',
+    restoreAccessNote: 'Access to the system is not restored — invite the member again.',
+    emailChangeHint: 'After the e-mail changes the member gets a new link and signs in with the new address.',
   },
   validation: {
     PLOT_ARCHIVED_plotId: 'The plot is archived',

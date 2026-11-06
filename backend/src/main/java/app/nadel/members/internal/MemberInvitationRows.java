@@ -71,6 +71,23 @@ class MemberInvitationRows {
         jdbc.update("update member_invitation set revoked_at = ? where id = ? and revoked_at is null", utc(at), id);
     }
 
+    /**
+     * Revokes every link of the member that is not used or revoked yet, a pending one included (access disabled, the
+     * member archived, the e-mail changed); answers how many.
+     */
+    int revokeUnused(UUID memberId, Instant at) {
+        return jdbc.update("update member_invitation set revoked_at = ? where member_id = ? and used_at is null "
+                + "and revoked_at is null", utc(at), memberId);
+    }
+
+    /** Whether the member has a sent link, not used, revoked or expired at {@code now}, made for this e-mail. */
+    boolean hasOpen(UUID memberId, byte[] emailBidx, Instant now) {
+        Integer count = jdbc.queryForObject("select count(*) from member_invitation where member_id = ? "
+                + "and email_bidx = ? and sent_at is not null and used_at is null and revoked_at is null "
+                + "and expires_at > ?", Integer.class, memberId, emailBidx, utc(now));
+        return count != null && count > 0;
+    }
+
     /** Marks a link used. */
     void markUsed(UUID id, Instant at) {
         jdbc.update("update member_invitation set used_at = ? where id = ? and used_at is null", utc(at), id);

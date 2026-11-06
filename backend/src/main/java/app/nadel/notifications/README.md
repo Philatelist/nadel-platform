@@ -61,12 +61,16 @@ system with its one-time set-password link:
   opened mailbox (`DeliverySettingsService.mailbox`), the texts `invitation.subject` / `invitation.body` of
   `messages_uk.properties` (the cooperative's name, the login, the link, the expiry in the cooperative's zone
   `dd.MM.yyyy HH:mm`), plain text, sent through `Letters` (which checks the host with `SmtpHostPolicy` first). Answers
-  the channels (`EMAIL`) or the failure: `NOT_CONFIGURED` without a mailbox, else the `MailFailure` code
-  (`SMTP_REJECTED`, `SMTP_AUTH_FAILED`, `CONNECTION_FAILED`, `SMTP_HOST_NOT_ALLOWED`). Nothing goes through the delivery
-  register, the outbox or the audit log (the link is a secret); `members` audits `MEMBER_INVITED` with the channels.
-  The log has the cooperative id, the member id and the outcome code only.
-- Telegram: the bot copy of the link for a member with an active link comes in feature 020 slice 6 and adds
-  `TELEGRAM` to the channels.
+  the channels (`EMAIL`, plus `TELEGRAM` below) or the failure: `NOT_CONFIGURED` without a mailbox, else the
+  `MailFailure` code (`SMTP_REJECTED`, `SMTP_AUTH_FAILED`, `CONNECTION_FAILED`, `SMTP_HOST_NOT_ALLOWED`). Nothing goes
+  through the delivery register, the outbox or the audit log (the link is a secret); `members` audits `MEMBER_INVITED`
+  / `MEMBER_INVITE_RESENT` with the channels. The log has the cooperative id, the member id and the outcome code only.
+- Telegram, best effort and only after the letter was accepted: when the cooperative has a bot
+  (`DeliverySettingsService.botToken`) and the member an active link (`TelegramLinks.chatOfMember`), the bot sends the
+  same link (`invitation.telegram`, same placeholders) straight through `TelegramClient` at the bot's pace
+  (`RateLimiters.telegram`), like the reading messages (`BotChat`: a 403 ends the link as `BLOCKED`). A sent message adds
+  `TELEGRAM` to the channels; no bot, no link, a refusal or any other failure only leaves it out and never fails the
+  invitation. The log has `SENT` / `NOT_SENT` or the exception class, never the chat or the text.
 
 ## Endpoints (tag `notifications`)
 

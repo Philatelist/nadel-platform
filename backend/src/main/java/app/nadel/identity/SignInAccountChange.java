@@ -24,6 +24,19 @@ public record SignInAccountChange(@Nullable String login, @Nullable Boolean emai
         return new SignInAccountChange(null, null, true, null);
     }
 
+    /** Turns the account off (access disabled or the member archived), nothing else. */
+    public static SignInAccountChange disable() {
+        return new SignInAccountChange(null, null, false, null);
+    }
+
+    /**
+     * A new login after the member's e-mail changed: the user name and the e-mail become {@code login}, which is not
+     * verified until the member opens the link sent to it.
+     */
+    public static SignInAccountChange newLogin(String login) {
+        return new SignInAccountChange(login, false, null, null);
+    }
+
     /**
      * What accepting an invitation does once the password is set: the e-mail is verified (the member opened the link
      * sent to it), no action is left for the next sign-in, and the account is on.
