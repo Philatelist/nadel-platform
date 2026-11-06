@@ -4,7 +4,6 @@ import app.nadel.identity.CurrentUser;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import app.nadel.problem.ProblemWriter;
-import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -29,6 +28,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -57,14 +58,11 @@ class ReportTemplatesController implements ReportTemplatesApi {
     private final CurrentUser currentUser;
     private final ReportTemplateService service;
     private final TemplateGenerator generator;
-    private final HttpServletRequest servletRequest;
 
-    ReportTemplatesController(CurrentUser currentUser, ReportTemplateService service, TemplateGenerator generator,
-            HttpServletRequest servletRequest) {
+    ReportTemplatesController(CurrentUser currentUser, ReportTemplateService service, TemplateGenerator generator) {
         this.currentUser = currentUser;
         this.service = service;
         this.generator = generator;
-        this.servletRequest = servletRequest;
     }
 
     @Override
@@ -128,7 +126,7 @@ class ReportTemplatesController implements ReportTemplatesApi {
     @PreAuthorize("hasAuthority('PERM_REPORTS_VIEW')")
     public ResponseEntity<Resource> generateReportTemplate(UUID id, ReportTemplateGenerateRequest request) {
         ReportLanguage language = ReportLanguage.resolve(request.getLang() == null ? null
-                : request.getLang().getValue(), servletRequest.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
+                : request.getLang().getValue(), acceptLanguage());
         TemplateGenerator.Generated file = generator.generate(id, request.getFrom(), request.getTo(), language);
         ResponseEntity.BodyBuilder response = ResponseEntity.ok()
                 .contentType(XLSX)
@@ -187,5 +185,15 @@ class ReportTemplatesController implements ReportTemplatesApi {
     private static boolean isAttrChar(int value) {
         return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') || (value >= '0' && value <= '9')
                 || "!#$&+-.^_`|~".indexOf(value) >= 0;
+    }
+
+    /**
+     * The {@code Accept-Language} header of the current HTTP request, read per call from {@link RequestContextHolder}
+     * (where an injected request proxy reads it too), so the controller needs no request bean and the context also
+     * starts without a web server (the {@code command} profile).
+     */
+    private static String acceptLanguage() {
+        return ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest()
+                .getHeader(HttpHeaders.ACCEPT_LANGUAGE);
     }
 }

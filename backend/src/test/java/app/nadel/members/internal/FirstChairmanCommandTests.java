@@ -353,8 +353,11 @@ class FirstChairmanCommandTests extends IntegrationTest {
                 .isNotEqualTo(FirstChairman.tenantIdOf("treasurer@example.org"));
     }
 
-    /** Removes everything a run made in the cooperative (the owner bypasses RLS; the ledger seed needs maintenance). */
-    private void removeCooperative(UUID tenant) {
+    /**
+     * Removes everything a run made in the cooperative (the owner bypasses RLS; the ledger seed needs maintenance). Also
+     * used by {@link FirstChairmanJarCommandTests}.
+     */
+    static void removeCooperative(UUID tenant) {
         JdbcTemplate owner = ownerJdbc();
         owner.update("delete from member_invitation where tenant_id = ?", tenant);
         owner.update("delete from member_access where tenant_id = ?", tenant);

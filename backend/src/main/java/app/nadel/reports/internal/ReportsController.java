@@ -1,6 +1,5 @@
 package app.nadel.reports.internal;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +24,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Endpoints of the built-in reports. Every one needs {@code REPORTS_VIEW} or {@code CASHBOOK_VIEW}; which reports a
@@ -43,11 +44,9 @@ class ReportsController implements ReportsApi {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     private final ReportRunner runner;
-    private final HttpServletRequest request;
 
-    ReportsController(ReportRunner runner, HttpServletRequest request) {
+    ReportsController(ReportRunner runner) {
         this.runner = runner;
-        this.request = request;
     }
 
     @Override
@@ -85,7 +84,7 @@ class ReportsController implements ReportsApi {
         RawFilters raw = new RawFilters(fromMonth, toMonth, from, to, asOf, year, chargeTypeIds, street, statuses,
                 minDebt, olderThanDays, resource, meterKinds, waterSource, correctionKinds, source, account,
                 expenseCategoryIds);
-        ReportLanguage language = ReportLanguage.resolve(lang, request.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
+        ReportLanguage language = ReportLanguage.resolve(lang, acceptLanguage());
         ReportFile file = runner.file(code, raw, language);
         return ResponseEntity.ok()
                 .contentType(XLSX)
@@ -94,5 +93,15 @@ class ReportsController implements ReportsApi {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(file.fileName()).build().toString())
                 .body(new ByteArrayResource(file.content()));
+    }
+
+    /**
+     * The {@code Accept-Language} header of the current HTTP request, read per call from {@link RequestContextHolder}
+     * (where an injected request proxy reads it too), so the controller needs no request bean and the context also
+     * starts without a web server (the {@code command} profile).
+     */
+    private static String acceptLanguage() {
+        return ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest()
+                .getHeader(HttpHeaders.ACCEPT_LANGUAGE);
     }
 }
