@@ -80,3 +80,7 @@ Minors (non-blocking, not fixed by rule):
 ## CI fixes round 1 (ab28ff0, deaa33e) — PASS
 
 Minors (non-blocking): gitleaks regexes are unanchored (fine for 14-char fixed strings; could be path-restricted); `FirstChairmanCommandExitTests.theApplicationRunnerDoesNothingUntilItRuns` adds little beyond coverage; its `warnings()` helper returns all events (rename to `messages()`).
+
+## Owner's fixes on PR #71 (22b26b5..7e57eed) — round 1 — PASS
+
+Minors (non-blocking): PublicInvitationController comment — an e-mail-limited request has already been counted against the address; ArrayDeque pre-sized to max-requests (large with test/e2e limits); IPv6 address rotation can push counters out of the 10000-key LRU (documented in ADR 0020); removing the Chairman role from the only chairman with access is not guarded by `ensureNotLastWithAccess` (outside decision 2); ProposalTable narrow layout: `display:block` may strip table semantics in some screen readers, `data-label` via `::before` not reliably announced (inputs keep aria-label) — consider explicit roles; an existing stand realm needs the user-profile change applied by hand or re-imported; `.github/workflows/ci.yml` e2e rate-limit env not committed (owner decides).
