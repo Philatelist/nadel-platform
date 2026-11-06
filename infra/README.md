@@ -3,6 +3,9 @@
 `make infra` starts the services below and waits until all are healthy
 (Keycloak health is probed on its management port, `/health/ready`).
 
+The test stand on one server (Caddy, HTTPS, the first-chairman command) is described in
+[`infra/stand/README.md`](stand/README.md).
+
 | Service         | Port(s)      | What it is                                                           |
 | --------------- | ------------ | -------------------------------------------------------------------- |
 | `postgres`      | 5432 (`NADEL_DB_PORT`) | PostgreSQL 17 + PostGIS                                              |
