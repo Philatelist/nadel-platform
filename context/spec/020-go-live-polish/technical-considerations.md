@@ -1,7 +1,7 @@
 # Technical Specification: Ready for real use — inviting members, tariff fixes, small review items
 
 - **Functional Specification:** [functional-spec.md](functional-spec.md)
-- **Status:** Draft
+- **Status:** Completed
 - **Author(s):** Alex Usov
 
 ---

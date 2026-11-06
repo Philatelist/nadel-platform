@@ -60,3 +60,12 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `1a30d0a..01e564a` | PASS | — | minor (owner to decide): stand-init order Keycloak-then-.env without recovery hint; append without trailing newline; secrets in argv; first-chairman.sh missing-value handling and `${}` in names; link in Docker json log if interrupted; personal data in shell history; JVM memory; master realm login publicly proxied |
+
+## Slice 9 — round 1 (2b2764b) — PASS
+
+Minors (non-blocking, not fixed by rule):
+- `infra/keycloak/nadel-realm.json:10` `editUsernameAllowed: true` is realm-wide; with the user-profile `username` edit permission `["admin","user"]` members can now rename themselves in the account console (collisions are still rejected; the backend does not read `preferred_username`). Narrowing `username` `permissions.edit` to `["admin"]` would keep the Admin API path only. Applies to the stand too.
+- `MemberAccessTests.java:185` `Thread.sleep(500)` before a "no audit event" check; Awaitility `during()` would be sturdier.
+- `IntegrationTest.java:50` `max_connections=400`: watch container memory as cached contexts grow.
+- `ownerManual.test.ts` second test uses a loose regex.
+- Stand must override the dev admin-client secret (stand-init.sh rotates it).
