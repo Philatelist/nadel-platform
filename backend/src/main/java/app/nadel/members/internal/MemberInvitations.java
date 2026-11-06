@@ -48,8 +48,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>a transaction locks the member ({@code FOR UPDATE}), checks again, links the account
  *       ({@code keycloak_subject}) and inserts the new link unsent;</li>
  *   <li>outside any transaction, {@link InvitationDeliveries#deliver} sends the letter;</li>
- *   <li>a transaction marks the link sent, revokes the member's older links, sets {@code INVITED} and publishes the
- *       audit event {@code MEMBER_INVITED} (field {@code channels} only).</li>
+ *   <li>a transaction locks the member and checks again (a disable, archive or e-mail change made while the letter was
+ *       on its way wins: 409, the unsent link is revoked, nothing is written or audited), then marks the link sent,
+ *       revokes the member's older links, sets {@code INVITED} and publishes the audit event {@code MEMBER_INVITED}
+ *       (field {@code channels} only).</li>
  * </ol>
  * When the letter is not sent a compensating transaction revokes the unsent link and the answer is 502
  * {@code INVITATION_NOT_SENT} with the failure code: the access state is unchanged, nothing is audited and an earlier
@@ -229,8 +231,8 @@ class MemberInvitations {
                 revoke(invitationId);
                 throw e;
             }
-            nadel.contract.model.MemberAccess answer = writing.execute(status -> complete(tenantId, memberId,
-                    invitationId, List.of(), actor, purpose));
+            nadel.contract.model.MemberAccess answer = completeOrRevoke(tenantId, memberId, invitationId, List.of(),
+                    actor, purpose);
             log.info("Invitation ({}) of member {} of cooperative {} handed to the operator", purpose, memberId,
                     tenantId);
             return answer;
@@ -249,8 +251,8 @@ class MemberInvitations {
                     : ApiProblemException.invitationNotSent(result.failure().name());
         }
         String channels = result.channels().stream().map(Enum::name).sorted().collect(Collectors.joining(", "));
-        nadel.contract.model.MemberAccess answer = writing.execute(status -> complete(tenantId, memberId,
-                invitationId, List.of(new FieldChange("channels", null, channels)), actor, purpose));
+        nadel.contract.model.MemberAccess answer = completeOrRevoke(tenantId, memberId, invitationId,
+                List.of(new FieldChange("channels", null, channels)), actor, purpose);
         log.info("Invitation ({}) of member {} of cooperative {} sent", purpose, memberId, tenantId);
         return answer;
     }
@@ -383,12 +385,45 @@ class MemberInvitations {
     }
 
     /**
+     * Step 5 in its own transaction; when it refuses (the member changed while the letter was on its way), a
+     * compensating transaction revokes the unsent link, as for a letter that was not sent, and the refusal is thrown.
+     */
+    private nadel.contract.model.MemberAccess completeOrRevoke(UUID tenantId, UUID memberId, UUID invitationId,
+            List<FieldChange> changes, @Nullable AccessProfile actor, Purpose purpose) {
+        try {
+            return Objects.requireNonNull(writing.execute(status -> complete(tenantId, memberId, invitationId,
+                    changes, actor, purpose)));
+        } catch (ApiProblemException e) {
+            revoke(invitationId);
+            log.info("Invitation ({}) of member {} of cooperative {} went out but was refused: {}", purpose,
+                    memberId, tenantId, e.code());
+            throw e;
+        }
+    }
+
+    /**
      * Step 5: the letter went out (or the command printed the link). {@code changes} are the audit fields:
      * {@code channels} for a letter, none for a printed link.
+     * <p>
+     * The letter is sent without a lock, so the board may have disabled or archived the member, or changed the
+     * e-mail, meanwhile (each revokes the unused links under the same member lock). Under the lock the member and the
+     * link are checked again before anything is written: the member still issuable for {@code purpose} (409
+     * {@code MEMBER_ARCHIVED}, {@code NOT_INVITED}, {@code INVITATION_PENDING} or {@code ACCESS_ALREADY_ACTIVE}), and
+     * the link still unsent, unused, not revoked and made for the member's current e-mail (otherwise 409
+     * {@code INVITATION_PENDING} for a resend or a new login, whose e-mail change sends its own link, and 409
+     * {@code NOT_INVITED} for an invitation). A refusal writes neither {@code INVITED} nor an audit entry.
      */
     private nadel.contract.model.MemberAccess complete(UUID tenantId, UUID memberId, UUID invitationId,
             List<FieldChange> changes, @Nullable AccessProfile actor, Purpose purpose) {
         Member member = members.findByIdForUpdate(memberId).orElseThrow(ApiProblemException::notFound);
+        requireIssuable(member, access.find(memberId), purpose);
+        // the member first, then the link: the order accept locks them in
+        Invitation invitation = invitations.lock(invitationId).orElseThrow(ApiProblemException::notFound);
+        if (invitation.sentAt() != null || invitation.usedAt() != null || invitation.revokedAt() != null
+                || !Arrays.equals(invitation.emailBidx(), member.getEmailBidx())) {
+            throw conflict(purpose == Purpose.INVITE ? ProblemCodes.NOT_INVITED : ProblemCodes.INVITATION_PENDING,
+                    "The member changed while the invitation was on its way.");
+        }
         Instant now = clock.instant();
         invitations.markSent(invitationId, memberId, now);
         access.set(tenantId, memberId, State.INVITED, now);

@@ -47,3 +47,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `71e116a..8e795f1` (+ slice-7 hunks of 71e116a) | PASS | — | offline compile OK; minor: ignored cooperative name on re-run, outbox wait may last 30 s, NONE-web tests lose method security, confirm nadel_app INSERT grant on tenant in the final run |
+
+## Slice 8 — End-to-end hygiene items
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `8e795f1..58c7a5c` | PASS | — | minor: restoreElectrician PUT results unchecked (warn), redundant toHaveCount, duplicate role id constant |

@@ -11,26 +11,40 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import app.nadel.IntegrationTest;
 import app.nadel.TestTokens;
+import app.nadel.identity.AccessProfile;
 import app.nadel.identity.FakeSignInAccounts;
+import app.nadel.identity.SignInAccounts;
+import app.nadel.members.InvitationDelivery;
+import app.nadel.members.InvitationDeliveryResult;
 import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.Mailpit;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.tenancy.TenantContext;
+import java.net.URI;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Resend, disable, the archive and e-mail rules and the last sign-in of feature 020 (§2.1, technical considerations
  * 2.1 and 2.4), with the in-memory Keycloak of the tests ({@link FakeSignInAccounts}) and real letters through Mailpit:
  * a resend replaces the link (and a failed one keeps it), disable and archive turn the account off through
- * {@link MemberAccessListener}, restore leaves access off, an e-mail change is checked in Keycloak first and then
+ * {@link MemberAccessListener}, a disable or archive while an invitation letter is on its way wins, restore leaves
+ * access off, an e-mail change is checked in Keycloak first and then
  * invites the member again with a letter to the new address, the listener retries only what may pass, and the last
  * sign-in is stored once per interval. {@code MemberAccessKeycloakTests} runs the main flows against a real Keycloak.
  */
@@ -46,6 +60,45 @@ class MemberAccessTests extends IntegrationTest {
 
     @Autowired
     MemberAccessListener listener;
+
+    @Autowired
+    MemberInvitations memberInvitations;
+
+    @Autowired
+    InvitationDelivery realDelivery;
+
+    @Autowired
+    MemberRepository memberRepository;
+
+    @Autowired
+    MemberCrypto memberCrypto;
+
+    @Autowired
+    MemberAccessState accessState;
+
+    @Autowired
+    MemberInvitationRows invitationRows;
+
+    @Autowired
+    SignInAccounts signInAccounts;
+
+    @Autowired
+    MemberAuditPublisher memberAudit;
+
+    @Autowired
+    MemberAccessRevocation revocation;
+
+    @Autowired
+    Clock clock;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    @Value("${nadel.web.url}")
+    String webUrl;
+
+    @Value("${nadel.invitations.ttl}")
+    Duration invitationTtl;
 
     private final Mailpit mailpit = Mailpit.shared();
     private InvitationRequests http;
@@ -448,6 +501,89 @@ class MemberAccessTests extends IntegrationTest {
         http.update(chairman(), plain, "Петренко", "Ігор", freshEmail()).andExpect(status().isOk());
         assertThat(state(member)).isEqualTo("INVITED");
         assertThat(state(plain)).isNull();
+    }
+
+    // ---- a change while the letter is on its way ----------------------------------------------------------------
+
+    /**
+     * {@link MemberInvitations} wired like the application's, except that its letters go through the real delivery
+     * and then run {@code meanwhile}: what the board does while a letter is on its way (no lock is held then).
+     */
+    private MemberInvitations racing(Runnable meanwhile) {
+        InvitationDelivery racingDelivery = new InvitationDelivery() {
+            @Override
+            public boolean emailReady(UUID tenantId) {
+                return realDelivery.emailReady(tenantId);
+            }
+
+            @Override
+            public InvitationDeliveryResult deliver(UUID tenantId, UUID memberId, String email, URI link,
+                    Instant expiresAt) {
+                InvitationDeliveryResult result = realDelivery.deliver(tenantId, memberId, email, link, expiresAt);
+                meanwhile.run();
+                return result;
+            }
+        };
+        InvitationDeliveries racingDeliveries = new InvitationDeliveries(
+                new StaticListableBeanFactory(Map.of("racingDelivery", racingDelivery))
+                        .getBeanProvider(InvitationDelivery.class));
+        return new MemberInvitations(memberRepository, memberCrypto, accessState, invitationRows, racingDeliveries,
+                signInAccounts, memberAudit, revocation, clock, transactionManager, webUrl, invitationTtl);
+    }
+
+    private AccessProfile chairmanProfile() {
+        return new AccessProfile(DEMO_TENANT, memberIdByEmail(DEMO_TENANT, "chairman@demo.local"),
+                "sub-chairman@demo.local", "Голова", Set.of(), List.of(), false);
+    }
+
+    @Test
+    void aDisableWhileTheResentLetterIsOnItsWayWins() throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        String first = invite(member, email);
+        String subject = subjectOf(DEMO_TENANT, member);
+        AccessProfile chairman = chairmanProfile();
+        MemberInvitations racing = racing(() -> memberInvitations.disable(member, chairman));
+
+        assertThatThrownBy(() -> TenantContext.runAs(DEMO_TENANT, () -> racing.resend(member, chairman)))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.code())
+                        .isEqualTo(ProblemCodes.NOT_INVITED));
+
+        assertThat(mailpit.lettersTo(email)).as("the resent letter did go out").hasSize(2);
+        String second = InvitationRequests.tokenOfLetterTo(email);
+        assertThat(state(member)).isEqualTo("DISABLED");
+        assertThat(openLinks(member)).isZero();
+        http.inspect(second).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INVITATION_INVALID"));
+        http.inspect(first).andExpect(status().isNotFound());
+        http.accept(second, PASSWORD).andExpect(status().isNotFound());
+        await().atMost(Duration.ofSeconds(10)).until(() -> !accounts.account(subject).orElseThrow().enabled());
+        await().atMost(Duration.ofSeconds(10)).until(() -> audited(member, "MEMBER_ACCESS_DISABLED") == 1);
+        Thread.sleep(500); // an audit event, if one were published, would be written within this time
+        assertThat(audited(member, "MEMBER_INVITE_RESENT")).isZero();
+        assertThat(state(member)).isEqualTo("DISABLED");
+    }
+
+    @Test
+    void anArchiveWhileTheInvitationLetterIsOnItsWayWins() throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        AccessProfile chairman = chairmanProfile();
+        MemberInvitations racing = racing(() -> archiveMember(DEMO_TENANT, member));
+
+        assertThatThrownBy(() -> TenantContext.runAs(DEMO_TENANT, () -> racing.invite(member, chairman)))
+                .isInstanceOfSatisfying(ApiProblemException.class, e -> assertThat(e.code())
+                        .isEqualTo(ProblemCodes.MEMBER_ARCHIVED));
+
+        String token = InvitationRequests.tokenOfLetterTo(email);
+        assertThat(state(member)).isNotEqualTo("INVITED");
+        assertThat(openLinks(member)).isZero();
+        http.inspect(token).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INVITATION_INVALID"));
+        Thread.sleep(500); // an audit event, if one were published, would be written within this time
+        assertThat(audited(member, "MEMBER_INVITED")).isZero();
     }
 
     // ---- the listener --------------------------------------------------------------------------------------------
