@@ -11,3 +11,8 @@ paths = [
   '''\.env\.example''',
   '''web/\.env\.example''',
 ]
+# Fixed fake set-password tokens of the invitation delivery tests (feature 020), not secrets.
+regexes = [
+  '''abcDEF123_-xyz''',
+  '''tgLINK123_-abc''',
+]
