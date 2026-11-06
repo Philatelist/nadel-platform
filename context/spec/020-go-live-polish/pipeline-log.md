@@ -71,3 +71,5 @@
 - Slice 7 docs builder issued `git stash && git stash pop` by mistake; the classifier denied it, nothing ran (stash list empty, tree intact).
 - Slice 6 backend notes: legacy-linked members (demo users) get no member_access row at sign-in → no lastSignInAt («ще не входив»); invited members get it. Open gaps (documented, not fixed): Excel import can change an e-mail without the login rules; disable/archive racing an invite between prepare and complete leaves INVITED with a revoked link; nothing stops a chairman disabling their own access (spec silent). MembersAccessAcceptanceTests onboarding expectation changed (new e-mail → INVITED, 403 until the new link is used).
 - Slices 6/7 were built concurrently; shared files (MemberInvitations.java, members/identity READMEs, application.yml) went into the slice 6 commit with the slice 7 hunks included.
+- Slice 6: 71e116a, tests not run, review r1 running
+- Slice 7: 8e795f1, tests not run, review r1 running

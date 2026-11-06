@@ -595,11 +595,23 @@ test.describe('chairman journeys that change data', () => {
 
     // archive: gone from the default list, present with "Show archived", marked archived
     await page.getByRole('button', { name: 'Archive' }).click();
+    const archived = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && /\/members\/[^/]+\/archive$/.test(r.url()),
+    );
     await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
+    expect((await archived).ok()).toBe(true);
     await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+    // wait for the filtered list request, not only for the typed text: the empty state must come from this query
+    const searched = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' && /\/members\?/.test(r.url()) && r.url().includes(`q=${lastName}`),
+    );
     await page.goto('/members');
     await page.getByRole('searchbox').fill(lastName);
+    await expect(page).toHaveURL(new RegExp(`q=${lastName}`));
+    expect((await searched).ok()).toBe(true);
     await expect(page.getByText('Nothing found')).toBeVisible();
+    await expect(tableRows(page).filter({ hasText: lastName })).toHaveCount(0);
     await page.goto('/members');
     await page.getByLabel('Show archived').click(); // controlled by the URL: assert the state, not check()
     await expect(page.getByLabel('Show archived')).toBeChecked();

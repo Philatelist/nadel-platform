@@ -35,3 +35,15 @@
 |---|---|---|---|---|
 | 1 | `a2e5224..ef3b71e` | MAJOR_ISSUES | M1 public set-password calls may send a stale bearer token | minor: resend/disable wired early (slice 6 adds tests); set-password topic front matter to confirm in slice 9 |
 | 2 | + `579d6ad` | PASS | M1 resolved | minor: startsWith on relative URL only |
+
+## Slice 6 — Resend, disable, the archive and e-mail rules, Telegram, last sign-in
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `579d6ad..71e116a` | MAJOR_ISSUES | M1 complete() can undo a concurrent disable/archive/e-mail change | minor: pre-check race leaves INVITED without link (README), listener 4xx leaves INVITED without link, check BotChat logging on 403 |
+
+## Slice 7 — First chairman command, ADR and owner documentation
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `71e116a..8e795f1` (+ slice-7 hunks of 71e116a) | PASS | — | offline compile OK; minor: ignored cooperative name on re-run, outbox wait may last 30 s, NONE-web tests lose method security, confirm nadel_app INSERT grant on tenant in the final run |
