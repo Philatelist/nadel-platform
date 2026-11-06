@@ -1,7 +1,7 @@
 # Pipeline log — 020 go-live polish
 
 - Status: running
-- Phase: 4 (verify — acceptance criteria in the running app; slice 9 review r1 running)
+- Phase: 5 (publish — push the spec branch, open the PR, watch checks)
 - Branch: 020-go-live-polish (planned) · Base: main @ b324146
 - Requirement: docs/features/020-go-live-polish.md
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -81,3 +81,4 @@
 - Slice 9 review r1: PASS (minors in review-log).
 - Verify (agent, isolated stack, DB nadel_verify dropped after): 31 [x], 1 [?] (2.3 "Розподілено X з Y" one line at 360 px: one line, but the 422 px allocation table scrolls inside a 286 px container so the total is cut until scrolled — owner judges), 1 NOT MET: 2.1 first-chairman command exits 1 at start-up under the `command` profile (web-application-type none) because ImportsController/ReportsController/ReportTemplatesController inject HttpServletRequest in their constructors; the command tests never booted the real profile. Fix attempt 1 delegated to spring-backend (test reproducing the stand invocation first). Observation (not a criterion): set-password shows «Паролі збігаються» while both fields are empty — follow-up. Test Keycloak users (@e2e.local) left in the local realm; `down -v` clears them (bulk delete was denied, not worked around). Screenshots in docs/screenshots/020-go-live-polish-*.png, untracked (folder not git-ignored; owner setup).
 - Verify fix 1: 7cfa226 (controllers read Accept-Language per call; FirstChairmanJarCommandTests RED→GREEN; 777 module tests green; real-jar smoke exit 0). Fix-review r1 running. Criterion 2.1 first-chairman now [x]; 32 [x], 1 [?] (2.3 360 px). Spec and tech Status → Completed. Product context: architecture.md already updated in slice 7; nothing else to suggest.
+- Verify fix 1 review r1: PASS. Full suite: make check EXIT 0 in slice 9 (before the fix); after the fix only the touched modules (777 tests) — CI runs the full suite. Phase 4 done; worktrees: main only. Phase 5 started.

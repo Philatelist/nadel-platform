@@ -69,3 +69,10 @@ Minors (non-blocking, not fixed by rule):
 - `IntegrationTest.java:50` `max_connections=400`: watch container memory as cached contexts grow.
 - `ownerManual.test.ts` second test uses a loose regex.
 - Stand must override the dev admin-client secret (stand-init.sh rotates it).
+
+## Verify fix 1 — round 1 (7cfa226) — PASS
+
+Minors (non-blocking, not fixed by rule):
+- `FirstChairmanJarCommandTests.java:76-79` the "Cooperative created" and token-count assertions print the raw child output on failure (unmasked token of a throwaway test user); assert on `masked(printed)`.
+- `FirstChairmanJarCommandTests.java:72-73` wrap the child in try/finally with `destroyForcibly` for an interrupted wait.
+- Three identical `acceptLanguage()` helpers in ImportsController, ReportsController, ReportTemplatesController.
