@@ -460,8 +460,9 @@ curl -s -X POST localhost:8091/control/reset</pre>
         Власний доступ ніхто не вимикає, а доступ останнього голови, що має доступ, не можна ні вимкнути, ні
         прибрати архівуванням: кооператив завжди лишається з головою, який може увійти. Сторінка задання
         пароля приймає не більше 5 запитів за 15 хвилин з однієї адреси й для пошти одного запрошення
-        (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>, <code>NADEL_INVITATIONS_RATE_LIMIT_WINDOW</code>);
-        лічильники живуть у пам’яті бекенда й обнуляються після перезапуску.
+        (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>,
+        <code>NADEL_INVITATIONS_RATE_LIMIT_WINDOW</code>); лічильники живуть у пам’яті бекенда й обнуляються
+        після перезапуску.
       </p>
       <h3>Власний клієнт платформи в Keycloak</h3>
       <p>
