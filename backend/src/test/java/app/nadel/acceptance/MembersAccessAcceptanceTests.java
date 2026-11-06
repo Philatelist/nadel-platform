@@ -78,6 +78,9 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 "electrician@demo.local");
         inTenant(DEMO_TENANT, sql -> sql.update("update member set archived_at = null where id = ?", DEMO_CHAIRMAN));
         for (UUID id : createdMembers) {
+            // feature 020: the e-mail change and the archive leave access rows, which the application may not delete
+            ownerJdbc().update("delete from member_invitation where member_id = ?", id);
+            ownerJdbc().update("delete from member_access where member_id = ?", id);
             inTenant(DEMO_TENANT, sql -> {
                 sql.update("delete from member_role where member_id = ?", id);
                 return sql.update("delete from member where id = ?", id);
@@ -187,16 +190,18 @@ class MembersAccessAcceptanceTests extends IntegrationTest {
                 .andExpect(jsonPath("$.postalAddress").value("5 New Street"))
                 .andExpect(jsonPath("$.phones[0]").value("+380501112233"));
 
-        // the e-mail is edited by an admin; the person is still the same member
+        // the e-mail is edited by an admin; it is the login, so (feature 020) the person is invited again to confirm
+        // the new address and cannot sign in until they set the password from the new link
         String newEmail = "moved-" + tag + "@example.com";
         Map<String, Object> moved = memberInput("Onboard" + tag, "Person", newEmail);
         moved.put("phones", List.of("050 111 22 33"));
         moved.put("postalAddress", "5 New Street");
-        doPut(chairman(), "/api/v1/members/" + member, moved).andExpect(status().isOk());
+        doPut(chairman(), "/api/v1/members/" + member, moved).andExpect(status().isOk())
+                .andExpect(jsonPath("$.access.status").value("INVITED"));
         mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION,
                         TestTokens.bearer(DEMO_TENANT, subject, newEmail)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.memberId").value(member.toString()));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MEMBER_NOT_LINKED"));
 
         // archive and restore, as seen by the person
         doPost(chairman(), "/api/v1/members/" + member + "/archive", null).andExpect(status().isOk());

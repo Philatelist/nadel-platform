@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useT } from '../../i18n';
+import { fileFingerprint } from '../../lib/fileFingerprint';
 import { heicToJpeg, isHeicFile } from '../../lib/heicToJpeg';
 import { Button, Notice } from '../ui';
 import { AttachmentPreviews, type PreviewFile } from './AttachmentPreview';
@@ -41,16 +42,28 @@ export function AttachmentPicker({
   const cameraInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string>();
   const [converting, setConverting] = useState(false);
+  // Fingerprint of the file the user picked, by the attached (possibly converted) file; removal drops it.
+  const fingerprints = useRef(new WeakMap<File, string>());
 
   async function choose(list: FileList | null) {
     const chosen = list ? Array.from(list) : [];
     if (chosen.length === 0) return;
     setError(undefined);
     const accepted: File[] = [];
+    const seen = new Set<string>();
+    for (const file of files) {
+      const known = fingerprints.current.get(file);
+      if (known) seen.add(known);
+    }
     let message: string | undefined;
     setConverting(true);
     try {
       for (const original of chosen) {
+        const print = await fileFingerprint(original);
+        if (print !== null && seen.has(print)) {
+          message = a.duplicate;
+          continue;
+        }
         let file: File | undefined = original;
         if (isHeicFile(original)) {
           file = await heicToJpeg(original);
@@ -67,6 +80,10 @@ export function AttachmentPicker({
           message = a.tooMany;
         } else {
           accepted.push(file);
+          if (print !== null) {
+            seen.add(print);
+            fingerprints.current.set(file, print);
+          }
         }
       }
     } finally {

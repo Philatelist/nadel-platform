@@ -48,14 +48,26 @@ production-like compose stack and in CI.
 
 ## 4. First cooperative and first chairman
 
-There is no operator console yet (phase 7). Add an operations command, run on the server, that:
+**Implemented** by feature 020 (ADR 0020; `infra/stand/first-chairman.sh`). There is no operator console yet (phase 7),
+so an operations command, run on the server, does the work:
 
-1. creates a cooperative (name, short code) and seeds its base roles;
-2. creates the chairman member and the matching Keycloak user with the `tenant_id` attribute;
-3. makes Keycloak send the "set your password" email.
+```bash
+./first-chairman.sh --cooperative "Name" --email chairman@example.org --last-name Ivanenko --first-name Petro [--resend]
+```
 
-It is idempotent (running it twice does nothing new), refuses to run without the `prod` or `staging` profile, and
-writes an audit entry. Documented in the runbook.
+It runs the backend jar once (`docker compose run --rm --no-deps backend java -jar ... --nadel.command=first-chairman`,
+profile `command`, no HTTP server, no published ports) and:
+
+1. creates the cooperative (name, deterministic id) and seeds its base roles, settings and charge types;
+2. creates the chairman member and the matching Keycloak user with the `tenant_id` attribute (through the Admin API);
+3. issues an invitation and prints the one-time set-password link to stdout, once, when the cooperative has no mailbox
+   yet (it always has none at this point). The operator passes the link to the chairman privately. No Keycloak mail
+   settings are needed.
+
+It is idempotent (a second run with the same arguments creates nothing and prints no link), `--resend` issues a new link
+(the older one stops working), it writes an audit entry and exits non-zero on failure. It is not limited to the `prod`
+and `staging` profiles: the safety is that it is an explicit one-shot `run --rm` invoked by an operator, with no HTTP
+surface. Documented in `infra/stand/README.md` and the owner manual; the runbook (section 10) links to them.
 
 ## 5. CI/CD (`.github/workflows/`)
 

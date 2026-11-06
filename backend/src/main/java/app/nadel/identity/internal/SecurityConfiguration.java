@@ -1,6 +1,7 @@
 package app.nadel.identity.internal;
 
 import app.nadel.identity.AccessProfileSource;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -13,7 +14,12 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
+/**
+ * The HTTP security of the API. Only in a web application: the one-shot commands of the profile {@code command}
+ * (feature 020, {@code spring.main.web-application-type=none}) have no HTTP surface and no {@code HttpSecurity}.
+ */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableMethodSecurity
 class SecurityConfiguration {
 
@@ -34,6 +40,8 @@ class SecurityConfiguration {
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // feature 020: the set-password page has no token yet (the invitation token is in the body)
+                        .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(e -> e

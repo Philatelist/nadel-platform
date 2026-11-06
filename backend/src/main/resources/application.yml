@@ -55,6 +55,9 @@ spring:
     default-property-inclusion: non_null
 
 server:
+  # Behind Caddy (infra/stand) the client address comes from X-Forwarded-For, which Tomcat's RemoteIpValve honours only
+  # from a proxy on a private or loopback address; request.getRemoteAddr() is then the client (the invitation rate limit)
+  forward-headers-strategy: native
   tomcat:
     # An upload over the limit is read to the end (up to this size) so that the client receives the 413 answer
     # instead of a broken connection; at least the multipart request limit above
@@ -67,6 +70,36 @@ logging:
     org.hibernate.orm.jdbc.error: "OFF"
 
 nadel:
+  keycloak:
+    # The Keycloak Admin API (feature 020): the backend makes and updates the sign-in accounts of invited members with
+    # the service account of the confidential client nadel-backend-admin (realm-management manage-users, view-users and
+    # query-users only), see identity/README.md
+    admin:
+      # Keycloak's base URL; on the stand http://keycloak:8080/auth inside its network (the proxy blocks /auth/admin)
+      url: ${NADEL_KEYCLOAK_ADMIN_URL:http://localhost:8180}
+      realm: ${NADEL_KEYCLOAK_REALM:nadel}
+      client-id: ${NADEL_KEYCLOAK_ADMIN_CLIENT_ID:nadel-backend-admin}
+      # From the environment only. Every profile except dev refuses to start without it; a blank value is missing (the
+      # dev default below applies only when the variable is not set at all)
+      client-secret: ${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+      connect-timeout: 5s
+      read-timeout: 10s
+  identity:
+    # How often a member's last sign-in (the member card, feature 020) is stored at most: once per interval
+    last-sign-in-interval: 1h
+  web:
+    # Where the web application is: the base of the set-password link in an invitation letter ({url}/set-password)
+    url: ${NADEL_WEB_URL:http://localhost:5173}
+  invitations:
+    # How long an invitation link works (feature 020: 72 hours, once)
+    ttl: 72h
+    # The public set-password endpoints (inspect, accept): at most max-requests per window from one client address and
+    # for the e-mail of one invitation, counted per endpoint; over it 429 TOO_MANY_REQUESTS. Kept in memory of this
+    # instance (at most max-keys counters, the least recently used go first), see ADR 0020
+    rate-limit:
+      max-requests: 5
+      window: 15m
+      max-keys: 10000
   privacy:
     # Personal data master key: 32 random bytes in base64 (openssl rand -base64 32), from the environment only. Every
     # profile except dev refuses to start without it; see backend/src/main/java/app/nadel/privacy/README.md
@@ -148,6 +181,31 @@ nadel:
   telegram:
     # The fake Telegram Bot API of infra/docker-compose.yml (fake-telegram), so the demo bot never reaches Telegram
     api-url: ${NADEL_TELEGRAM_API_URL:http://localhost:8091}
+  keycloak:
+    admin:
+      # The dev secret of infra/keycloak/nadel-realm.json; only when NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET is not set
+      client-secret: ${NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET:nadel-backend-admin-dev-secret}
+
+---
+# One-shot operations commands (feature 020): java -jar nadel-backend.jar --spring.profiles.include=command
+# --nadel.command=first-chairman ... (infra/stand/first-chairman.sh). No web server and no HTTP security, no JobRunr
+# job server, no bot polling or delivery sweep, no resubmission of the backend's outstanding events; the command's
+# runner stops the application with its exit code when it is done (members/README.md).
+spring:
+  config:
+    activate:
+      on-profile: command
+  main:
+    web-application-type: none
+  modulith:
+    events:
+      republish-outstanding-events-on-restart: false
+nadel:
+  telegram:
+    bot-enabled: false
+jobrunr:
+  background-job-server:
+    enabled: false
 
 ---
 # Production. The personal data master key has no fallback: start-up fails without NADEL_PD_MASTER_KEY or with a

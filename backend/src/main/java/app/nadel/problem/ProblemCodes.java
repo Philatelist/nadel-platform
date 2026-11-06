@@ -49,6 +49,12 @@ public final class ProblemCodes {
     public static final String TARIFF_VERSION_IN_USE = "TARIFF_VERSION_IN_USE";
     /** 409: the only version of a tariff cannot be deleted; a tariff always has a version. */
     public static final String TARIFF_LAST_VERSION = "TARIFF_LAST_VERSION";
+    /** 409: a charge was made from a version of the tariff (a reversed one included), so it cannot be deleted. */
+    public static final String TARIFF_IN_USE = "TARIFF_IN_USE";
+    /** 409: the tariff is archived; it gets no new version, version change or scope change and no second archive. */
+    public static final String TARIFF_ARCHIVED = "TARIFF_ARCHIVED";
+    /** 409: an unreversed charge was made from the tariff for the chosen end date or a later day. */
+    public static final String TARIFF_CHARGED_AFTER_END = "TARIFF_CHARGED_AFTER_END";
     /** 413: the uploaded file is over the size limit. */
     public static final String FILE_TOO_LARGE = "FILE_TOO_LARGE";
     /** 400: the upload is not an {@code .xlsx} workbook (also a corrupt, encrypted or oversized-when-unpacked one). */
@@ -153,6 +159,45 @@ public final class ProblemCodes {
     public static final String TELEGRAM_NOT_CONFIGURED = "TELEGRAM_NOT_CONFIGURED";
     /** 409: a paper delivery, or one that is still queued, is sent again (feature 017 §2.4). */
     public static final String DELIVERY_NOT_RETRYABLE = "DELIVERY_NOT_RETRYABLE";
+    /** 409: a member without an e-mail is invited; the e-mail is the login (feature 020 §2.1). */
+    public static final String MEMBER_EMAIL_MISSING = "MEMBER_EMAIL_MISSING";
+    /** 409: a member who is already invited is invited again; the invitation is sent again instead (feature 020). */
+    public static final String INVITATION_PENDING = "INVITATION_PENDING";
+    /** 409: a member who already has access is invited (feature 020). */
+    public static final String ACCESS_ALREADY_ACTIVE = "ACCESS_ALREADY_ACTIVE";
+    /**
+     * 409: the member's e-mail is already a sign-in login in another cooperative (or in none); the answer never says
+     * which (feature 020 §2.1).
+     */
+    public static final String EMAIL_IN_OTHER_COOPERATIVE = "EMAIL_IN_OTHER_COOPERATIVE";
+    /**
+     * 409: the sign-in account with the member's e-mail is already linked to another member of this cooperative, or
+     * the stored account belongs to another cooperative (feature 020).
+     */
+    public static final String SIGN_IN_ACCOUNT_IN_USE = "SIGN_IN_ACCOUNT_IN_USE";
+    /** 409: the invitation is sent again for a member who is not invited (feature 020). */
+    public static final String NOT_INVITED = "NOT_INVITED";
+    /** 409: access is turned off for a member who was never invited (feature 020). */
+    public static final String ACCESS_NOT_GRANTED = "ACCESS_NOT_GRANTED";
+    /** 409: a member turns off their own access; another holder of the permission must do it (feature 020). */
+    public static final String OWN_ACCESS = "OWN_ACCESS";
+    /**
+     * 502: the invitation letter could not be sent; the problem carries the delivery failure in {@code failureCode},
+     * the access status is unchanged and an earlier link still works (feature 020).
+     */
+    public static final String INVITATION_NOT_SENT = "INVITATION_NOT_SENT";
+    /** 503: the sign-in service (Keycloak) could not be reached or did not answer in time (feature 020). */
+    public static final String SIGN_IN_SERVICE_UNAVAILABLE = "SIGN_IN_SERVICE_UNAVAILABLE";
+    /**
+     * 404 of the public invitation endpoints: the link is unknown, used, replaced, expired, or the member's access is
+     * off or the member is archived; one code for every case, so nothing leaks (feature 020).
+     */
+    public static final String INVITATION_INVALID = "INVITATION_INVALID";
+    /**
+     * 429 of the public invitation endpoints: too many requests from one client address, or for one invitation e-mail,
+     * within the window ({@code nadel.invitations.rate-limit.*}, feature 020); nothing was checked or changed.
+     */
+    public static final String TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS";
     /**
      * 400: an announcement's text is longer than 2000 characters (Unicode code points, after the surrounding spaces are
      * removed; feature 017 §2.6); also with the field code {@code TOO_LONG} of {@code text} in {@code errors[]}.
@@ -308,6 +353,10 @@ public final class ProblemCodes {
     /** Codes of single fields in {@code errors[]}. */
     public static final String REQUIRED = "REQUIRED";
     public static final String TOO_LONG = "TOO_LONG";
+    /** Under the minimum length (a password under 8 characters). */
+    public static final String TOO_SHORT = "TOO_SHORT";
+    /** The sign-in service refused a password by its own rules (field {@code password}). */
+    public static final String PASSWORD_POLICY = "PASSWORD_POLICY";
     public static final String INVALID = "INVALID";
     /** An archived record (an expense category) named for a new entry; it stays only on old ones. */
     public static final String ARCHIVED = "ARCHIVED";
@@ -322,6 +371,8 @@ public final class ProblemCodes {
     public static final String FREQUENCY_BASIS_MISMATCH = "FREQUENCY_BASIS_MISMATCH";
     /** Common land named in the scope of a tariff (selected plots or exclusions); it has no tariffs. */
     public static final String TARIFF_COMMON_LAND = "TARIFF_COMMON_LAND";
+    /** The end date of a tariff archive that is not after the start of its last version (field {@code endsOn}). */
+    public static final String TARIFF_END_BEFORE_LAST_VERSION = "TARIFF_END_BEFORE_LAST_VERSION";
     /** An amount that must be greater than zero (an opening balance) is zero or negative. */
     public static final String AMOUNT_NOT_POSITIVE = "AMOUNT_NOT_POSITIVE";
     /** A date that must not be after today in the cooperative's time zone (an opening balance) is in the future. */

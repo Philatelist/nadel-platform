@@ -20,7 +20,7 @@ export function TariffConflicts({ conflicts }: { conflicts: readonly TariffConfl
               <Link to={`/tariffs/${conflict.otherTariffId}`} className="font-medium text-accent underline">
                 <UserContent>{conflict.otherTariffName}</UserContent>
               </Link>
-              . {format(c.text, { count: conflict.plotCount })}
+              . {c.text}
             </p>
             <p className="mt-1">
               {c.plots}:{' '}

@@ -20,6 +20,11 @@ shots:
     open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
     steps:
       - { click: Edit roles }
+  - name: member-card-access
+    user: chairman
+    path: /members
+    open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
+    element: { heading: System access }
 ---
 
 ## What the screen is for
@@ -32,9 +37,10 @@ The card is seen by whoever has the permission "{{ui:permission.MEMBERS_VIEW.nam
 
 - "{{ui:memberForm.edit}}" and "{{ui:memberForm.archive}}" or "{{ui:memberForm.restore}}": "{{ui:permission.MEMBERS_EDIT.name}}";
 - "{{ui:rolesPage.memberRoles}}": "{{ui:permission.ROLES_MANAGE.name}}";
-- "{{ui:members.history}}": "{{ui:permission.AUDIT_VIEW.name}}".
+- "{{ui:members.history}}": "{{ui:permission.AUDIT_VIEW.name}}";
+- the buttons of the "{{ui:memberAccess.title}}" block: "{{ui:permission.MEMBERS_INVITE.name}}".
 
-Notes are seen only by those who have "{{ui:permission.MEMBERS_VIEW.name}}". Every member sees their own data in "{{ui:nav.account}}".
+Notes are seen only by those who have "{{ui:permission.MEMBERS_VIEW.name}}". The "{{ui:memberAccess.title}}" block is seen by those who have "{{ui:permission.MEMBERS_VIEW.name}}"; the member does not see it on their own card. Every member sees their own data in "{{ui:nav.account}}".
 
 ## Every element
 
@@ -53,6 +59,33 @@ At the top are the link "{{ui:members.back}}" and then the member's name. For an
 ### Member data
 
 The table shows: {{ui:member.fields.name}}, {{ui:member.fields.phones}}, {{ui:member.fields.email}}, {{ui:member.fields.postalAddress}}, {{ui:member.fields.deliveryChannel}}, the Telegram nickname and the Viber phone (when they exist), the Telegram state, {{ui:member.fields.notes}} and {{ui:member.fields.roles}}. For Telegram the card shows only "{{ui:telegramLink.memberLinked}}" or "{{ui:telegramLink.memberNotLinked}}", without data of the member's own account. Connecting and disconnecting go to the change log.
+
+### The "{{ui:memberAccess.title}}" block
+
+Shows whether the person can sign in to the system. There are four states:
+
+- "{{ui:memberAccess.status.NOT_INVITED}}": no invitation has been sent yet;
+- "Invited <date>, waiting for a password": the letter was sent, the person has not set a password yet;
+- "Has access, last sign-in <date>" or "Has access, has not signed in yet": the password is set;
+- "{{ui:memberAccess.status.DISABLED}}": signing in is switched off.
+
+The buttons are seen by whoever has the permission "{{ui:permission.MEMBERS_INVITE.name}}":
+
+- **{{ui:memberAccess.invite}}** sends the letter "{{ui:setPassword.title}}" to the e-mail on the card, with a link to the [set-password page](help:set-password). The letter comes from the cooperative's mailbox; the link is valid for 72 hours and works once. If the member has connected Telegram, the link also arrives from the bot. The system says: "{{ui:memberAccess.invited}}"
+- **{{ui:memberAccess.resend}}** sends a new link; the previous one stops working. The system says: "{{ui:memberAccess.resent}}"
+- **{{ui:memberAccess.disable}}** removes the sign-in, but the card and the data stay. The system asks to confirm: "{{ui:memberAccess.disableTitle}}". The person can be invited again afterwards.
+
+When a button is unavailable, the reason is written beside it: "{{ui:memberAccess.blocked.EMAIL_MISSING}}" (the e-mail is the login) or "{{ui:memberAccess.blocked.MAILBOX_NOT_CONFIGURED}}" (see the [cooperative settings](help:settings)). When the letter could not be sent, the system says the invitation was not sent and suggests trying again.
+
+Other rules:
+
+- an e-mail that a member of another cooperative already uses is refused;
+- archiving a member switches their access off, and restoring does not switch it on: invite the person again;
+- nobody can switch off their own access: their own card has no "{{ui:memberAccess.disable}}" button;
+- the access of the last chairman who has access cannot be switched off, and that chairman cannot be archived either: the system says "{{ui:memberAccess.lastChairman}}";
+- when the e-mail of a member who has access is changed, a new link is sent to the new address.
+
+Invitations, resends and switching access off are written to the [change log](help:audit).
 
 ### The "{{ui:ownership.plotsTitle}}" panel
 
@@ -74,6 +107,8 @@ Another example: Polishchuk Oksana, who keeps the member list, has, besides the 
 
 ![Choosing roles on the member card](shot:member-card-roles)
 
+![The system access block on the member card](shot:member-card-access)
+
 ## Related pages
 
 - [Members](help:members)
@@ -81,3 +116,4 @@ Another example: Polishchuk Oksana, who keeps the member list, has, besides the 
 - [Roles and permissions](help:roles)
 - [Plot card](help:plot-card)
 - [Change log](help:audit)
+- [Set a password](help:set-password)

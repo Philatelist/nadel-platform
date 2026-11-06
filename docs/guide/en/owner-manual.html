@@ -444,36 +444,56 @@ curl -s -X POST localhost:8091/control/reset</pre>
           <code>PLATFORM_OPERATOR</code> role.
         </li>
       </ul>
-      <h3>Creating an account for a member</h3>
+      <h3>Giving a member access (the board invites)</h3>
+      <p>
+        Accounts are no longer created by hand in Keycloak. The board invites a member from the member card:
+      </p>
       <ol class="steps">
         <li>
-          Make sure the member exists in the system and their card has an email (the chairman does this).
+          The member exists in the system and their card has an email; the cooperative's own mailbox is set up
+          in the settings (the chairman does this).
         </li>
         <li>
-          Keycloak admin console → choose the realm <strong>nadel</strong> at the top left →
-          <strong>Users</strong> → <strong>Add user</strong>.
+          Members → the member's card → <strong>Invite to the system</strong> (permission "Invite to the
+          system", the chairman by default). The system creates the Keycloak account with the
+          <code>tenant_id</code> attribute and emails a one-time link from the cooperative's mailbox.
         </li>
         <li>
-          Username and Email — the same address; First name, Last name; switch on
-          <strong>Email verified</strong>; <strong>Create</strong>.
-        </li>
-        <li>
-          Tab <strong>Attributes</strong>: key <code>tenant_id</code>, value — the cooperative's identifier
-          (chapter 4) → <strong>Save</strong>.
-        </li>
-        <li>
-          Tab <strong>Credentials</strong> → <strong>Set password</strong>: a temporary password with
-          <strong>Temporary</strong> on — the person sets their own at the first sign-in.
+          The member opens the link (valid 72 hours), sets a password on the app's page and signs in. The card
+          shows the access status: not invited, invited, active, disabled. The board can resend the link (the
+          older one stops working) or disable access.
         </li>
       </ol>
-      <div class="warn">
-        <span class="callout-title">No Attributes tab?</span>
-        <p>
-          Keycloak 26 hides custom attributes by default. Once: <strong>Realm settings</strong> →
-          <strong>General</strong> → <strong>Unmanaged attributes</strong> → "Admin can edit" →
-          <strong>Save</strong>.
-        </p>
-      </div>
+      <p>
+        Nobody can disable their own access, and the access of the last chairman who has access can be neither
+        disabled nor removed by archiving: a cooperative always keeps a chairman who can sign in. The
+        set-password page takes at most 5 requests within 15 minutes from one address and for the e-mail of
+        one invitation (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>,
+        <code>NADEL_INVITATIONS_RATE_LIMIT_WINDOW</code>); the counters live in the backend's memory and are
+        cleared by a restart.
+      </p>
+      <h3>The platform's own Keycloak client</h3>
+      <p>
+        To create users the backend signs in to Keycloak as a separate <strong>confidential</strong> client,
+        <code>nadel-backend-admin</code> (service account only). It has exactly three
+        <code>realm-management</code> roles: <code>manage-users</code>, <code>view-users</code> and
+        <code>query-users</code>.
+      </p>
+      <ul>
+        <li>
+          Its secret lives only in the environment: <code>NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET</code> in
+          <code>/opt/nadel/.env</code> (mode 600) on the server. Locally the realm file holds a dev value.
+        </li>
+        <li>
+          <strong>Rotation:</strong> <code>./stand-init.sh</code> on the server issues a new secret and writes
+          it to <code>.env</code>; then run <code>docker compose up -d backend</code> so the backend picks it
+          up. Every run of the script changes the secret. Never choose the value by hand and never share it.
+        </li>
+        <li>
+          A stand imported before this client existed needs a fresh realm import (Reset in
+          <code>infra/stand/README.md</code>).
+        </li>
+      </ul>
       <h3>Other tasks</h3>
       <table>
         <thead>
@@ -514,10 +534,6 @@ curl -s -X POST localhost:8091/control/reset</pre>
           </tr>
         </tbody>
       </table>
-      <p class="muted small">
-        Creating accounts and email invitations from the cooperative admin come with the operator console and
-        mail (phases 4 and 7). Until then the platform owner creates accounts in Keycloak.
-      </p>
     </section>
 
     <section class="chapter" id="tenants">
@@ -527,12 +543,27 @@ curl -s -X POST localhost:8091/control/reset</pre>
         identifier (UUID) and a name. When a cooperative is created the system gives it the base roles, the
         settings and the standard charge types.
       </p>
-      <h3>Creating a new cooperative (until the operator console exists)</h3>
+      <h3>Creating a new cooperative: the first-chairman command</h3>
       <p>
         Contacts (phones, email, address) are encrypted by the application, so SQL cannot write them. The
         first chairman is therefore created <em>without</em> contacts and is linked to the Keycloak account by
         the account's identifier; the chairman enters the email and phones in the app afterwards.
       </p>
+      <p>On the server, in <code>/opt/nadel</code>, with Postgres and Keycloak running:</p>
+      <pre class="formula">
+./first-chairman.sh --cooperative "SK Name" --email chairman@example.org \
+  --last-name Ivanenko --first-name Petro</pre>
+      <p>
+        It creates the cooperative (base roles, settings, charge types), the chairman and their Keycloak
+        account, and <strong>prints the one-time set-password link once</strong> on the screen (a new
+        cooperative has no mailbox yet, and Keycloak needs no mail settings). Pass the link to the chairman
+        privately; it is valid for 72 hours and cannot be shown again. Running the command again changes
+        nothing; <code>--resend</code> issues a new link (the old one stops working). The command is a
+        one-shot container without a web server and exits with an error code on any failure. The chairman sets
+        a password, signs in and enters the email and phones in the app; later members are invited from the
+        member card.
+      </p>
+      <h3>The old manual way (SQL, only if the command is not available)</h3>
       <ol class="steps">
         <li>
           Connect to the database as the superuser:
@@ -550,9 +581,11 @@ BEGIN
 END $$;</pre>
       <ol class="steps" start="3">
         <li>
-          Create the chairman's account in Keycloak with the attribute <code>tenant_id</code> set to that
-          identifier (chapter 3). Open the new user and copy the <strong>ID</strong> shown on the
-          <strong>Details</strong> tab (a UUID) — it is the Keycloak <em>subject</em>.
+          Create the chairman's account in Keycloak (Users → Add user, Email verified on, Credentials →
+          temporary password) with the attribute <code>tenant_id</code> set to that identifier (needs
+          "Unmanaged attributes: Admin can edit" in Realm settings). Open the new user and copy the
+          <strong>ID</strong> shown on the <strong>Details</strong> tab (a UUID) — it is the Keycloak
+          <em>subject</em>.
         </li>
         <li>
           Back in <code>psql</code>, add the chairman with the identifier and the subject (name and both
@@ -582,10 +615,10 @@ END $$;</pre>
         its contact.
       </p>
       <div class="warn">
-        <span class="callout-title">A temporary way</span>
+        <span class="callout-title">A fallback</span>
         <p>
-          This SQL is a workaround until the operator console; creation through it is not in the audit log. On
-          the server a "first cooperative" command replaces it (chapter 9), later the operator console.
+          This SQL is a fallback; creation through it is not in the audit log. Use the command above; the
+          operator console comes later.
         </p>
       </div>
       <h3>Isolation</h3>
@@ -1855,6 +1888,13 @@ END $$;</pre>
             <td>—</td>
           </tr>
           <tr>
+            <td>Invite to the system</td>
+            <td>yes</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
             <td>Manage roles</td>
             <td>yes</td>
             <td>—</td>
@@ -2073,6 +2113,11 @@ END $$;</pre>
           categories. The reconciliation act is built with "View charges", and by a member for their own
           plots. A member does not see "Cash and bank".
         </li>
+        <li>
+          Access to the system: "Invite to the system" (the chairman only; thirty-two permissions in all)
+          invites a member from the member card, resends the link, disables and enables access and shows the
+          access status. It is used together with "View members".
+        </li>
       </ul>
     </section>
 
@@ -2282,8 +2327,9 @@ END $$;</pre>
           environments; the backend refuses to start with a default password.
         </li>
         <li>
-          A "first cooperative" command creates the cooperative, its chairman and the Keycloak account and
-          sends the set-your-password email.
+          The <code>first-chairman.sh</code> command creates the cooperative, its chairman and the Keycloak
+          account and prints a one-time set-password link for you to pass to the chairman (chapter 4). The
+          backend also needs <code>NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET</code> (chapter 3).
         </li>
         <li>The Keycloak admin console and the database only through an SSH tunnel.</li>
       </ul>

@@ -99,6 +99,44 @@ export async function pastRange(page: Page): Promise<{ from: string; to: string 
   return { from: shiftDay(demoEnd, -78), to: shiftDay(demoEnd, -48) };
 }
 
+/** The demo custom role «Електрик» and the demo member who holds it (R__demo_data.sql). */
+export const ELECTRICIAN_ROLE_ID = 'cccccccc-0000-0000-0000-000000000001';
+export const ELECTRICIAN_MEMBER_ID = 'aaaaaaaa-0000-0000-0000-000000000004';
+/** The permissions the demo role «Електрик» carries; specs that change the role or its holders put them back. */
+export const ELECTRICIAN_DEMO_PERMISSIONS = ['METERS_VIEW', 'READINGS_ENTER'] as const;
+
+/**
+ * Best effort, never throws: puts the demo electrician back to the demo state. The role «Електрик» gets its demo
+ * permissions (name and description are sent back as they are) and the member holds exactly Member plus «Електрик».
+ * Needs a chairman's page.
+ */
+export async function restoreElectrician(page: Page): Promise<void> {
+  try {
+    const listed = await api(page, 'GET', '/roles');
+    if (listed.status !== 200) return;
+    const roles = JSON.parse(listed.body) as {
+      id: string;
+      name: string;
+      description?: string;
+      baseCode?: string;
+    }[];
+    const role = roles.find((r) => r.id === ELECTRICIAN_ROLE_ID);
+    if (role !== undefined)
+      await api(page, 'PUT', `/roles/${ELECTRICIAN_ROLE_ID}`, {
+        name: role.name,
+        description: role.description,
+        permissions: [...ELECTRICIAN_DEMO_PERMISSIONS],
+      });
+    const memberRoleId = roles.find((r) => r.baseCode === 'MEMBER')?.id;
+    if (memberRoleId !== undefined)
+      await api(page, 'PUT', `/members/${ELECTRICIAN_MEMBER_ID}/roles`, {
+        roleIds: [memberRoleId, ELECTRICIAN_ROLE_ID],
+      });
+  } catch {
+    // best effort: a clean-up must not hide the test's own failure
+  }
+}
+
 /** Parses a JSON response that must have the given status, or throws with the body for a readable failure. */
 export function expectCreated<T>(result: ApiResult, status = 201): T {
   if (result.status !== status) throw new Error(`expected ${status}, got ${result.status}: ${result.body}`);
@@ -124,9 +162,13 @@ export async function createPlot(page: Page, number: string): Promise<CreatedPlo
 }
 
 /** A member whose last name is unique, so that the member search finds exactly this one. */
-export async function createMember(page: Page, lastName: string): Promise<CreatedMember> {
+export async function createMember(page: Page, lastName: string, email?: string): Promise<CreatedMember> {
   const created = expectCreated<{ id: string }>(
-    await api(page, 'POST', '/members', { lastName, firstName: 'Test' }),
+    await api(page, 'POST', '/members', {
+      lastName,
+      firstName: 'Test',
+      ...(email === undefined ? {} : { email }),
+    }),
   );
   return { id: created.id, name: `${lastName} Test`, lastName };
 }

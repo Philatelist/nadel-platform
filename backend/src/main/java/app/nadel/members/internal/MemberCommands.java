@@ -10,6 +10,7 @@ import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +18,9 @@ import nadel.contract.model.MemberInput;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Creates, edits, archives and restores members. Every method is one transaction that also publishes the
@@ -26,6 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * The cooperative always comes from the caller's {@link AccessProfile}, never from the request. The caller must hold
  * {@code MEMBERS_EDIT} (checked on the controller).
+ * <p>
+ * Access to the system (feature 020): archiving a member with access or an open invitation stores {@code DISABLED}
+ * and revokes the links ({@link MemberAccessRevocation}); restoring leaves access as it is. A new e-mail of such a
+ * member is checked in Keycloak before the update transaction ({@link MemberLoginGuard}), then stores {@code INVITED}
+ * so the new address is confirmed through a new link. The Keycloak account follows through the id-only events and
+ * {@link MemberAccessListener}.
  */
 @Service
 class MemberCommands {
@@ -33,23 +42,28 @@ class MemberCommands {
     private static final String EMAIL_INDEX = "member_tenant_email_bidx_uq";
 
     private final MemberRepository members;
-    private final RoleGrantReader grants;
     private final LastChairmanGuard lastChairman;
     private final List<MemberArchiveGuard> archiveGuards;
     private final MemberAuditPublisher audit;
     private final MemberCrypto crypto;
-    private final TelegramLinkFlags telegram;
+    private final MemberCards cards;
+    private final MemberAccessRevocation access;
+    private final MemberLoginGuard loginGuard;
+    private final TransactionTemplate writing;
 
-    MemberCommands(MemberRepository members, RoleGrantReader grants, LastChairmanGuard lastChairman,
+    MemberCommands(MemberRepository members, LastChairmanGuard lastChairman,
             List<MemberArchiveGuard> archiveGuards, MemberAuditPublisher audit, MemberCrypto crypto,
-            TelegramLinkFlags telegram) {
+            MemberCards cards, MemberAccessRevocation access, MemberLoginGuard loginGuard,
+            PlatformTransactionManager transactionManager) {
         this.members = members;
-        this.grants = grants;
         this.lastChairman = lastChairman;
         this.archiveGuards = archiveGuards;
         this.audit = audit;
         this.crypto = crypto;
-        this.telegram = telegram;
+        this.cards = cards;
+        this.access = access;
+        this.loginGuard = loginGuard;
+        this.writing = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -71,10 +85,22 @@ class MemberCommands {
         return card(member, contacts, actor);
     }
 
-    @Transactional
+    /**
+     * Edits a member: first, outside any transaction, the pre-check of a new login ({@link MemberLoginGuard}, which may
+     * ask Keycloak), then one transaction that applies the change, publishes the audit event and, when the e-mail of a
+     * member with access or an open invitation changed, stores {@code INVITED} and publishes
+     * {@link MemberLoginChanged}.
+     */
     nadel.contract.model.Member update(UUID id, MemberInput input, AccessProfile actor) {
         MemberData data = MemberData.from(input);
-        Member member = find(id);
+        loginGuard.ensureLoginFree(actor.tenantId(), id, data.email());
+        return writing.execute(status -> apply(id, data, actor));
+    }
+
+    private nadel.contract.model.Member apply(UUID id, MemberData input, AccessProfile actor) {
+        MemberData data = input;
+        // locked like an invitation locks it: the access decision below sees the committed state
+        Member member = members.findByIdForUpdate(id).orElseThrow(ApiProblemException::notFound);
         OpenedContacts stored = crypto.open(member);
         if (!actor.can(Permission.MEMBERS_VIEW)) {
             data = withNotes(data, stored.notes()); // keep what is stored: the editor cannot see it
@@ -83,16 +109,21 @@ class MemberCommands {
             ensureEmailFree(actor.tenantId(), data.email(), member.getId());
         }
         MemberSnapshot before = MemberSnapshot.of(member, stored);
+        byte[] emailBefore = member.getEmailBidx();
         member.apply(data);
         OpenedContacts contacts = crypto.seal(member, stored, data);
         List<FieldChange> changes = MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts));
         if (!changes.isEmpty()) {
-            member.touch(Instant.now());
+            Instant now = Instant.now();
+            member.touch(now);
             save(member);
             if (!contacts.phones().equals(stored.phones())) {
                 crypto.replacePhoneIndex(member, contacts.phones());
             }
             publish(actor, "MEMBER_UPDATED", member, changes);
+            if (!member.isArchived() && !Arrays.equals(emailBefore, member.getEmailBidx())) {
+                access.loginChanged(member, now);
+            }
         }
         return card(member, contacts, actor);
     }
@@ -100,7 +131,8 @@ class MemberCommands {
     /**
      * Archives a member. The member row is locked first ({@code FOR UPDATE}): a concurrent change of owner that adds
      * this member holds a {@code FOR SHARE} lock on it, so the two serialise, and whichever runs second sees the
-     * other's result. Then the last-chairman check and every {@link MemberArchiveGuard} run. The chairman lock is
+     * other's result. Then the last-chairman checks (the last active chairman, and the last active chairman whose
+     * access is on, because the archive turns access off) and every {@link MemberArchiveGuard} run. The chairman lock is
      * taken before the row lock, the order a role change already uses (see {@link LastChairmanGuard#lock}).
      */
     @Transactional
@@ -110,10 +142,13 @@ class MemberCommands {
         OpenedContacts contacts = crypto.open(member);
         if (!member.isArchived()) {
             lastChairman.ensureNotLast(actor.tenantId(), member.getId());
+            lastChairman.ensureNotLastWithAccess(actor.tenantId(), member.getId()); // the archive turns access off
             archiveGuards.forEach(guard -> guard.ensureCanArchive(member.getId()));
             MemberSnapshot before = MemberSnapshot.of(member, contacts);
-            member.archive(Instant.now());
+            Instant now = Instant.now();
+            member.archive(now);
             save(member);
+            access.revoke(member, now); // restore leaves it DISABLED: the board invites again
             publish(actor, "MEMBER_ARCHIVED", member,
                     MemberSnapshot.diff(before, MemberSnapshot.of(member, contacts)));
         }
@@ -177,7 +212,7 @@ class MemberCommands {
     }
 
     private nadel.contract.model.Member card(Member member, OpenedContacts contacts, AccessProfile viewer) {
-        return MemberDtoMapper.toDto(member, contacts, grants.read(member), viewer, telegram.linked(member.getId()));
+        return cards.card(member, contacts, viewer);
     }
 
     private static MemberData withNotes(MemberData data, String notes) {

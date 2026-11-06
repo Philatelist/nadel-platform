@@ -18,11 +18,16 @@ import app.nadel.tariffs.TariffVersionUsage;
 import app.nadel.tariffs.VersionTerms;
 import app.nadel.tariffs.VersionTerms.Violation;
 import jakarta.persistence.EntityManager;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,11 +64,17 @@ import org.springframework.transaction.annotation.Transactional;
  * The changes themselves ({@link #add}, {@link #update}, {@link #delete}) run in the caller's transaction and return
  * the audit entry unpublished, so {@link TariffVersionChangeService} (a version change booked with a recalculation,
  * feature 012) applies them with the same locks and validation, without the use check.
+ * <p>
+ * A whole tariff is deleted ({@link #deleteTariff}) only while no charge was ever made from it ({@link TariffUsages},
+ * feature 020); a used one is archived from an end date ({@link #archive}), after which its versions and scope are
+ * frozen (409 {@code TARIFF_ARCHIVED} from every version change, also through {@link TariffVersionChangeService}, and
+ * from a scope change).
  */
 @Service
 class TariffCommands {
 
     private static final String DATE_INDEX = "tariff_version_valid_from_uq";
+    private static final String FOREIGN_KEY_VIOLATION = "23503";
     /** The audited fields of a version, in the order they are written. */
     private static final List<String> VERSION_FIELDS = List.of("validFrom", "basis", "frequency", "rate", "dueDate",
             "note");
@@ -78,10 +89,12 @@ class TariffCommands {
     private final EntityManager entityManager;
     private final Clock clock;
     private final List<TariffVersionUsage> usages;
+    private final TariffUsages tariffUsages;
 
     TariffCommands(TariffRepository tariffs, TariffVersionRepository versions, TariffScopePlotRepository scopePlots,
             ChargeTypeRepository chargeTypes, PlotCatalog plots, TariffAssembler assembler,
-            TariffAuditPublisher audit, EntityManager entityManager, Clock clock, List<TariffVersionUsage> usages) {
+            TariffAuditPublisher audit, EntityManager entityManager, Clock clock, List<TariffVersionUsage> usages,
+            TariffUsages tariffUsages) {
         this.tariffs = tariffs;
         this.versions = versions;
         this.scopePlots = scopePlots;
@@ -92,6 +105,7 @@ class TariffCommands {
         this.entityManager = entityManager;
         this.clock = clock;
         this.usages = usages;
+        this.tariffUsages = tariffUsages;
     }
 
     @Transactional
@@ -123,8 +137,8 @@ class TariffCommands {
     @Transactional
     TariffVersion addVersion(UUID tariffId, TariffVersionCreate input, AccessProfile actor) {
         VersionTerms terms = validTerms(input);
-        TariffRecord tariff = tariffs.findById(tariffId).filter(t -> t.getTenantId().equals(actor.tenantId()))
-                .orElseThrow(ApiProblemException::notFound);
+        // FOR UPDATE, so a concurrent archive of the tariff waits for this transaction (or this one sees it archived)
+        TariffRecord tariff = lockTariff(tariffId, actor);
         Applied applied = add(tariff, terms, input, actor);
         publish(applied);
         return versionDto(tariff, applied.version());
@@ -144,6 +158,7 @@ class TariffCommands {
         TariffRecord tariff = lockTariff(tariffId, actor);
         lockChargeType(tariff.getChargeTypeId(), actor);
         TariffVersionRecord version = version(tariff, versionId);
+        checkNotArchived(tariff);
         String note = blankToNull(input.getNote());
         if (changesTerms(version, terms, note)) {
             checkUnused(version, actor);
@@ -163,8 +178,111 @@ class TariffCommands {
         TariffRecord tariff = lockTariff(tariffId, actor);
         lockChargeType(tariff.getChargeTypeId(), actor);
         TariffVersionRecord version = version(tariff, versionId);
+        checkNotArchived(tariff);
         checkUnused(version, actor);
         publish(delete(tariff, version, false, actor));
+    }
+
+    /**
+     * Deletes a tariff entered by mistake, with its scope rows and every version, softly deleted ones included
+     * (feature 020). Order: the tariff row {@code FOR UPDATE} (404 when missing or foreign); the use check through
+     * {@link TariffUsages} (409 {@code TARIFF_IN_USE} when any charge was ever made from it, a reversed one included);
+     * the scope rows, the versions, the tariff. The {@code ON DELETE RESTRICT} foreign keys of {@code charge} and
+     * {@code charge_part} are the last guard: their violation (SQLSTATE 23503) is the same 409. The charge type is not
+     * locked: deleting changes nothing a charge type or a month run reads, and a run that charges from the tariff holds
+     * it {@code FOR SHARE}, so this waits for it and then sees its charges. The audit entry {@code TARIFF_DELETED}
+     * holds the name.
+     */
+    @Transactional
+    void deleteTariff(UUID id, AccessProfile actor) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        TariffRecord tariff = lockTariff(id, actor);
+        if (tariffUsages.everCharged(tenantId, tariff.getId())) {
+            throw tariffInUse();
+        }
+        try {
+            scopePlots.deleteAllOfTariff(tariff.getId());
+            versions.deleteAllOfTariff(tariff.getId());
+            tariffs.delete(tariff);
+            tariffs.flush();
+        } catch (DataIntegrityViolationException e) {
+            if (isForeignKeyViolation(e)) {
+                throw tariffInUse();
+            }
+            throw e;
+        }
+        publish(actor, "TARIFF_DELETED", tariff, List.of(new FieldChange("name", tariff.getName(), null)));
+    }
+
+    /**
+     * Archives a used tariff from {@code endsOn}, the first day it no longer applies (feature 020). Order: the tariff
+     * row {@code FOR UPDATE} (404 when missing or foreign); 409 {@code TARIFF_ARCHIVED} when it is archived already;
+     * 400 {@code VALIDATION_FAILED} ({@code endsOn} {@code TARIFF_END_BEFORE_LAST_VERSION}) unless {@code endsOn} is
+     * after the start of its last version (softly deleted versions do not count); 409
+     * {@code TARIFF_CHARGED_AFTER_END} when an unreversed charge from it covers {@code endsOn} or a later day
+     * ({@link TariffUsages#lastChargedDay}); then {@code valid_until = endsOn - 1} and {@code archived_at}. Whatever
+     * charges from a tariff holds it {@code FOR SHARE}, so this waits for a run in progress and then sees its charges.
+     * The charge type is not locked and may be archived: archiving the tariff changes nothing a charge type reads. A
+     * tariff never charged may be archived too (the web deletes it instead). The audit entry {@code TARIFF_ARCHIVED}
+     * holds {@code endsOn}.
+     */
+    @Transactional
+    Tariff archive(UUID id, LocalDate endsOn, AccessProfile actor) {
+        UUID tenantId = Objects.requireNonNull(actor.tenantId());
+        TariffRecord tariff = lockTariff(id, actor);
+        checkNotArchived(tariff);
+        List<TariffVersionRecord> oldestFirst = versions.findByTariffIdOrderByValidFromAsc(tariff.getId());
+        if (oldestFirst.isEmpty() || !endsOn.isAfter(oldestFirst.getLast().getValidFrom())) {
+            throw invalid(List.of(new FieldProblem("endsOn", ProblemCodes.TARIFF_END_BEFORE_LAST_VERSION)));
+        }
+        if (tariffUsages.lastChargedDay(tenantId, tariff.getId()).filter(day -> !day.isBefore(endsOn)).isPresent()) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_CHARGED_AFTER_END,
+                    "A charge from this tariff covers the end date or a later day.");
+        }
+        tariff.archive(endsOn.minusDays(1), clock.instant());
+        tariffs.saveAndFlush(tariff);
+        publish(actor, "TARIFF_ARCHIVED", tariff, List.of(new FieldChange("endsOn", null, endsOn.toString())));
+        ChargeTypeRecord chargeType = chargeTypes.findById(tariff.getChargeTypeId())
+                .orElseThrow(ApiProblemException::notFound);
+        return assembler.assemble(tariff, chargeType);
+    }
+
+    /** 409 {@code TARIFF_ARCHIVED} when the tariff is archived: its versions and scope are frozen. */
+    static void checkNotArchived(TariffRecord tariff) {
+        if (tariff.isArchived()) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_ARCHIVED,
+                    "The tariff is archived; its versions and scope can no longer change.");
+        }
+    }
+
+    private static ApiProblemException tariffInUse() {
+        return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_IN_USE,
+                "A charge was made from this tariff, so it cannot be deleted.");
+    }
+
+    /** Whether the failure, or anything it wraps, is a foreign key violation (SQLSTATE 23503). */
+    static boolean isForeignKeyViolation(Throwable failure) {
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Throwable> pending = new ArrayDeque<>();
+        pending.add(failure);
+        while (!pending.isEmpty()) {
+            Throwable t = pending.poll();
+            if (!seen.add(t)) {
+                continue;
+            }
+            if (t instanceof SQLException sql) {
+                if (FOREIGN_KEY_VIOLATION.equals(sql.getSQLState())) {
+                    return true;
+                }
+                if (sql.getNextException() != null) {
+                    pending.add(sql.getNextException());
+                }
+            }
+            if (t.getCause() != null) {
+                pending.add(t.getCause());
+            }
+        }
+        return false;
     }
 
     // ---- the changes themselves, shared with TariffVersionChanges (feature 012): in the caller's transaction
@@ -216,6 +334,7 @@ class TariffCommands {
     /** Adds a version to the tariff (its charge type locked {@code FOR SHARE} first). */
     Applied add(TariffRecord tariff, VersionTerms terms, TariffVersionCreate input, AccessProfile actor) {
         lockChargeType(tariff.getChargeTypeId(), actor);
+        checkNotArchived(tariff);
         TariffVersionRecord version = saveVersion(TariffVersionRecord.create(Objects.requireNonNull(actor.tenantId()),
                 tariff.getId(), terms, blankToNull(input.getNote()), Instant.now()));
         return validity(version).span(tariff, version,
@@ -228,6 +347,7 @@ class TariffCommands {
      */
     Applied update(TariffRecord tariff, TariffVersionRecord version, VersionTerms terms, @Nullable String note,
             AccessProfile actor) {
+        checkNotArchived(tariff);
         Validity before = validity(version);
         List<FieldChange> old = versionFields(version, false);
         version.correct(terms, note);
@@ -245,6 +365,7 @@ class TariffCommands {
      * otherwise; the only version of a tariff is 409 {@code TARIFF_LAST_VERSION}.
      */
     Applied delete(TariffRecord tariff, TariffVersionRecord version, boolean softly, AccessProfile actor) {
+        checkNotArchived(tariff);
         if (versions.countByTariffId(tariff.getId()) <= 1) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.TARIFF_LAST_VERSION,
                     "The only version of a tariff cannot be deleted.");
@@ -296,7 +417,8 @@ class TariffCommands {
     /** The answer for a version: its end date is derived from the versions that start after it. */
     private TariffVersion versionDto(TariffRecord tariff, TariffVersionRecord version) {
         List<TariffVersion> all = TariffDtoMapper.versionsNewestFirst(
-                versions.findByTariffIdOrderByValidFromAsc(tariff.getId()), LocalDate.now(clock));
+                versions.findByTariffIdOrderByValidFromAsc(tariff.getId()), tariff.getValidUntil(),
+                LocalDate.now(clock));
         return all.stream().filter(v -> v.getId().equals(version.getId())).findFirst().orElseThrow();
     }
 
@@ -329,6 +451,7 @@ class TariffCommands {
         TariffRecord tariff = tariffs.findByIdForUpdate(id).filter(t -> t.getTenantId().equals(tenantId))
                 .orElseThrow(ApiProblemException::notFound);
         ChargeTypeRecord chargeType = lockChargeType(tariff.getChargeTypeId(), actor);
+        checkNotArchived(tariff);
         List<TariffScopePlotRecord> stored = scopePlots.findByTariffId(id);
 
         ScopeKind kind = ScopeKind.valueOf(input.getKind().name());

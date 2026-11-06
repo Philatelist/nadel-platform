@@ -50,7 +50,7 @@ shots:
 
 - «{{ui:expenses.attachments.pick}}» додає файл з пристрою.
 - «{{ui:expenses.attachments.camera}}» (на телефоні) відкриває камеру: знімок іде у витрату як вкладення.
-- Файли, додані до збереження, видно мініатюрами. Кнопка «{{ui:expenses.attachments.remove}}» прибирає файл.
+- Файли, додані до збереження, видно мініатюрами. Кнопка «{{ui:expenses.attachments.remove}}» прибирає файл. Той самий файл (з тими самими назвою, розміром і вмістом) двічі додати не можна: форма пише «{{ui:expenses.attachments.duplicate}}».
 - З фото під час завантаження видаляються дані місця зйомки й камери (GPS). Тип файлу система визначає за вмістом, а не за назвою.
 - Повідомлення про помилки: «{{ui:expenses.attachments.tooLarge}}», «{{ui:expenses.attachments.tooMany}}» і «{{ui:expenses.attachments.typeNotAllowed}}». Текстовий файл, перейменований на receipt.jpg, буде відхилено.
 

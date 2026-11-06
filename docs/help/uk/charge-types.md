@@ -35,7 +35,7 @@ shots:
 У кооперативі від початку є види: {{ui:chargeTypes.defaultNames.MEMBERSHIP}}, {{ui:chargeTypes.defaultNames.ELECTRICITY}}, {{ui:chargeTypes.defaultNames.LAND_TAX}}, {{ui:chargeTypes.defaultNames.WATER}} і {{ui:chargeTypes.defaultNames.COMMON_CONSUMERS}}. Можна додати свої, наприклад «Ремонт дороги». Якщо видів немає, екран пише «{{ui:chargeTypes.empty}}».
 
 > [!important]
-> Вид «{{ui:chargeTypes.defaultNames.WATER}}» може бути вимкнений, доки в кооперативі немає водомірів. Тоді його немає у списку видів у формі нового тарифу, і тариф за воду створити не вийде. Спершу ввімкніть його тут: натисніть «{{ui:chargeTypes.edit}}» біля виду «{{ui:chargeTypes.defaultNames.WATER}}», поставте позначку «{{ui:chargeTypes.dialog.active}}» і збережіть. Потім створіть [тариф](help:tariff-form): фіксована сума на ділянку, платять лише ділянки, підключені до води. Електроенергію насоса свердловини нараховують не цим видом, а видом «{{ui:chargeTypes.defaultNames.COMMON_CONSUMERS}}».
+> Вид «{{ui:chargeTypes.defaultNames.WATER}}» може бути вимкнений, доки в кооперативі немає водомірів. Тоді у формі нового тарифу він показаний як «назва (неактивний — увімкнути)». Ввімкнути його можна там, вибравши його, або тут: натисніть «{{ui:chargeTypes.edit}}» біля виду «{{ui:chargeTypes.defaultNames.WATER}}», поставте позначку «{{ui:chargeTypes.dialog.active}}» і збережіть. Потім створіть [тариф](help:tariff-form): фіксована сума на ділянку, платять лише ділянки, підключені до води. Електроенергію насоса свердловини нараховують не цим видом, а видом «{{ui:chargeTypes.defaultNames.COMMON_CONSUMERS}}».
 
 ### Рядок виду
 

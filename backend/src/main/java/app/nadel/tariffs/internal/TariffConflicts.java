@@ -9,6 +9,7 @@ import app.nadel.tariffs.TariffResolver;
 import app.nadel.tariffs.TariffResolver.Conflict;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -25,8 +26,10 @@ import org.springframework.stereotype.Component;
 /**
  * The conflict warning of the tariffs page (feature 011 §2.3): for a tariff, the other tariffs of the same charge type
  * that apply to some of the same plots from today on, worked out by {@link TariffResolver} (the rule the month run
- * uses) for every active plot that is not common land. Versions never end, so two tariffs whose scopes share a plot
- * conflict from the later first version on. A warning only: both tariffs stay valid, and on those plots the month run
+ * uses) for every active plot that is not common land. Versions end only with an archived tariff (feature 020), so two
+ * tariffs whose scopes share a plot conflict from the later first version on, unless one is archived with its last day
+ * in a month before the other starts ({@link #shareAMonth}); an archived tariff whose last day is before today is left
+ * out by the resolver. A warning only: both tariffs stay valid, and on those plots the month run
  * charges neither and queues the case. Runs in the caller's transaction; plots are read through {@link PlotCatalog}.
  */
 @Component
@@ -34,7 +37,7 @@ class TariffConflicts {
 
     /** The plots listed per conflict; {@code plotCount} has them all. */
     static final int LISTED_PLOTS = 10;
-    /** The end of the range checked: versions never end, so "from today on". */
+    /** The end of the range checked: "from today on" (an active tariff never ends). */
     private static final LocalDate FOREVER = LocalDate.of(9999, 12, 31);
 
     private final TariffBook book;
@@ -72,7 +75,7 @@ class TariffConflicts {
                 if (TariffResolver.resolve(snapshot, type, facts, today, FOREVER) instanceof Conflict conflict) {
                     for (TariffEntry tariff : conflict.tariffs()) {
                         for (TariffEntry other : conflict.tariffs()) {
-                            if (!other.id().equals(tariff.id())) {
+                            if (!other.id().equals(tariff.id()) && shareAMonth(tariff, other, YearMonth.from(today))) {
                                 shared.computeIfAbsent(tariff.id(), id -> new LinkedHashMap<>())
                                         .computeIfAbsent(other.id(), id -> new ArrayList<>()).add(plot);
                             }
@@ -88,6 +91,26 @@ class TariffConflicts {
                     .map(other -> conflict(other, withOthers.get(other.id()))).toList());
         }
         return result;
+    }
+
+    /**
+     * Whether both tariffs apply in a common billing month from {@code from} on, as the month run resolves them month by
+     * month: a tariff archived before the other starts (its {@code validUntil} in an earlier month) never meets it.
+     */
+    static boolean shareAMonth(TariffEntry a, TariffEntry b, YearMonth from) {
+        YearMonth start = latest(from, latest(firstMonth(a), firstMonth(b)));
+        YearMonth endA = a.validUntil() == null ? null : YearMonth.from(a.validUntil());
+        YearMonth endB = b.validUntil() == null ? null : YearMonth.from(b.validUntil());
+        YearMonth end = endA == null ? endB : endB == null || endA.isBefore(endB) ? endA : endB;
+        return end == null || !start.isAfter(end);
+    }
+
+    private static YearMonth firstMonth(TariffEntry tariff) {
+        return tariff.firstDay().map(YearMonth::from).orElse(YearMonth.from(FOREVER));
+    }
+
+    private static YearMonth latest(YearMonth a, YearMonth b) {
+        return a.isAfter(b) ? a : b;
     }
 
     private static TariffConflict conflict(TariffEntry other, List<PlotFacts> plots) {

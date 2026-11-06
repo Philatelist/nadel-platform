@@ -51,3 +51,14 @@ export async function clear(): Promise<void> {
   const response = await fetch(`${BASE}/messages`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`Mailpit clear: ${response.status}`);
 }
+
+/** The first `/set-password?token=` link of a letter (plain text first, then HTML), as an absolute URL. */
+export async function letterLink(id: string): Promise<string> {
+  const response = await fetch(`${BASE}/message/${id}`);
+  if (!response.ok) throw new Error(`Mailpit message: ${response.status}`);
+  const body = (await response.json()) as { Text?: string; HTML?: string };
+  const pattern = /https?:\/\/[^\s"'<>]+\/set-password\?token=[A-Za-z0-9_\-.~%]+/;
+  const match = pattern.exec(body.Text ?? '') ?? pattern.exec((body.HTML ?? '').replaceAll('&amp;', '&'));
+  if (!match) throw new Error('no set-password link in the letter');
+  return match[0];
+}

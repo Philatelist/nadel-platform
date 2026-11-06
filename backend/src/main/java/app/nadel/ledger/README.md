@@ -667,7 +667,11 @@ Lock order of the slice: plot `FOR SHARE` -> charge type `FOR SHARE` -> billing 
   any basis, count only the days the plot is connected to water (`meters.WaterConnections.connectedDays`, read once
   per run for every chargeable plot and every month the run plans), so a plot that is not connected in the month gets
   no water charge and is never queued, and a connection that starts or ends inside the month splits the fee by days
-  (300.0000 a year from the 16th of October: 12.90). A retry of a month item uses the same days.
+  (300.0000 a year from the 16th of October: 12.90). A retry of a month item uses the same days. An archived tariff
+  (feature 020) ends on its `validUntil`: the resolver skips it for a month that starts after that day, and the
+  calculator counts its last version only up to it (`VersionTerms.lastDayOf`), so a tariff archived from the 1st of
+  March charges February as before and nothing for March; the reading charges (`ReadingChargeCalculator`), losses and
+  common consumers price only the days up to the end as well (see the `tariffs` README, Archiving a tariff).
 - **The charge:** kind `REGULAR`, source `TARIFF`, `tariff_id`, `source_key` `TARIFF:{tariff}:{plot}:{YYYY-MM}`, booked
   in the run month, service period = the first to the last day the versions count for, `accrued_on` = the first day of
   the month (a one-time fee: its due date), `created_by` the person who ran it, `calculation` `{amount, parts[{tariffVersionId,
@@ -1178,6 +1182,12 @@ reversed has a `charge_part` priced by it, so its correction or deletion is 409 
 reversal of those charges it is free again. An adjustment writes the parts of its expected charge, so those versions
 count as used too. It replaces the stub `tariffs/internal/NoChargesYetUsage`. A used version is changed only together
 with a recalculation (`TARIFF_VERSION_*` causes, `tariffs.TariffVersionChanges`, which skips this check).
+
+`LedgerTariffUsage` implements `tariffs.TariffUsage` (feature 020) for whole tariffs, from the ledger's tables only (the
+caller passes the version ids, softly deleted ones included): `everCharged` is any `charge` row naming the tariff or any
+`charge_part` priced by one of its versions, reversed charges and reversals included, so a tariff ever charged from is
+never deleted (409 `TARIFF_IN_USE`); `lastChargedDay` is the latest `service_to` of the regular charges made from it that
+no reversal cancels (the archive date check). Tests: `TariffDeleteTests`, `internal.LedgerTariffUsageTests`.
 
 ## Plot status
 

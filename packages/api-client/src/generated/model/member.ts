@@ -10,10 +10,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeliveryChannel } from './deliveryChannel';
+import type { MemberAccess } from './memberAccess';
 import type { RoleRef } from './roleRef';
 
 /**
- * A person of the cooperative. `notes` is present only when the caller has the `MEMBERS_VIEW` permission.
+ * A person of the cooperative. `notes` and `access` are present only when the caller has the `MEMBERS_VIEW`
+ * permission.
  */
 export interface Member {
   id: string;
@@ -34,4 +36,6 @@ export interface Member {
   archivedAt?: string;
   /** Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in responses; read-only. Only this flag is shown: never the member's Telegram account details */
   readonly telegramLinked?: boolean;
+  /** The member's access to the system (feature 020). Present only when the caller has `MEMBERS_VIEW`; the key is absent otherwise, so a member never sees it on their own card. Read-only: it changes only through the invitation endpoints (`inviteMember`, `resendMemberInvitation`, `disableMemberAccess`) */
+  readonly access?: MemberAccess;
 }

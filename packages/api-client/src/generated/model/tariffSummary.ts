@@ -26,4 +26,12 @@ export interface TariffSummary {
   plotCount?: number;
   /** The other tariffs of the same charge type that apply to some of the same active plots, ordered by name; empty when there is no conflict or the charge type is inactive */
   conflicts: TariffConflict[];
+  /** True when no charge was ever made from any version of the tariff (a reversed one counts as made), so it may be deleted (`DELETE /tariffs/{id}`); otherwise it is archived instead */
+  deletable: boolean;
+  /** The last day the tariff applies (inclusive), the day before the `endsOn` of its archive; absent for a tariff that was not archived */
+  validUntil?: string;
+  /** When the tariff was archived; absent for an active tariff */
+  archivedAt?: string;
+  /** The numbers of the active plots in the scope of the tariff (for `ALL_PLOTS` every active plot minus the excluded ones, for `SELECTED_PLOTS` the selected active ones; common land never; not narrowed to the plots with a meter), in the natural order of the number. These are the plots on which another tariff of the same charge type would conflict; the new tariff form shows them. User content */
+  plotNumbers: string[];
 }

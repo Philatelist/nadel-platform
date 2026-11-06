@@ -1,5 +1,6 @@
 package app.nadel.problem;
 
+import jakarta.validation.ConstraintViolation;
 import java.util.Collection;
 import org.jspecify.annotations.Nullable;
 import org.springframework.validation.FieldError;
@@ -16,7 +17,8 @@ public final class ValidationProblems {
 
     /**
      * {@code NotNull}, {@code NotBlank} and {@code NotEmpty} are {@code REQUIRED}; {@code Size}, {@code Max} and
-     * {@code Length} are {@code TOO_LONG}, or {@code REQUIRED} when the rejected value is an empty string or list;
+     * {@code Length} are {@code TOO_LONG}, or {@code REQUIRED} when the rejected value is an empty string or list, or
+     * {@code TOO_SHORT} when a non-empty value is under the constraint's {@code min} (a password under 8 characters);
      * a {@code Pattern} on a share is {@code SHARE_INVALID}, on a tariff rate {@code RATE_INVALID}, on a meter reading
      * {@code METER_VALUE_INVALID}; everything else is {@code INVALID}.
      */
@@ -24,8 +26,8 @@ public final class ValidationProblems {
         String constraint = error.getCode() == null ? "" : error.getCode();
         String code = switch (constraint) {
             case "NotNull", "NotBlank", "NotEmpty" -> ProblemCodes.REQUIRED;
-            case "Size", "Max", "Length" -> isEmpty(error.getRejectedValue())
-                    ? ProblemCodes.REQUIRED : ProblemCodes.TOO_LONG;
+            case "Size", "Max", "Length" -> isEmpty(error.getRejectedValue()) ? ProblemCodes.REQUIRED
+                    : isUnderMinimum(error) ? ProblemCodes.TOO_SHORT : ProblemCodes.TOO_LONG;
             // a share that does not look like n/d is the same mistake as one outside the bounds: SHARE_INVALID
             case "Pattern" -> error.getField().endsWith("share") ? ProblemCodes.SHARE_INVALID
                     : isRate(error.getField()) ? ProblemCodes.RATE_INVALID
@@ -46,6 +48,21 @@ public final class ValidationProblems {
      */
     private static boolean isMeterValue(String field) {
         return field.endsWith("Reading") || field.equals("value") || field.endsWith(".value");
+    }
+
+    /**
+     * Whether a text or list is shorter than the {@code min} of the violated constraint. The minimum is read from the
+     * Bean Validation violation the error wraps (Spring keeps it on errors of request bodies); an error without one
+     * is never too short.
+     */
+    private static boolean isUnderMinimum(FieldError error) {
+        if (!error.contains(ConstraintViolation.class)) {
+            return false;
+        }
+        Object min = error.unwrap(ConstraintViolation.class).getConstraintDescriptor().getAttributes().get("min");
+        int length = error.getRejectedValue() instanceof CharSequence text ? text.length()
+                : error.getRejectedValue() instanceof Collection<?> items ? items.size() : -1;
+        return min instanceof Number minimum && length >= 0 && length < minimum.longValue();
     }
 
     /** An empty string or list that violates a minimum size is a missing value, not a short one. */

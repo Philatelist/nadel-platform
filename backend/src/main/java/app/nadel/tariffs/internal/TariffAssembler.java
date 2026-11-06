@@ -43,21 +43,24 @@ class TariffAssembler {
     private final PlotCatalog plots;
     private final MeterCatalog meters;
     private final TariffConflicts conflicts;
+    private final TariffUsages usages;
     private final Clock clock;
 
     TariffAssembler(TariffVersionRepository versions, TariffScopePlotRepository scopePlots, PlotCatalog plots,
-            MeterCatalog meters, TariffConflicts conflicts, Clock clock) {
+            MeterCatalog meters, TariffConflicts conflicts, TariffUsages usages, Clock clock) {
         this.versions = versions;
         this.scopePlots = scopePlots;
         this.plots = plots;
         this.meters = meters;
         this.conflicts = conflicts;
+        this.usages = usages;
         this.clock = clock;
     }
 
     /**
-     * The tariff with every version newest first, its scope in natural order of the plot numbers, the count and its
-     * conflicts with other tariffs of the charge type.
+     * The tariff with every version newest first, its scope in natural order of the plot numbers, the count, its
+     * conflicts with other tariffs of the charge type and {@code deletable} (no charge was ever made from it,
+     * {@link TariffUsages}).
      */
     Tariff assemble(TariffRecord tariff, ChargeTypeRecord chargeType) {
         LocalDate today = LocalDate.now(clock);
@@ -85,8 +88,9 @@ class TariffAssembler {
                     oldestFirst.get(TariffDtoMapper.shownIndex(oldestFirst, today)).getBasis());
             count = new Counter().count(tariff, resource, rows, facts);
         }
+        boolean deletable = !usages.everCharged(tariff.getTenantId(), tariff.getId());
         return TariffDtoMapper.toDto(tariff, chargeType, oldestFirst, today, selected, excluded, count,
-                conflicts.of(List.of(tariff.getId())).get(tariff.getId()));
+                conflicts.of(List.of(tariff.getId())).get(tariff.getId()), deletable);
     }
 
     /**
@@ -110,6 +114,32 @@ class TariffAssembler {
         tariffs.forEach((tariff, resource) -> counts.put(tariff.getId(),
                 counter.count(tariff, resource, byTariff.getOrDefault(tariff.getId(), List.of()), facts)));
         return counts;
+    }
+
+    /**
+     * The numbers of the plots in the scope of each tariff, by tariff id, in natural order of the number: the active
+     * plots that are not common land, for {@code ALL_PLOTS} minus the excluded ones, for {@code SELECTED_PLOTS} the
+     * selected ones; never narrowed to the plots with a meter (feature 020: the plots on which another tariff of the
+     * charge type would conflict, shown by the new tariff form). The chargeable plots are read once, in natural order.
+     */
+    Map<UUID, List<String>> plotNumbers(Collection<TariffRecord> tariffs) {
+        if (tariffs.isEmpty()) {
+            return Map.of();
+        }
+        List<PlotFacts> chargeable = plots.findChargeable();
+        Map<UUID, List<TariffScopePlotRecord>> byTariff = scopePlots.findOf(tariffs.stream().map(TariffRecord::getId)
+                .toList()).stream().collect(Collectors.groupingBy(TariffScopePlotRecord::getTariffId));
+        Map<UUID, List<String>> numbers = new HashMap<>();
+        for (TariffRecord tariff : tariffs) {
+            boolean all = tariff.getScopeKind() == ScopeKind.ALL_PLOTS;
+            Kind listed = all ? Kind.EXCLUDED : Kind.SELECTED;
+            Set<UUID> ids = byTariff.getOrDefault(tariff.getId(), List.of()).stream()
+                    .filter(row -> row.getKind() == listed).map(TariffScopePlotRecord::getPlotId)
+                    .collect(Collectors.toSet());
+            numbers.put(tariff.getId(), chargeable.stream().filter(plot -> all != ids.contains(plot.id()))
+                    .map(PlotFacts::number).toList());
+        }
+        return numbers;
     }
 
     /**

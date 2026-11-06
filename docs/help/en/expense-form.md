@@ -50,7 +50,7 @@ The hint under the buttons: "{{ui:expenses.attachments.hint}}".
 
 - "{{ui:expenses.attachments.pick}}" adds a file from the device.
 - "{{ui:expenses.attachments.camera}}" (on a phone) opens the camera: the shot goes into the expense as an attachment.
-- Files added before saving are shown as thumbnails. The button "{{ui:expenses.attachments.remove}}" removes a file.
+- Files added before saving are shown as thumbnails. The button "{{ui:expenses.attachments.remove}}" removes a file. The same file (same name, size and content) cannot be attached twice: the form says "{{ui:expenses.attachments.duplicate}}".
 - Location (GPS) and camera data are removed from photos on upload. The system determines the file type from its content, not from its name.
 - Error messages: "{{ui:expenses.attachments.tooLarge}}", "{{ui:expenses.attachments.tooMany}}" and "{{ui:expenses.attachments.typeNotAllowed}}". A text file renamed to receipt.jpg is rejected.
 

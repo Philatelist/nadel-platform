@@ -38,11 +38,11 @@ class MemberRoleCommands {
     private final EntityManager entityManager;
     private final ApplicationEventPublisher events;
     private final MemberCrypto crypto;
-    private final TelegramLinkFlags telegram;
+    private final MemberCards cards;
 
     MemberRoleCommands(MemberRepository members, RoleRepository roles, RoleGrantReader grants,
             LastChairmanGuard lastChairman, EntityManager entityManager, ApplicationEventPublisher events,
-            MemberCrypto crypto, TelegramLinkFlags telegram) {
+            MemberCrypto crypto, MemberCards cards) {
         this.members = members;
         this.roles = roles;
         this.grants = grants;
@@ -50,7 +50,7 @@ class MemberRoleCommands {
         this.entityManager = entityManager;
         this.events = events;
         this.crypto = crypto;
-        this.telegram = telegram;
+        this.cards = cards;
     }
 
     @Transactional
@@ -98,8 +98,7 @@ class MemberRoleCommands {
                                     .map(r -> RoleSnapshot.auditName(r.getName(), r.getBaseCode(), r.isNameCustomized()))
                                     .toList())))));
         }
-        return MemberDtoMapper.toDto(member, crypto.open(member), grants.read(member), actor,
-                telegram.linked(member.getId()));
+        return cards.card(member, crypto.open(member), actor);
     }
 
     /** Role names sorted and joined; null when there are none. */

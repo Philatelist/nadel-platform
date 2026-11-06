@@ -98,8 +98,16 @@ describe('ReallocateDialog', () => {
     // the table is not replaced; the problem stands next to its line, the server's totals are shown, Save is off
     expect(await screen.findByText(/^Більше, ніж залишок 600,00\s₴$/, {}, wait)).toBeInTheDocument();
     expect(screen.getByRole('textbox', membershipField)).toHaveValue('999');
-    const totals = screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr');
-    expect(totals).toHaveTextContent('999,00 ₴ з 300,00 ₴');
+    // the exceed alert precedes the amount input of its row, and the footer is one element with label and amount
+    const alert = screen.getByText(/^Більше, ніж залишок/);
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(
+      alert.compareDocumentPosition(screen.getByRole('textbox', membershipField)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByRole('rowheader', { name: /^Розподілено/ })).toHaveTextContent(
+      /^Розподілено\s999,00\s₴\sз\s300,00\s₴$/,
+    );
     expect(screen.getByRole('button', { name: 'Перерозподілити' })).toBeDisabled();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument(), wait);
 

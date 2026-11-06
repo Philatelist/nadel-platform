@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryFailureCode } from './deliveryFailureCode';
 import type { ProblemFieldError } from './problemFieldError';
 import type { RequisiteField } from './requisiteField';
 
@@ -45,4 +46,6 @@ export interface Problem {
      * @nullable
      */
   date?: string | null;
+  /** For `INVITATION_NOT_SENT`: why the letter was not sent (`SMTP_AUTH_FAILED`, `SMTP_REJECTED`, `CONNECTION_FAILED` or `SMTP_HOST_NOT_ALLOWED`, as for a delivery); absent on every other problem */
+  failureCode?: DeliveryFailureCode;
 }

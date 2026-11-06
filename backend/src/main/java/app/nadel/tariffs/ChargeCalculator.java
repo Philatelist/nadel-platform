@@ -17,7 +17,8 @@ import org.jspecify.annotations.Nullable;
  * 011, {@link #breakdown} with the days the tariff may charge) use the same code, so the two can never disagree.
  * <p>
  * The rule, in short. The versions of a tariff are ordered by {@code validFrom}; a version applies until the day before
- * the next one starts. Each version counts for the days it overlaps the month, divided by the days in the month
+ * the next one starts, the last one without end unless it carries the end of an archived tariff
+ * ({@link VersionTerms#validTo()}, feature 020; {@link VersionTerms#lastDayOf}). Each version counts for the days it overlaps the month, divided by the days in the month
  * {@code D}. A recurring version contributes {@code rate x units x share x days / D} where {@code units} is 1 per plot
  * or the area in sotkas (m2 / 100, exact), and {@code share} is 1 for monthly, 1/3 quarterly and 1/12 yearly. A
  * fixed one-time version contributes its whole rate in the month of its due date (when that version is valid on the due
@@ -177,7 +178,7 @@ public final class ChargeCalculator {
         List<Overlap> result = new ArrayList<>();
         for (int i = 0; i < sorted.size(); i++) {
             VersionTerms terms = sorted.get(i);
-            LocalDate validTo = i + 1 < sorted.size() ? sorted.get(i + 1).validFrom().minusDays(1) : null;
+            LocalDate validTo = VersionTerms.lastDayOf(sorted, i);
             LocalDate from = terms.validFrom().isAfter(first) ? terms.validFrom() : first;
             LocalDate to = validTo == null || validTo.isAfter(last) ? last : validTo;
             if (!to.isBefore(from)) {

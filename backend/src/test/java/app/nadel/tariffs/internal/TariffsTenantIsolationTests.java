@@ -245,9 +245,9 @@ class TariffsTenantIsolationTests extends IntegrationTest {
     }
 
     @Test
-    void theApplicationRoleCannotDeleteOrTruncateChargeTypesAndTariffsButMayUpdateThem() {
+    void theApplicationRoleCannotDeleteOrTruncateChargeTypesAndCannotTruncateTariffsButMayUpdateThem() {
+        assertDenied("charge_type", sql -> sql.update("delete from charge_type"));
         for (String table : List.of("charge_type", "tariff")) {
-            assertDenied(table, sql -> sql.update("delete from " + table));
             assertDenied(table, sql -> {
                 sql.execute("truncate " + table);
                 return null;
@@ -260,6 +260,19 @@ class TariffsTenantIsolationTests extends IntegrationTest {
         assertThat(types).isEqualTo(5);
         assertThat(tariffs).isEqualTo(1);
         assertThat(ownerJdbc().queryForObject("select count(*) from charge_type", Integer.class)).isGreaterThan(7);
+    }
+
+    @Test
+    void theApplicationRoleMayDeleteATariffOnlyOfItsOwnCooperativeAndOnlyWithoutVersions() {
+        // feature 020 (V35) grants DELETE on tariff: the tenant_isolation policy limits it to the cooperative, and the
+        // versions' foreign key stops a delete that did not remove them first
+        assertThatThrownBy(() -> inTenant(DEMO_TENANT, sql -> sql.update("delete from tariff")))
+                .isInstanceOf(DataAccessException.class)
+                .hasStackTraceContaining("tariff_version_tariff_fk");
+        Integer foreign = inTenant(OTHER_TENANT, sql -> sql.update("delete from tariff where id = ?", DEMO_TARIFF));
+
+        assertThat(foreign).isZero();
+        assertThat(count(DEMO_TENANT, "tariff", "")).isEqualTo(1);
     }
 
     @Test

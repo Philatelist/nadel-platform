@@ -27,6 +27,10 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "and m.archivedAt is null")
     Optional<Member> findActiveBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);
 
+    /** The member (archived included) linked to the Keycloak subject; at most one ({@code member_tenant_subject_uq}). */
+    @Query("select m from Member m where m.tenantId = :tenantId and m.keycloakSubject = :subject")
+    Optional<Member> findAnyBySubject(@Param("tenantId") UUID tenantId, @Param("subject") String subject);
+
     /** The active member with this e-mail blind index; at most one (unique {@code member_tenant_email_bidx_uq}). */
     @Query("select m from Member m where m.tenantId = :tenantId and m.emailBidx = :emailBidx "
             + "and m.archivedAt is null")
@@ -122,6 +126,21 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "join Role r on r.id = mr.roleId "
             + "where m.tenantId = :tenantId and m.archivedAt is null and r.baseCode = 'CHAIRMAN'")
     List<UUID> findActiveChairmanIds(@Param("tenantId") UUID tenantId);
+
+    /**
+     * Ids of the active chairmen whose access to the system is on (feature 020): {@code INVITED} or {@code ACTIVE} in
+     * {@code member_access}, or linked to a sign-in account before invitations existed and without an access row (read
+     * as {@code ACTIVE}, see {@link MemberAccessState#status}).
+     */
+    @Query(value = """
+            select distinct m.id from member m
+            join member_role mr on mr.member_id = m.id
+            join role r on r.id = mr.role_id
+            left join member_access a on a.member_id = m.id
+            where m.tenant_id = :tenantId and m.archived_at is null and r.base_code = 'CHAIRMAN'
+              and (a.state in ('INVITED', 'ACTIVE') or (a.member_id is null and m.keycloak_subject is not null))
+            """, nativeQuery = true)
+    List<UUID> findActiveChairmanIdsWithAccess(@Param("tenantId") UUID tenantId);
 
     /**
      * Takes a transaction-scoped advisory lock for the cooperative (released at commit or rollback). Two requests
