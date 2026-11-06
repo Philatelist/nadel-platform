@@ -2,8 +2,8 @@
 // @spec: 020-go-live-polish
 // @regression
 // Acceptance checks of feature 020 that no other spec covers (FS 2.3): on a phone-sized screen (360 px) the payer of a
-// one-owner plot is preselected, "Allocated X of Y" stays on one line, and an amount above the open amount of a line
-// shows "More than the remaining ..." above that amount. The jsdom unit tests cannot measure a layout, so the one-line
+// one-owner plot is preselected, "Allocated X of Y" stays inside the screen without horizontal scrolling, and an amount above the open amount of a line
+// shows "More than the remaining ..." above that amount. The jsdom unit tests cannot measure a layout, so the overflow
 // rule is checked in the browser. The plot, owner and opening balance are created through the API and tidied after.
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -77,16 +77,23 @@ test.describe('020 payment form on a 360 px screen', () => {
       await expect(phone.getByRole('main')).toContainText(member.lastName);
       await expect(phone.getByRole('button', { name: 'Change', exact: true })).toBeVisible();
 
-      // "Allocated X of Y" is one line: the row is as high as a single line of text
+      // the allocation lines are cards on a phone: no horizontal scrolling, the total is inside the screen
       await phone.getByLabel('Amount', { exact: true }).fill('400.00');
       const proposal = phone.getByRole('table', { name: 'Allocation of the payment to charges' });
       await expect(proposal.getByLabel(/^Amount to allocate:/)).toHaveValue('400.00');
       const total = proposal.getByRole('rowheader', { name: /^Allocated/ });
       await expect(total).toContainText('of');
+      const overflow = await proposal.evaluate((el) => {
+        const area = el.parentElement!;
+        return { scroll: area.scrollWidth, client: area.clientWidth };
+      });
+      expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
       const box = await total.boundingBox();
-      const lineHeight = await total.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
       expect(box).not.toBeNull();
-      expect(box!.height).toBeLessThan(lineHeight * 2);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+      const fieldBox = await proposal.getByLabel(/^Amount to allocate:/).boundingBox();
+      expect(fieldBox!.x + fieldBox!.width).toBeLessThanOrEqual(360);
 
       // more than the open amount: the explanation sits above the input
       const input = proposal.getByLabel(/^Amount to allocate:/);
