@@ -130,6 +130,14 @@ public final class TestKeycloak {
         return response.statusCode();
     }
 
+    /** An access token of a user of realm {@code nadel} through the test client's direct grant (the realm's own clients stay closed). */
+    public synchronized String userToken(String username, String password) {
+        ensureDirectClient();
+        return tokenOf(REALM, "grant_type=password&client_id=" + DIRECT_CLIENT_ID
+                + "&username=" + URLEncoder.encode(username, StandardCharsets.UTF_8)
+                + "&password=" + URLEncoder.encode(password, StandardCharsets.UTF_8));
+    }
+
     private void ensureDirectClient() {
         if (directClient) {
             return;

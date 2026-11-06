@@ -115,6 +115,28 @@ class KeycloakAdminClientTests {
     }
 
     @Test
+    void aMemberCannotChangeTheirOwnUserNameOrEmailInTheAccountConsole() {
+        String email = freshEmail();
+        SignInAccount created = as(DEMO, () -> client.create(email, "A", "B"));
+        as(DEMO, () -> {
+            client.resetPassword(created.id(), "correct-horse-1");
+            client.update(created.id(), SignInAccountChange.activated());
+            return null;
+        });
+        String token = keycloak.userToken(email, "correct-horse-1");
+        String stolen = freshEmail();
+
+        keycloak.call("POST", "/realms/" + TestKeycloak.REALM + "/account", token,
+                "{\"username\":\"" + stolen + "\",\"email\":\"" + stolen
+                        + "\",\"firstName\":\"A\",\"lastName\":\"B\"}");
+
+        assertThat(client.findByLogin(stolen)).isEmpty();
+        assertThat(client.findByLogin(email)).singleElement()
+                .satisfies(account -> assertThat(account.username()).isEqualTo(email));
+        assertThat(keycloak.usersByEmail(email)).hasSize(1);
+    }
+
+    @Test
     void aLoginThatExistsIsAnsweredByCreateWithItsOwnCooperative() {
         String email = freshEmail();
         SignInAccount first = as(OTHER, () -> client.create(email, "A", "B"));

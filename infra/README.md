@@ -74,6 +74,7 @@ The realm also has the confidential client `nadel-backend-admin` (service accoun
 `view-users`, `query-users`; dev secret `nadel-backend-admin-dev-secret`) that the backend uses for the Keycloak
 Admin API, and the password policy `length(8)`. After pulling a change of the realm file run
 `docker compose -f infra/docker-compose.yml down -v` so it is re-imported.
+The user profile makes `username` and `email` (the login) editable by admins only, so a member cannot change their login in the account console; the backend changes it through the Admin API.
 
 The demo users' password `nadel` is shorter than the policy, and Keycloak validates a plain `value` credential on
 import, so the realm file stores each demo password as a pre-hashed credential (`credentialData`/`secretData`,
