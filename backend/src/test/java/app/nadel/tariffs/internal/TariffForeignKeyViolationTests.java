@@ -32,6 +32,18 @@ class TariffForeignKeyViolationTests {
     }
 
     @Test
+    void aFailureReachedTwiceInTheChainIsExaminedOnceAndTheCheckEnds() {
+        // the driver hands the same exception out as the cause and as the next exception of the batch
+        var unique = new SQLException("duplicate key value", "23505");
+        var batch = new BatchUpdateException("Batch entry 0 was aborted", "23000", new int[0]);
+        batch.setNextException(unique);
+        batch.initCause(unique);
+
+        assertThat(TariffCommands.isForeignKeyViolation(new DataIntegrityViolationException("flush", batch)))
+                .isFalse();
+    }
+
+    @Test
     void anotherIntegrityFailureIsNotOne() {
         var unique = new DataIntegrityViolationException("insert failed",
                 new SQLException("duplicate key value", "23505"));

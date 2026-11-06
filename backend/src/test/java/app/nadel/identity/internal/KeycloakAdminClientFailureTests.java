@@ -237,6 +237,33 @@ class KeycloakAdminClientFailureTests {
     }
 
     @Test
+    void aSearchRefusedWithAClientErrorIsUnavailableAndNeverAnEmptyResult(CapturedOutput output) {
+        keycloak.reply("GET", "/admin/realms/nadel/users", 400, "{\"error\":\"" + EMAIL + "\"}");
+        assertUnavailable(() -> client.findByLogin(EMAIL));
+
+        // nothing queued: the fake answers 404, which is no "nobody has this login" either
+        assertUnavailable(() -> client.findByLogin(EMAIL));
+
+        assertThat(keycloak.adminRequests()).hasSize(2).extracting(Request::query)
+                .allMatch(query -> query.startsWith("email="), "the username search is never sent");
+        assertThat(output).contains("Keycloak find failed: HTTP 400").contains("Keycloak find failed: HTTP 404")
+                .doesNotContain(EMAIL);
+    }
+
+    @Test
+    void anInterruptedCallIsUnavailableAndKeepsTheInterrupt(CapturedOutput output) {
+        keycloak.delay = Duration.ofSeconds(1); // the answer is still on its way when the wait sees the interrupt
+
+        Thread.currentThread().interrupt();
+        try {
+            assertUnavailable(() -> client.get(USER_ID));
+        } finally {
+            assertThat(Thread.interrupted()).as("the interrupt is restored for the caller").isTrue();
+        }
+        assertThat(output).contains("Keycloak token was interrupted");
+    }
+
+    @Test
     void anAccountWithoutAValidIdIsRefusedAndNeverReturned() {
         keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, "{\"id\":\"bad id!\",\"username\":\"x\"}");
 
