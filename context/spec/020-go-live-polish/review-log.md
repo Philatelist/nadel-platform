@@ -90,3 +90,7 @@ Minors (non-blocking): PublicInvitationController comment — an e-mail-limited 
 Root cause: `MemberInvitations.ensureAccount` re-enabled an existing disabled account before any new password and left the old credentials and sessions; "not linked" followed from the INVITED state. Fix: invite never enables; `lockOut` (disable, remove credentials, end sessions) before the letter; accept enables with the new password.
 Minors (non-blocking): e2e takes `lettersTo(email)[0]` (newest first in Mailpit); no test for the swallowed `SignInAccountMissingException` branch of `lockOut`; redundant 404 branch in `KeycloakAdminClient.removeCredentials`.
 Related, not changed: an e-mail change of a member with access moves the account to the new login but keeps it on with the old password (same "not linked" symptom until the new link is used).
+
+## Owner round 3 fix review (c7c11ae, 9c994e7) — r1 MAJOR_ISSUES → fixed
+- M1: README claimed the CI e2e job sets the limit variables; ci.yml is the owner's to change (diff handed over). README reworded.
+- Minors (not fixed, reported to the owner): an address blocked by 5 failed links also gets 429 for a valid link (token-guess protection; shared NAT waits one window); failed-link, send and member counters share one LRU map; check/record of a send not atomic (+1 possible); no test that a PASSWORD_POLICY refusal is not a failed link.

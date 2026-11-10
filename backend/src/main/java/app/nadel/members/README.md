@@ -183,8 +183,9 @@ the application may set only those three times and deletes nothing; one open sen
   client address is `request.getRemoteAddr()` (the client behind Caddy through
   `server.forward-headers-strategy: native`). The counters are in memory (`max-keys`, 10,000, least recently used
   dropped): with several instances each counts on its own, and a restart clears them. The tests raise the limits
-  (`nadel.test.invitation-rate-limit`); `make e2e` and the CI e2e job set
-  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000` and `NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000`.
+  (`nadel.test.invitation-rate-limit`); `make e2e` sets
+  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000` and `NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000`; the CI
+  e2e job needs the same two variables (a change to `.github/workflows/ci.yml` the repository owner applies).
 - **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
   no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
 - **Last sign-in** (`lastSignInAt` on the card): when a linked member's row is `ACTIVE` and `last_sign_in_at` is missing
