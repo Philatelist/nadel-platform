@@ -237,9 +237,10 @@ class PaymentMessagesTests extends DeliveryTestSupport {
 
             List<String> events = ownerJdbc().queryForList("select serialized_event from " + table
                     + " where event_type like '%PaymentRecorded' or event_type like '%PaymentReversed'", String.class);
+            // the full amount: a random id may contain "512"
             assertThat(events).hasSize(2).allSatisfy(event -> assertThat(event)
                     .contains(tenant.toString(), payment.toString())
-                    .doesNotContain("512", "Шевчук", "shevchuk", "Отримано", "сторновано", "Помилкова", "Тест"));
+                    .doesNotContain("512.34", "Шевчук", "shevchuk", "Отримано", "сторновано", "Помилкова", "Тест"));
         } finally {
             ownerJdbc().execute("drop trigger if exists " + table + " on event_publication");
             ownerJdbc().execute("drop function if exists " + table + "()");
