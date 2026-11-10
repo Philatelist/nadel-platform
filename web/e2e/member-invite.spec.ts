@@ -5,7 +5,8 @@
 // Inviting a member into the system (feature 020, slice 5): the chairman invites a throwaway member with an e-mail,
 // the letter arrives in Mailpit, the invitee sets a password on the public page, signs in at Keycloak and the card
 // then shows «Has access». Also: no e-mail disables the invite with a reason, the treasurer only sees the status,
-// and an e-mail of another cooperative is refused. Needs the demo cooperative's mailbox (Mailpit) and Keycloak.
+// an e-mail of another cooperative is refused, and inviting again after access was turned off refuses the old
+// password and lets the member in only with the new link. Needs the demo cooperative's mailbox (Mailpit) and Keycloak.
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
@@ -168,6 +169,45 @@ test('turning access off shows the status and blocks the sign-in', async ({ brow
   await admin.getByRole('dialog').getByRole('button', { name: t.memberAccess.disable }).click();
   await expect(admin.getByText(t.memberAccess.status.DISABLED)).toBeVisible();
   await expectCannotSignIn(browser, email, password);
+  await admin.context().close();
+});
+
+test('inviting again after access was turned off: the old password is refused, the new link signs the member in', async ({
+  browser,
+}) => {
+  const { admin, member, email } = await invited(browser);
+  const oldPassword = await setPassword(browser, await letterLink((await waitForLetterTo(email)).id));
+  await admin.reload();
+  await admin.getByRole('button', { name: t.memberAccess.disable }).click();
+  await admin.getByRole('dialog').getByRole('button', { name: t.memberAccess.disable }).click();
+  await expect(admin.getByText(t.memberAccess.status.DISABLED)).toBeVisible();
+
+  await admin.getByRole('button', { name: t.memberAccess.invite }).click();
+  await expect(admin.getByText(/waiting for a password/)).toBeVisible();
+  await expectCannotSignIn(browser, email, oldPassword);
+
+  await expect.poll(async () => (await lettersTo(email)).length).toBe(2);
+  const newLink = await letterLink((await lettersTo(email))[0]!.id);
+  const context = await browser.newContext({ baseURL: 'http://localhost:5173', locale: 'en-US' });
+  const page = await context.newPage();
+  await page.addInitScript(() => window.localStorage.setItem('nadel.locale', 'en'));
+  await page.goto(newLink);
+  await expect(page.getByLabel(t.setPassword.email)).toHaveValue(email);
+  const newPassword = `Pw-${randomBytes(6).toString('hex')}`;
+  await page.getByLabel(t.setPassword.password, { exact: true }).fill(newPassword);
+  await page.getByLabel(t.setPassword.confirm).fill(newPassword);
+  await page.getByRole('button', { name: t.setPassword.submit }).click();
+  await expect(page.getByText(t.setPassword.done)).toBeVisible();
+  await page.getByRole('button', { name: t.setPassword.signIn }).click();
+  await signInAtKeycloak(page, email, newPassword);
+  await expect(page.getByRole('banner').getByRole('button', { name: t.auth.signOut })).toBeVisible();
+  await page.goto('/account');
+  await expect(page.getByRole('main').getByText(member.lastName).first()).toBeVisible();
+  await expect(page.getByText(t.access.notLinkedTitle)).toHaveCount(0);
+  await context.close();
+
+  await admin.reload();
+  await expect(admin.getByText(/Has access/)).toBeVisible();
   await admin.context().close();
 });
 

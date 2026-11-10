@@ -15,7 +15,7 @@ and whether they are the `PLATFORM_OPERATOR`; everything else is data in the dat
 | `AccessProfileSource` | SPI implemented by `members`. Keeps the dependency one-way: `members` -> `identity`, never the opposite |
 | `OwnedPlotsSource`, `OwnedPlot` | SPI implemented by `plots`: the plots the signed-in member owns now, returned as `ownedPlots` by `GET /me` (empty for the platform operator). Keeps the dependency one-way: `plots` -> `identity` |
 | `Roles.PLATFORM_OPERATOR` | The only role name left in code |
-| `SignInAccounts`, `SignInAccount`, `SignInAccountChange`, `SignInAccountMissingException` | Port (feature 020) to the Keycloak accounts of members, used by `members` to invite them: `findByLogin`, `create`, `get`, `update` (`SignInAccountChange.enable()`, `disable()`, `newLogin(e-mail)`, `activated()`), `resetPassword`, `logout`. Implemented by `KeycloakAdminClient` (below) |
+| `SignInAccounts`, `SignInAccount`, `SignInAccountChange`, `SignInAccountMissingException` | Port (feature 020) to the Keycloak accounts of members, used by `members` to invite them: `findByLogin`, `create`, `get`, `update` (`SignInAccountChange.enable()`, `disable()`, `newLogin(e-mail)`, `activated()`), `resetPassword`, `removeCredentials`, `logout`. Implemented by `KeycloakAdminClient` (below) |
 
 ## Authentication flow
 
@@ -65,7 +65,9 @@ client of `notifications`; no Keycloak library).
   `POST /users` (user name and e-mail = the member's e-mail in lower case, names, enabled, e-mail not verified, attribute
   `tenant_id` = the bound cooperative, no password; a 409 looks the login up again), `GET /users/{id}`,
   `PUT /users/{id}` (the whole representation read before, with the changed user name/e-mail, `emailVerified`,
-  `enabled`, `requiredActions`), `PUT /users/{id}/reset-password` (`temporary: false`), `POST /users/{id}/logout`.
+  `enabled`, `requiredActions`), `PUT /users/{id}/reset-password` (`temporary: false`), `GET /users/{id}/credentials`
+  and `DELETE /users/{id}/credentials/{credentialId}` for each (remove every credential; a 404 on one is already gone),
+  `POST /users/{id}/logout`.
 - **Tenant guard.** Every change to an existing user reads it first and refuses with 409 `SIGN_IN_ACCOUNT_IN_USE` when
   its `tenant_id` attribute is not `TenantContext`'s cooperative.
 - **Errors.** No connection, a timeout, a 5xx, a refused token (401/403) or any other unexpected answer: 503

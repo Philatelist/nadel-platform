@@ -96,6 +96,34 @@ class KeycloakAdminClientTests {
     }
 
     @Test
+    void removingTheCredentialsLeavesTheAccountWithoutAPassword() {
+        String email = freshEmail();
+        SignInAccount created = as(DEMO, () -> client.create(email, "A", "B"));
+        as(DEMO, () -> {
+            client.resetPassword(created.id(), "correct-horse-1");
+            client.update(created.id(), SignInAccountChange.activated());
+            return null;
+        });
+        assertThat(keycloak.credentials(created.id())).hasSize(1);
+
+        as(DEMO, () -> {
+            client.removeCredentials(created.id());
+            client.removeCredentials(created.id()); // nothing left: still fine
+            return null;
+        });
+
+        assertThat(keycloak.credentials(created.id())).isEmpty();
+        assertThat(keycloak.signIn(email, "correct-horse-1")).isNotEqualTo(200);
+        SignInAccount kept = client.get(created.id()).orElseThrow();
+        assertThat(kept.enabled()).as("only the credentials go").isTrue();
+        assertThat(kept.tenantId()).isEqualTo(DEMO);
+        assertThatThrownBy(() -> as(DEMO, () -> {
+            client.removeCredentials(UUID.randomUUID().toString());
+            return null;
+        })).isInstanceOf(SignInAccountMissingException.class);
+    }
+
+    @Test
     void aNewLoginChangesTheUserNameAndTheEmailTogether() {
         String email = freshEmail();
         SignInAccount created = as(DEMO, () -> client.create(email, "A", "B"));
@@ -156,6 +184,7 @@ class KeycloakAdminClientTests {
         for (Runnable change : List.<Runnable>of(
                 () -> client.update(foreign.id(), SignInAccountChange.activated()),
                 () -> client.resetPassword(foreign.id(), "correct-horse-1"),
+                () -> client.removeCredentials(foreign.id()),
                 () -> client.logout(foreign.id()))) {
             assertThatThrownBy(() -> as(DEMO, () -> {
                 change.run();

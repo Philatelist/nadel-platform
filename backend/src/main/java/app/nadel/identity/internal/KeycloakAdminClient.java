@@ -50,6 +50,7 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>
  * <b>Calls</b> ({@code {url}/admin/realms/{realm}}): {@code GET /users?email=|username=…&exact=true},
  * {@code POST /users}, {@code GET /users/{id}}, {@code PUT /users/{id}}, {@code PUT /users/{id}/reset-password},
+ * {@code GET /users/{id}/credentials}, {@code DELETE /users/{id}/credentials/{credentialId}},
  * {@code POST /users/{id}/logout}. Never a role-mapping endpoint. A change reads the user first, checks its
  * {@code tenant_id} against the bound cooperative (the tenant guard) and writes the whole representation back, so
  * attributes it does not change stay.
@@ -213,6 +214,31 @@ class KeycloakAdminClient implements SignInAccounts {
                         List.of(new FieldProblem("password", ProblemCodes.PASSWORD_POLICY)));
             }
             default -> throw unexpected("reset-password", reply.status());
+        }
+    }
+
+    @Override
+    public void removeCredentials(String id) {
+        guarded(id, "remove-credentials");
+        Reply list = admin("GET", "/users/" + id + "/credentials", null, "remove-credentials");
+        if (list.status() == 404) {
+            throw new SignInAccountMissingException(id);
+        }
+        JsonNode credentials = list.status() == 200 ? parse(list.body()) : null;
+        if (credentials == null || !credentials.isArray()) {
+            throw unexpected("remove-credentials", list.status());
+        }
+        for (JsonNode credential : credentials) {
+            String credentialId = credential.path("id").asString("");
+            if (!ID.matcher(credentialId).matches()) {
+                throw unexpected("remove-credentials", list.status());
+            }
+            Reply reply = admin("DELETE", "/users/" + id + "/credentials/" + credentialId, null,
+                    "remove-credentials");
+            switch (reply.status()) {
+                case 204, 200, 404 -> { } // 404: removed meanwhile
+                default -> throw unexpected("remove-credentials", reply.status());
+            }
         }
     }
 

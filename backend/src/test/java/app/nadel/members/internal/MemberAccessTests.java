@@ -298,8 +298,10 @@ class MemberAccessTests extends IntegrationTest {
         String subject = subjectOf(DEMO_TENANT, member);
         await().atMost(Duration.ofSeconds(10)).until(() -> !accounts.account(subject).orElseThrow().enabled());
 
-        // the board invites again: a new link, the account on again
+        // the board invites again: a new link, the account off until the member uses it
         http.invite(chairman(), member).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INVITED"));
+        assertThat(accounts.account(subject).orElseThrow().enabled()).isFalse();
+        http.accept(InvitationRequests.tokenOfLetterTo(email), PASSWORD).andExpect(status().isNoContent());
         assertThat(accounts.account(subject).orElseThrow().enabled()).isTrue();
     }
 

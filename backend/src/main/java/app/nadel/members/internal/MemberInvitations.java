@@ -47,7 +47,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       {@code ACCESS_ALREADY_ACTIVE}, {@code MEMBER_EMAIL_MISSING}, {@code DELIVERY_NOT_CONFIGURED});</li>
  *   <li>outside any transaction, {@link #ensureAccount} finds or makes the Keycloak account of the member's e-mail;</li>
  *   <li>a transaction locks the member ({@code FOR UPDATE}), checks again, links the account
- *       ({@code keycloak_subject}) and inserts the new link unsent;</li>
+ *       ({@code keycloak_subject}) and inserts the new link unsent; for an invitation (never invited, or access turned
+ *       off) of an account that existed already, outside any transaction the account is then locked out
+ *       ({@link #lockOut}: off, no credential, no session), so only the new link lets the member in;</li>
  *   <li>outside any transaction, {@link InvitationDeliveries#deliver} sends the letter;</li>
  *   <li>a transaction locks the member and checks again (a disable, archive or e-mail change made while the letter was
  *       on its way wins: 409, the unsent link is revoked, nothing is written or audited), then marks the link sent,
@@ -227,13 +229,22 @@ class MemberInvitations {
         if (!mailboxReady && printer == null) {
             throw notConfigured();
         }
-        String accountId = ensureAccount(candidate);
+        EnsuredAccount account = ensureAccount(candidate);
+        String accountId = account.id();
 
         String token = InvitationTokens.newToken();
         Instant created = clock.instant();
         Instant expiresAt = created.plus(ttl);
         UUID invitationId = writing.execute(status -> prepare(candidate, accountId,
                 InvitationTokens.hash(token), created, expiresAt, actor, purpose));
+        if (purpose == Purpose.INVITE && account.existing()) {
+            try {
+                lockOut(tenantId, memberId, accountId);
+            } catch (RuntimeException e) {
+                revoke(invitationId);
+                throw e;
+            }
+        }
 
         URI link = URI.create(setPasswordUrl + "?token=" + token);
         if (!mailboxReady) {
@@ -346,13 +357,15 @@ class MemberInvitations {
      * <ul>
      *   <li>an account of another cooperative, or of none, has the e-mail: 409 {@code EMAIL_IN_OTHER_COOPERATIVE}
      *       (which one is never said);</li>
-     *   <li>an account of this cooperative has it: it is linked (and turned on), unless another member of the
-     *       cooperative is linked to it, or this member is linked to another account that still exists: 409
+     *   <li>an account of this cooperative has it: it is linked, unless another member of the cooperative is linked
+     *       to it, or this member is linked to another account that still exists: 409
      *       {@code SIGN_IN_ACCOUNT_IN_USE};</li>
      *   <li>none has it: a new account (no password, the e-mail not verified).</li>
      * </ul>
+     * The account is never turned on here: only {@link #accept} does, once the member set the password with the link.
+     * An account that was turned off (access disabled, the member archived) stays off until then.
      */
-    private String ensureAccount(Candidate candidate) {
+    private EnsuredAccount ensureAccount(Candidate candidate) {
         List<SignInAccount> found = accounts.findByLogin(candidate.email());
         if (found.stream().anyMatch(account -> !account.belongsTo(candidate.tenantId()))) {
             throw emailInOtherCooperative();
@@ -375,10 +388,27 @@ class MemberInvitations {
                 && accounts.get(candidate.subject()).isPresent()) {
             throw accountInUse();
         }
-        if (!account.enabled()) {
-            accounts.update(account.id(), SignInAccountChange.enable());
+        return new EnsuredAccount(account.id(), !found.isEmpty());
+    }
+
+    /**
+     * Step 3a of an invitation to an account that existed already (the member's access was turned off, or an account
+     * made before): the account is turned off, every credential is removed and every session ended, in this order, so a
+     * password the member had before no longer signs in and only the new link lets them in ({@link #accept} sets the
+     * new password and turns the account on). Runs after step 3, when the member is known to be invitable and the new
+     * link is not sent yet (nothing can accept it meanwhile). An account removed meanwhile needs nothing: the link then
+     * cannot be accepted.
+     */
+    private void lockOut(UUID tenantId, UUID memberId, String accountId) {
+        try {
+            accounts.update(accountId, SignInAccountChange.disable());
+            accounts.removeCredentials(accountId);
+            accounts.logout(accountId);
+            log.info("Sign-in account of member {} of cooperative {} locked out until the new link is used", memberId,
+                    tenantId);
+        } catch (SignInAccountMissingException e) {
+            log.info("Member {} of cooperative {} has no sign-in account to lock out", memberId, tenantId);
         }
-        return account.id();
     }
 
     /** Step 3: under the member's lock, checks again, links the account and inserts the unsent link. */
@@ -521,6 +551,10 @@ class MemberInvitations {
     private static ApiProblemException invalid() {
         return new ApiProblemException(HttpStatus.NOT_FOUND, ProblemCodes.INVITATION_INVALID,
                 "The invitation link cannot be used.");
+    }
+
+    /** The account of step 2 and whether it existed before (otherwise step 2 made it, without a password). */
+    private record EnsuredAccount(String id, boolean existing) {
     }
 
     /** What step 1 read: personal data, so {@link #toString()} prints ids only. */

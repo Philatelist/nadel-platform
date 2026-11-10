@@ -107,10 +107,13 @@ the application may set only those three times and deletes nothing; one open sen
   `MEMBER_ARCHIVED`, `INVITATION_PENDING` (`INVITED`), `ACCESS_ALREADY_ACTIVE` (`ACTIVE`), `MEMBER_EMAIL_MISSING`,
   `DELIVERY_NOT_CONFIGURED`; (2) outside any transaction `ensureAccount` with `identity.SignInAccounts`: an account of
   the e-mail in another cooperative (or in none) is 409 `EMAIL_IN_OTHER_COOPERATIVE`; an account of this cooperative is
-  linked and turned on, unless another member of the cooperative holds it or this member is linked to another account
-  that still exists (409 `SIGN_IN_ACCOUNT_IN_USE`); otherwise a new account (no password, e-mail not verified,
+  linked (never turned on here), unless another member of the cooperative holds it or this member is linked to another
+  account that still exists (409 `SIGN_IN_ACCOUNT_IN_USE`); otherwise a new account (no password, e-mail not verified,
   `tenant_id`); (3) a transaction locks the member `FOR UPDATE`, checks again, sets `keycloak_subject` (the unique index
-  `member_tenant_subject_uq` maps to `SIGN_IN_ACCOUNT_IN_USE`) and inserts the link unsent; (4) outside any transaction
+  `member_tenant_subject_uq` maps to `SIGN_IN_ACCOUNT_IN_USE`) and inserts the link unsent; (3a) when the account
+  existed before step 2 (access turned off, or an account made before), outside any transaction `lockOut` turns it off,
+  removes every credential and ends every session, so a password from before signs in nowhere and only the new link
+  lets the member in (a failure revokes the unsent link: 503, nothing sent); (4) outside any transaction
   `InvitationDelivery.deliver` with `{nadel.web.url}/set-password?token=…`, valid `nadel.invitations.ttl` (72 h);
   (5) a transaction revokes the member's older open links, marks the new one sent, sets `INVITED` + `invited_at` and
   publishes the audit event `MEMBER_INVITED` (entity `MEMBER`, field `channels` only: `EMAIL` or `EMAIL, TELEGRAM`).
@@ -167,7 +170,8 @@ the application may set only those three times and deletes nothing; one open sen
   cooperative with `members_invitation_tenant`, binds it with `TenantContext.runAs` and, in one transaction, locks the
   member then the link, checks it (sent, not used, not revoked, not expired by the `Clock`, member active and `INVITED`,
   link e-mail = the member's current `email_bidx`), sets the password (`reset-password`, a refused one is 400
-  `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true`, then
+  `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true` (the
+  only place an account is turned on), then
   `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
 - **Rate limit of the public endpoints** (`InvitationRateLimiter`, ADR 0020): before anything else each request is
   counted by the client address (`request.getRemoteAddr()`, the client behind Caddy through

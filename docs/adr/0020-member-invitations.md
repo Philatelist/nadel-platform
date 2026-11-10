@@ -23,7 +23,8 @@ any further one needs one); cross-module side effects go through the outbox (ADR
 - The backend gets a token with the client-credentials grant (`nadel.keycloak.admin.*`). The secret comes only from the
   environment (`NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET`). The realm file holds a dev value; on the stand `stand-init.sh`
   rotates the secret and writes it to `.env` (mode 600), after which the backend is restarted.
-- The backend creates users with the `tenant_id` attribute, sets the password, and disables or enables them. The
+- The backend creates users with the `tenant_id` attribute, sets the password, removes credentials, ends sessions,
+  and disables or enables them. The
   public clients and the PKCE rules of the realm do not change.
 
 ### Invitation by a backend token
@@ -56,6 +57,12 @@ any further one needs one); cross-module side effects go through the outbox (ADR
   Keycloak is not asked on every read.
 - Archiving a member disables the Keycloak user and sets `DISABLED`; restoring does not re-enable it, the board
   invites again. A disabled or invited member is refused in `MemberAuthenticationConverter`.
+- Only accepting a link turns a Keycloak account on. Inviting a member whose account exists already (access turned
+  off, or an account made before) links the same account (same id, no second user) and, once the member is checked
+  under the lock and before the letter goes out, turns it off, removes every credential and ends every session. So a
+  password from before neither signs in to Keycloak nor reaches the application (where an `INVITED` member would only
+  be refused as not linked); the new link sets the new password and turns the account on. This does not depend on the
+  asynchronous listener of the disable having run.
 - Invite, resend, disable and enable need the permission `MEMBERS_INVITE` (the thirty-second, Chairman only by
   default) and are audited without the link or the password.
 - A cooperative never locks its board out: nobody turns off their own access (409 `OWN_ACCESS`), and neither the

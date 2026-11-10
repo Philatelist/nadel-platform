@@ -59,7 +59,9 @@ tenancy is a base module). No cycles. `ModularityTests` must stay green.
 **`ensureAccount`:** `SignInAccounts.findByLogin(email)` (`GET users?email=X&exact=true` and `?username=X&exact=true`;
 realm has `duplicateEmailsAllowed=false`).
 - match with another or no `tenant_id` → 409 `EMAIL_IN_OTHER_COOPERATIVE` (no details, no letter);
-- match with this `tenant_id` → reuse: enable, link `keycloak_subject`; if another member row holds that subject → 409
+- match with this `tenant_id` → reuse: link `keycloak_subject` (the account is turned on only by accept; an invitation
+  then turns it off, removes its credentials and ends its sessions, so an old password never signs in); if another
+  member row holds that subject → 409
   `SIGN_IN_ACCOUNT_IN_USE`;
 - no match → `POST users` (`username=email`, `email`, names, `enabled:true`, `emailVerified:false`,
   `attributes.tenant_id`, no credentials). A 409 from Keycloak (race) → search again.

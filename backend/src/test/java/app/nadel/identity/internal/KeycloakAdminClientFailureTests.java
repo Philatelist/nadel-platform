@@ -476,7 +476,47 @@ class KeycloakAdminClientFailureTests {
         assertUnavailable(this::logout);
     }
 
+    @Test
+    void removingTheCredentialsDeletesEachAndMapsTheAnswers() {
+        String credentials = "/admin/realms/nadel/users/" + USER_ID + "/credentials";
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, user(USER_ID, EMAIL, TENANT));
+        keycloak.reply("GET", credentials, 200, "[{\"id\":\"c-1\",\"type\":\"password\"},{\"id\":\"c-2\",\"type\":\"otp\"}]");
+        keycloak.reply("DELETE", credentials + "/c-1", 204, "");
+        keycloak.reply("DELETE", credentials + "/c-2", 404, ""); // removed meanwhile
+        removeCredentials();
+        assertThat(keycloak.adminRequests()).filteredOn(r -> r.method().equals("DELETE")).extracting(Request::path)
+                .containsExactly(credentials + "/c-1", credentials + "/c-2");
+
+        // the account vanished between the guard and the list
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, user(USER_ID, EMAIL, TENANT));
+        keycloak.reply("GET", credentials, 404, "");
+        assertThatThrownBy(this::removeCredentials).isInstanceOf(SignInAccountMissingException.class);
+        // a list that is not a list, a credential without a valid id, a refused delete
+        for (String list : List.of("{}", "[{\"id\":\"../x\"}]")) {
+            keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, user(USER_ID, EMAIL, TENANT));
+            keycloak.reply("GET", credentials, 200, list);
+            assertUnavailable(this::removeCredentials);
+        }
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, user(USER_ID, EMAIL, TENANT));
+        keycloak.reply("GET", credentials, 200, "[{\"id\":\"c-3\"}]");
+        keycloak.reply("DELETE", credentials + "/c-3", 418, "");
+        assertUnavailable(this::removeCredentials);
+        // another cooperative's account: refused before anything is listed or deleted
+        keycloak.reply("GET", "/admin/realms/nadel/users/" + USER_ID, 200, user(USER_ID, EMAIL, OTHER));
+        int before = keycloak.adminRequests().size();
+        assertThatThrownBy(this::removeCredentials).isInstanceOfSatisfying(ApiProblemException.class,
+                e -> assertThat(e.code()).isEqualTo("SIGN_IN_ACCOUNT_IN_USE"));
+        assertThat(keycloak.adminRequests()).hasSize(before + 1);
+    }
+
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    private void removeCredentials() {
+        TenantContext.runAs(TENANT, () -> {
+            client.removeCredentials(USER_ID);
+            return null;
+        });
+    }
 
     private void update(SignInAccountChange change) {
         TenantContext.runAs(TENANT, () -> {

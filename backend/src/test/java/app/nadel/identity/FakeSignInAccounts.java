@@ -35,6 +35,7 @@ public class FakeSignInAccounts implements SignInAccounts {
         private volatile String password;
         private volatile List<String> requiredActions = List.of();
         private final AtomicInteger logouts = new AtomicInteger();
+        private final AtomicInteger credentialRemovals = new AtomicInteger();
 
         Account(String id, String login, UUID tenantId, boolean enabled) {
             this.id = id;
@@ -75,6 +76,10 @@ public class FakeSignInAccounts implements SignInAccounts {
             return logouts.get();
         }
 
+        public int credentialRemovals() {
+            return credentialRemovals.get();
+        }
+
         SignInAccount view() {
             return new SignInAccount(id, login, login, enabled, emailVerified, tenantId);
         }
@@ -82,11 +87,18 @@ public class FakeSignInAccounts implements SignInAccounts {
 
     private final Map<String, Account> accounts = new ConcurrentHashMap<>();
     private volatile boolean unavailable;
+    private volatile boolean credentialRemovalUnavailable;
 
     /** Forgets every account and turns the service back on. */
     public void reset() {
         accounts.clear();
         unavailable = false;
+        credentialRemovalUnavailable = false;
+    }
+
+    /** From now on {@link #removeCredentials} alone is 503 {@code SIGN_IN_SERVICE_UNAVAILABLE}. */
+    public void credentialRemovalUnavailable(boolean value) {
+        credentialRemovalUnavailable = value;
     }
 
     /** From now on every call is 503 {@code SIGN_IN_SERVICE_UNAVAILABLE}, as when Keycloak is down. */
@@ -171,6 +183,17 @@ public class FakeSignInAccounts implements SignInAccounts {
                     "The request is not valid.", List.of(new FieldProblem("password", ProblemCodes.PASSWORD_POLICY)));
         }
         account.password = password;
+    }
+
+    @Override
+    public void removeCredentials(String id) {
+        Account account = guarded(id);
+        if (credentialRemovalUnavailable) {
+            throw new ApiProblemException(HttpStatus.SERVICE_UNAVAILABLE, ProblemCodes.SIGN_IN_SERVICE_UNAVAILABLE,
+                    "The sign-in service could not be reached.");
+        }
+        account.password = null;
+        account.credentialRemovals.incrementAndGet();
     }
 
     @Override

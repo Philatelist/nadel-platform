@@ -37,7 +37,10 @@ public final class TestKeycloak {
     public static final String REALM = "nadel";
     public static final String ADMIN_CLIENT_ID = "nadel-backend-admin";
     public static final String ADMIN_CLIENT_SECRET = "nadel-backend-admin-dev-secret";
-    /** A public client with direct grants that {@link #signIn} creates, so a test signs in with a password. */
+    /**
+     * A public client with direct grants that {@link #signIn} creates, so a test signs in with a password; its tokens
+     * carry the {@code tenant_id} claim as the web client's do.
+     */
     public static final String DIRECT_CLIENT_ID = "nadel-test-direct";
 
     private static final int HTTP_PORT = 8080;
@@ -114,6 +117,32 @@ public final class TestKeycloak {
         return users;
     }
 
+    /** The credentials (password, one-time codes) of a user of realm {@code nadel}, as the master admin reads them. */
+    public List<JsonNode> credentials(String userId) {
+        return arrayOf(call("GET", "/admin/realms/" + REALM + "/users/" + userId + "/credentials", masterToken(), null));
+    }
+
+    /** The open sessions of a user of realm {@code nadel}, as the master admin reads them. */
+    public List<JsonNode> sessions(String userId) {
+        return arrayOf(call("GET", "/admin/realms/" + REALM + "/users/" + userId + "/sessions", masterToken(), null));
+    }
+
+    /** The claims of an access token of realm {@code nadel} (its payload, not verified: the test's own token). */
+    public static JsonNode claims(String accessToken) {
+        String payload = accessToken.split("\\.")[1];
+        return JsonMapper.shared().readTree(new String(java.util.Base64.getUrlDecoder().decode(payload),
+                StandardCharsets.UTF_8));
+    }
+
+    private static List<JsonNode> arrayOf(HttpResponse<String> response) {
+        if (response.statusCode() != 200) {
+            throw new IllegalStateException("Keycloak refused the admin read: HTTP " + response.statusCode());
+        }
+        List<JsonNode> items = new ArrayList<>();
+        JsonMapper.shared().readTree(response.body()).forEach(items::add);
+        return items;
+    }
+
     /**
      * Signs in to realm {@code nadel} with a user name (or e-mail) and password through the test client's direct grant,
      * as a person would at the sign-in page; answers the HTTP status of the token endpoint (200 signed in).
@@ -144,7 +173,10 @@ public final class TestKeycloak {
         }
         HttpResponse<String> response = call("POST", "/admin/realms/" + REALM + "/clients", masterToken(),
                 "{\"clientId\":\"" + DIRECT_CLIENT_ID + "\",\"publicClient\":true,\"directAccessGrantsEnabled\":true,"
-                        + "\"standardFlowEnabled\":false,\"enabled\":true}");
+                        + "\"standardFlowEnabled\":false,\"enabled\":true,\"protocolMappers\":[{\"name\":\"tenant_id\","
+                        + "\"protocol\":\"openid-connect\",\"protocolMapper\":\"oidc-usermodel-attribute-mapper\","
+                        + "\"config\":{\"user.attribute\":\"tenant_id\",\"claim.name\":\"tenant_id\","
+                        + "\"jsonType.label\":\"String\",\"access.token.claim\":\"true\"}}]}");
         if (response.statusCode() != 201 && response.statusCode() != 409) {
             throw new IllegalStateException("Could not create the test client: HTTP " + response.statusCode());
         }

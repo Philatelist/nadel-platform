@@ -13,6 +13,7 @@ import app.nadel.TestTokens;
 import app.nadel.identity.FakeSignInAccounts;
 import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.Mailpit;
+import app.nadel.tenancy.TenantContext;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
@@ -226,9 +227,12 @@ class MemberInvitationTests extends IntegrationTest {
 
         assertThat(accounts.byLogin(email)).singleElement().satisfies(account -> {
             assertThat(account.id()).isEqualTo(existing);
-            assertThat(account.enabled()).as("turned on again").isTrue();
+            assertThat(account.enabled()).as("off until the link is used").isFalse();
         });
         assertThat(subjectOf(DEMO_TENANT, member)).isEqualTo(existing);
+
+        http.accept(InvitationRequests.tokenOfLetterTo(email), PASSWORD).andExpect(status().isNoContent());
+        assertThat(accounts.account(existing).orElseThrow().enabled()).as("turned on by the link").isTrue();
     }
 
     @Test
@@ -481,7 +485,65 @@ class MemberInvitationTests extends IntegrationTest {
                 .andExpect(jsonPath("$.access.disabledAt").exists());
 
         http.invite(chairman(), member).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INVITED"));
-        assertThat(accounts.account(account).orElseThrow().enabled()).isTrue();
+        FakeSignInAccounts.Account invited = accounts.account(account).orElseThrow();
+        assertThat(invited.enabled()).as("off until the link is used").isFalse();
+        assertThat(invited.credentialRemovals()).isEqualTo(1);
+        assertThat(invited.logouts()).isEqualTo(1);
+    }
+
+    @Test
+    void invitingAgainRemovesTheOldPasswordAndEndsTheSessionsOfTheAccountThatWasOn() throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        String account = accounts.add(email, DEMO_TENANT, true);
+        TenantContext.runAs(DEMO_TENANT, () -> {
+            accounts.resetPassword(account, "the-old-password");
+            return null;
+        });
+        // disabled, and the listener has not turned the account off yet
+        inTenant(DEMO_TENANT, sql -> {
+            sql.update("update member set keycloak_subject = ? where id = ?", account, member);
+            return sql.update("insert into member_access (member_id, tenant_id, state, disabled_at) "
+                    + "values (?, ?, 'DISABLED', now())", member, DEMO_TENANT);
+        });
+
+        http.invite(chairman(), member).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INVITED"));
+
+        FakeSignInAccounts.Account invited = accounts.account(account).orElseThrow();
+        assertThat(invited.enabled()).isFalse();
+        assertThat(invited.password()).as("the old password is gone").isNull();
+        assertThat(invited.logouts()).isEqualTo(1);
+        assertThat(accounts.byLogin(email)).singleElement();
+
+        http.accept(InvitationRequests.tokenOfLetterTo(email), PASSWORD).andExpect(status().isNoContent());
+        assertThat(invited.enabled()).isTrue();
+        assertThat(invited.password()).isEqualTo(PASSWORD);
+        http.me(TestTokens.bearer(DEMO_TENANT, account, email)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.memberId").value(member.toString()));
+    }
+
+    @Test
+    void anInvitationWhoseAccountCannotBeLockedOutIsNotSent() throws Exception {
+        http.mailboxOnMailpit();
+        String email = freshEmail();
+        UUID member = invitee(email);
+        String account = accounts.add(email, DEMO_TENANT, true);
+        inTenant(DEMO_TENANT, sql -> {
+            sql.update("update member set keycloak_subject = ? where id = ?", account, member);
+            return sql.update("insert into member_access (member_id, tenant_id, state, disabled_at) "
+                    + "values (?, ?, 'DISABLED', now())", member, DEMO_TENANT);
+        });
+        accounts.credentialRemovalUnavailable(true);
+
+        http.invite(chairman(), member).andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SIGN_IN_SERVICE_UNAVAILABLE"));
+
+        assertThat(mailpit.lettersTo(email)).isEmpty();
+        assertThat(state(member)).isEqualTo("DISABLED");
+        assertThat(invitationRows(member)).singleElement()
+                .satisfies(row -> assertThat(row.get("revoked_at")).isNotNull());
+        http.card(chairman(), member).andExpect(jsonPath("$.access.status").value("DISABLED"));
     }
 
     // ---- secrets -------------------------------------------------------------------------------------------------

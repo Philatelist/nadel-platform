@@ -9,7 +9,8 @@ import java.util.Optional;
  * account on or off. Implemented by {@code identity.internal.KeycloakAdminClient} with a service account that may only
  * manage the users of the realm; role mappings are never touched (cooperative roles live in the database, ADR 0009).
  * <p>
- * <b>Tenant guard.</b> Every change to an existing account ({@link #update}, {@link #resetPassword}, {@link #logout})
+ * <b>Tenant guard.</b> Every change to an existing account ({@link #update}, {@link #resetPassword},
+ * {@link #removeCredentials}, {@link #logout})
  * first reads it and refuses with 409 {@code SIGN_IN_ACCOUNT_IN_USE} when its {@code tenant_id} attribute is not the
  * cooperative bound by {@code TenantContext}; {@link #create} writes the bound cooperative. A caller without a bound
  * cooperative is a programming error ({@link IllegalStateException}).
@@ -47,6 +48,12 @@ public interface SignInAccounts {
 
     /** Sets the account's password, not temporary (tenant guard). The password is never logged or kept. */
     void resetPassword(String id, String password);
+
+    /**
+     * Removes every credential of the account: its password and any other (a one-time code), so nothing it signed in with
+     * before works any more (tenant guard). The account itself, its id and its attributes stay.
+     */
+    void removeCredentials(String id);
 
     /** Ends every session of the account (tenant guard). */
     void logout(String id);

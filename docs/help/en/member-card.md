@@ -73,7 +73,7 @@ The buttons are seen by whoever has the permission "{{ui:permission.MEMBERS_INVI
 
 - **{{ui:memberAccess.invite}}** sends the letter "{{ui:setPassword.title}}" to the e-mail on the card, with a link to the [set-password page](help:set-password). The letter comes from the cooperative's mailbox; the link is valid for 72 hours and works once. If the member has connected Telegram, the link also arrives from the bot. The system says: "{{ui:memberAccess.invited}}"
 - **{{ui:memberAccess.resend}}** sends a new link; the previous one stops working. The system says: "{{ui:memberAccess.resent}}"
-- **{{ui:memberAccess.disable}}** removes the sign-in, but the card and the data stay. The system asks to confirm: "{{ui:memberAccess.disableTitle}}". The person can be invited again afterwards.
+- **{{ui:memberAccess.disable}}** removes the sign-in, but the card and the data stay. The system asks to confirm: "{{ui:memberAccess.disableTitle}}". The person can be invited again afterwards: the new invitation removes the old password and ends every session, so the person signs in only after setting a new password with the new link, to the same account and the same card.
 
 When a button is unavailable, the reason is written beside it: "{{ui:memberAccess.blocked.EMAIL_MISSING}}" (the e-mail is the login) or "{{ui:memberAccess.blocked.MAILBOX_NOT_CONFIGURED}}" (see the [cooperative settings](help:settings)). When the letter could not be sent, the system says the invitation was not sent and suggests trying again.
 
