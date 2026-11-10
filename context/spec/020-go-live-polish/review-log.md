@@ -84,3 +84,9 @@ Minors (non-blocking): gitleaks regexes are unanchored (fine for 14-char fixed s
 ## Owner's fixes on PR #71 (22b26b5..7e57eed) — round 1 — PASS
 
 Minors (non-blocking): PublicInvitationController comment — an e-mail-limited request has already been counted against the address; ArrayDeque pre-sized to max-requests (large with test/e2e limits); IPv6 address rotation can push counters out of the 10000-key LRU (documented in ADR 0020); removing the Chairman role from the only chairman with access is not guarded by `ensureNotLastWithAccess` (outside decision 2); ProposalTable narrow layout: `display:block` may strip table semantics in some screen readers, `data-label` via `::before` not reliably announced (inputs keep aria-label) — consider explicit roles; an existing stand realm needs the user-profile change applied by hand or re-imported; `.github/workflows/ci.yml` e2e rate-limit env not committed (owner decides).
+
+## Re-invite fix (6dae469) — round 1 — PASS
+
+Root cause: `MemberInvitations.ensureAccount` re-enabled an existing disabled account before any new password and left the old credentials and sessions; "not linked" followed from the INVITED state. Fix: invite never enables; `lockOut` (disable, remove credentials, end sessions) before the letter; accept enables with the new password.
+Minors (non-blocking): e2e takes `lettersTo(email)[0]` (newest first in Mailpit); no test for the swallowed `SignInAccountMissingException` branch of `lockOut`; redundant 404 branch in `KeycloakAdminClient.removeCredentials`.
+Related, not changed: an e-mail change of a member with access moves the account to the new login but keeps it on with the old password (same "not linked" symptom until the new link is used).
