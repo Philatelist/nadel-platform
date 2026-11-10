@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import app.nadel.members.internal.InvitationRateLimiter.Endpoint;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.ProblemCodes;
 import java.time.Clock;
@@ -12,20 +11,24 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
 /**
- * The sliding window of {@link InvitationRateLimiter} with a clock the test moves: five requests per fifteen minutes
- * per key, the window frees one slot when the oldest admitted request leaves it, refused requests are not counted, the
- * keys (address and e-mail, each endpoint) are apart, and the number of keys is bounded.
+ * The sliding window of {@link InvitationRateLimiter} with a clock the test moves: per member five sent invitations,
+ * per address thirty (here three, to keep the test short) and five failed links per fifteen minutes; the window frees
+ * one slot when the oldest counted event leaves it, a refusal is not counted, the keys are apart, and the number of
+ * keys is bounded.
  */
 class InvitationRateLimiterTests {
 
     private static final Duration WINDOW = Duration.ofMinutes(15);
+    private static final UUID TENANT = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+    private static final String ADDRESS = "203.0.113.7";
 
     private final MovableClock clock = new MovableClock(Instant.parse("2026-11-06T10:00:00Z"));
-    private final InvitationRateLimiter limiter = new InvitationRateLimiter(5, WINDOW, 1000, clock);
+    private final InvitationRateLimiter limiter = new InvitationRateLimiter(5, 30, WINDOW, 1000, clock);
 
     private static void assertTooMany(Runnable request) {
         assertThatThrownBy(request::run).isInstanceOfSatisfying(ApiProblemException.class, e -> {
@@ -34,65 +37,114 @@ class InvitationRateLimiterTests {
         });
     }
 
-    @Test
-    void theSixthRequestFromOneAddressWithinTheWindowIsRefused() {
-        for (int i = 0; i < 5; i++) {
-            limiter.acquireForAddress(Endpoint.INSPECT, "203.0.113.7");
-            clock.advance(Duration.ofMinutes(1));
-        }
-        assertTooMany(() -> limiter.acquireForAddress(Endpoint.INSPECT, "203.0.113.7"));
-        // another address, the other endpoint and an e-mail key are counted apart
-        assertThatCode(() -> limiter.acquireForAddress(Endpoint.INSPECT, "203.0.113.8")).doesNotThrowAnyException();
-        assertThatCode(() -> limiter.acquireForAddress(Endpoint.ACCEPT, "203.0.113.7")).doesNotThrowAnyException();
-        assertThatCode(() -> limiter.acquireForEmail(Endpoint.INSPECT, "203.0.113.7")).doesNotThrowAnyException();
+    private static void send(InvitationRateLimiter limiter, String address, UUID member) {
+        limiter.ensureSendAllowed(address, TENANT, member);
+        limiter.recordSend(address, TENANT, member);
     }
 
     @Test
-    void theWindowFreesASlotWhenTheOldestRequestLeavesIt() {
+    void theSixthFailedLinkFromOneAddressBlocksItAndOtherAddressesAreNot() {
+        for (int i = 0; i < 5; i++) {
+            limiter.ensureNotBlocked(ADDRESS);
+            limiter.recordFailedLink(ADDRESS);
+            clock.advance(Duration.ofMinutes(1));
+        }
+        assertTooMany(() -> limiter.ensureNotBlocked(ADDRESS));
+        assertThatCode(() -> limiter.ensureNotBlocked("203.0.113.8")).doesNotThrowAnyException();
+        // failed links and sends are counted apart
+        assertThatCode(() -> send(limiter, ADDRESS, UUID.randomUUID())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void anAddressWithoutFailedLinksIsNeverBlocked() {
+        for (int i = 0; i < 100; i++) {
+            limiter.ensureNotBlocked(ADDRESS); // a usable link opened again and again
+        }
+        assertThatCode(() -> limiter.ensureNotBlocked(ADDRESS)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void theSixthSendForOneMemberIsRefusedFromAnyAddress() {
+        UUID member = UUID.randomUUID();
+        for (int i = 0; i < 5; i++) {
+            send(limiter, "198.51.100." + i, member);
+        }
+        assertTooMany(() -> limiter.ensureSendAllowed("198.51.100.99", TENANT, member));
+        // another member, and the same member id in another cooperative, are apart
+        assertThatCode(() -> send(limiter, "198.51.100.99", UUID.randomUUID())).doesNotThrowAnyException();
+        assertThatCode(() -> limiter.ensureSendAllowed("198.51.100.99", UUID.randomUUID(), member))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void oneAddressSendsToManyMembersUpToItsOwnLimit() {
+        InvitationRateLimiter three = new InvitationRateLimiter(5, 3, WINDOW, 1000, clock);
+        for (int i = 0; i < 3; i++) {
+            send(three, ADDRESS, UUID.randomUUID());
+        }
+        assertTooMany(() -> three.ensureSendAllowed(ADDRESS, TENANT, UUID.randomUUID()));
+        assertThatCode(() -> send(three, "203.0.113.8", UUID.randomUUID())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void theWindowFreesASlotWhenTheOldestEventLeavesIt() {
+        UUID member = UUID.randomUUID();
         Instant first = clock.instant();
-        limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx");
+        send(limiter, ADDRESS, member);
         clock.advance(Duration.ofMinutes(5));
         for (int i = 0; i < 4; i++) {
-            limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx");
+            send(limiter, ADDRESS, member);
         }
-        assertTooMany(() -> limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx"));
+        assertTooMany(() -> limiter.ensureSendAllowed(ADDRESS, TENANT, member));
 
-        // a moment before the first request is fifteen minutes old: still refused, and the refusal is not counted
+        // a moment before the first send is fifteen minutes old: still refused, and the refusal is not counted
         clock.set(first.plus(WINDOW).minusMillis(1));
-        assertTooMany(() -> limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx"));
-        // the first request leaves the window: one slot, then refused again until the other four leave
+        assertTooMany(() -> limiter.ensureSendAllowed(ADDRESS, TENANT, member));
+        // the first send leaves the window: one slot, then refused again until the other four leave
         clock.set(first.plus(WINDOW));
-        limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx");
-        assertTooMany(() -> limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx"));
+        send(limiter, ADDRESS, member);
+        assertTooMany(() -> limiter.ensureSendAllowed(ADDRESS, TENANT, member));
         clock.set(first.plus(Duration.ofMinutes(5)).plus(WINDOW));
         for (int i = 0; i < 4; i++) {
-            limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx");
+            send(limiter, ADDRESS, member);
         }
-        assertTooMany(() -> limiter.acquireForEmail(Endpoint.ACCEPT, "tenant|bidx"));
+        assertTooMany(() -> limiter.ensureSendAllowed(ADDRESS, TENANT, member));
+    }
+
+    @Test
+    void aBlockedAddressIsFreedOneWindowAfterItsOldestFailedLink() {
+        for (int i = 0; i < 5; i++) {
+            limiter.recordFailedLink(ADDRESS);
+        }
+        assertTooMany(() -> limiter.ensureNotBlocked(ADDRESS));
+        clock.advance(WINDOW);
+        assertThatCode(() -> limiter.ensureNotBlocked(ADDRESS)).doesNotThrowAnyException();
     }
 
     @Test
     void theLeastRecentlyUsedKeyIsDroppedPastTheBound() {
-        InvitationRateLimiter small = new InvitationRateLimiter(1, WINDOW, 2, clock);
-        small.acquireForAddress(Endpoint.INSPECT, "a");
-        small.acquireForAddress(Endpoint.INSPECT, "b");
-        assertTooMany(() -> small.acquireForAddress(Endpoint.INSPECT, "a")); // "a" is now the most recent
-        small.acquireForAddress(Endpoint.INSPECT, "c"); // drops "b"
+        InvitationRateLimiter small = new InvitationRateLimiter(1, 1, WINDOW, 2, clock);
+        small.recordFailedLink("a");
+        small.recordFailedLink("b");
+        assertTooMany(() -> small.ensureNotBlocked("a")); // "a" is now the most recent
+        small.recordFailedLink("c"); // drops "b"
 
-        assertTooMany(() -> small.acquireForAddress(Endpoint.INSPECT, "a"));
-        assertTooMany(() -> small.acquireForAddress(Endpoint.INSPECT, "c"));
-        assertThatCode(() -> small.acquireForAddress(Endpoint.INSPECT, "b")).doesNotThrowAnyException();
+        assertTooMany(() -> small.ensureNotBlocked("a"));
+        assertTooMany(() -> small.ensureNotBlocked("c"));
+        assertThatCode(() -> small.ensureNotBlocked("b")).doesNotThrowAnyException();
     }
 
     @Test
     void theSettingsMustBePositive() {
-        assertThatThrownBy(() -> new InvitationRateLimiter(0, WINDOW, 10, clock))
+        assertThatThrownBy(() -> new InvitationRateLimiter(0, 30, WINDOW, 10, clock))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InvitationRateLimiter(5, Duration.ZERO, 10, clock))
+        assertThatThrownBy(() -> new InvitationRateLimiter(5, 0, WINDOW, 10, clock))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InvitationRateLimiter(5, WINDOW.negated(), 10, clock))
+        assertThatThrownBy(() -> new InvitationRateLimiter(5, 30, Duration.ZERO, 10, clock))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InvitationRateLimiter(5, WINDOW, 0, clock))
+        assertThatThrownBy(() -> new InvitationRateLimiter(5, 30, WINDOW.negated(), 10, clock))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InvitationRateLimiter(5, 30, WINDOW, 0, clock))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

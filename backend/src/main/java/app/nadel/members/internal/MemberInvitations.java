@@ -20,7 +20,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -278,19 +277,6 @@ class MemberInvitations {
                 List.of(new FieldChange("channels", null, channels)), actor, purpose);
         log.info("Invitation ({}) of member {} of cooperative {} sent", purpose, memberId, tenantId);
         return answer;
-    }
-
-    /**
-     * The key the e-mail limit of the public endpoints counts a link under ({@link InvitationRateLimiter}): the
-     * cooperative and the blind index of the e-mail the link was made for, so every link of one e-mail shares it. Empty
-     * for a token no link has. Never the e-mail itself, and never logged.
-     */
-    Optional<String> rateLimitKey(String token) {
-        byte[] hash = InvitationTokens.hash(token);
-        Optional<UUID> tenantId = Objects.requireNonNull(reading.execute(status -> invitations.tenantOf(hash)));
-        return tenantId.flatMap(tenant -> Objects.requireNonNull(TenantContext.runAs(tenant,
-                () -> reading.execute(status -> invitations.findByHash(hash))))
-                .map(invitation -> tenant + "|" + HexFormat.of().formatHex(invitation.emailBidx())));
     }
 
     /** The e-mail a usable link was sent to (the login); 404 {@code INVITATION_INVALID} for every other link. */

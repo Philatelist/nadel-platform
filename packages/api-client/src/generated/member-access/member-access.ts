@@ -24,6 +24,7 @@ import type {
   ForbiddenResponse,
   InvitationConflictResponse,
   InvitationNotSentResponse,
+  InvitationRateLimitedResponse,
   MemberAccess,
   NotFoundResponse,
   SignInServiceUnavailableResponse,
@@ -62,7 +63,8 @@ export const getInviteMemberUrl = (id: string,) => {
  * 502 `INVITATION_NOT_SENT` (with `failureCode`): the letter could not be sent; nothing changes, the access
  * status stays as it was and no audit entry is written. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service
  * could not be reached. A sent invitation is written to the audit log (`MEMBER_INVITED`, with the channels only:
- * never the link).
+ * never the link). 429 `TOO_MANY_REQUESTS` when the member, or the caller's address, has had too many sent
+ * invitations within the window (see `InvitationRateLimited`); nothing is sent.
  * @summary Invite a member into the system
  */
 export const inviteMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberAccess> => {
@@ -82,7 +84,7 @@ export const inviteMember = async (id: string, options?: Parameters<typeof nadel
 
 export const getInviteMemberMutationKey = () => ['inviteMember'] as const;
 
-export const getInviteMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
+export const getInviteMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,InviteMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,InviteMemberMutationVariables, TContext> => {
 
@@ -111,13 +113,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type InviteMemberMutationResult = NonNullable<Awaited<ReturnType<typeof inviteMember>>>
 
-    export type InviteMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse
+    export type InviteMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse
     export type InviteMemberMutationVariables = {id: string}
 
     /**
  * @summary Invite a member into the system
  */
-export const useInviteMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
+export const useInviteMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,InviteMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof inviteMember>>,
@@ -144,7 +146,8 @@ export const useInviteMember = <TError = BadRequestResponse | UnauthorizedRespon
  * Refused like `inviteMember`: 409 `MEMBER_ARCHIVED`, `MEMBER_EMAIL_MISSING`, `DELIVERY_NOT_CONFIGURED`,
  * `EMAIL_IN_OTHER_COOPERATIVE`, `SIGN_IN_ACCOUNT_IN_USE`; 502 `INVITATION_NOT_SENT` (with `failureCode`; the
  * previous link still works and no audit entry is written); 503 `SIGN_IN_SERVICE_UNAVAILABLE`. A sent invitation
- * is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only).
+ * is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only). 429 `TOO_MANY_REQUESTS` as in
+ * `inviteMember`; nothing is sent.
  * @summary Send the invitation again with a new link
  */
 export const resendMemberInvitation = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<MemberAccess> => {
@@ -164,7 +167,7 @@ export const resendMemberInvitation = async (id: string, options?: Parameters<ty
 
 export const getResendMemberInvitationMutationKey = () => ['resendMemberInvitation'] as const;
 
-export const getResendMemberInvitationMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
+export const getResendMemberInvitationMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendMemberInvitation>>, TError,ResendMemberInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof resendMemberInvitation>>, TError,ResendMemberInvitationMutationVariables, TContext> => {
 
@@ -193,13 +196,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type ResendMemberInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof resendMemberInvitation>>>
 
-    export type ResendMemberInvitationMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse
+    export type ResendMemberInvitationMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse
     export type ResendMemberInvitationMutationVariables = {id: string}
 
     /**
  * @summary Send the invitation again with a new link
  */
-export const useResendMemberInvitation = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
+export const useResendMemberInvitation = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | InvitationConflictResponse | InvitationRateLimitedResponse | InvitationNotSentResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendMemberInvitation>>, TError,ResendMemberInvitationMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof resendMemberInvitation>>,

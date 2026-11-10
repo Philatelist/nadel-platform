@@ -65,15 +65,25 @@ any further one needs one); cross-module side effects go through the outbox (ADR
   asynchronous listener of the disable having run.
 - Invite, resend, disable and enable need the permission `MEMBERS_INVITE` (the thirty-second, Chairman only by
   default) and are audited without the link or the password.
+- An e-mail change of a member with access or an open invitation does the same lock-out to the same account: the
+  listener moves its login to the new e-mail (not verified), turns it off, removes every credential and ends every
+  session, and the member gets a new link at the new address. A password set for the old login never signs in under
+  the new one.
 - A cooperative never locks its board out: nobody turns off their own access (409 `OWN_ACCESS`), and neither the
   disable action nor the archive turns off the access of the last active chairman whose access is on (`INVITED` or
   `ACTIVE`; 409 `LAST_CHAIRMAN`, under the same per-cooperative advisory lock as the other last-chairman checks).
 
-### Rate limit of the public endpoints
-- `inspect` and `accept` are public, so each is limited: at most 5 requests within 15 minutes from one client address
-  and for the e-mail of one invitation (`nadel.invitations.rate-limit.*`; the e-mail is found from the token hash and
-  counted by the cooperative and its blind index; a token of no link meets only the address limit). Over a limit the
-  answer is 429 `TOO_MANY_REQUESTS` before anything else runs, and the refused request is not counted.
+### Invitation limits
+- Only two things are counted, never a page load: opening a usable link, however often, always works.
+  - **Sent invitations** (invite and resend together, counted once the letter is out): at most 5 for one member and
+    at most 30 from one client address within 15 minutes (`nadel.invitations.rate-limit.max-requests`,
+    `max-sends-per-address`, `window`). One more is 429 `TOO_MANY_REQUESTS` before anything is sent. A refused or
+    failed invitation is not counted. The address limit is higher so a chairman can invite the cooperative at
+    go-live.
+  - **Failed links** on the public endpoints (404 `INVITATION_INVALID`: unknown, used, replaced or expired): at most 5
+    from one client address within the window. Past that, every public invitation request from that address is 429
+    before the token is looked at, so guessing tokens stops; the address is free again one window after its oldest
+    failure.
 - The client address is `request.getRemoteAddr()`. Behind Caddy, `server.forward-headers-strategy: native` lets
   Tomcat's `RemoteIpValve` take it from `X-Forwarded-For`, but only from a proxy on a private or loopback address; the
   application never reads that header itself.
@@ -81,8 +91,8 @@ any further one needs one); cross-module side effects go through the outbox (ADR
   used dropped first). No new dependency and no table: one backend instance runs per stand. With several instances
   each counts on its own, so the effective limit is multiplied by the number of instances; a shared store (the
   database or a cache) is the change to make then. A restart clears the counters.
-- A per-e-mail limit lets whoever holds a link delay that member for one window by repeating its requests; links
-  cannot be guessed (256-bit tokens), so the address limit is the main guard against floods.
+- Links cannot be guessed (256-bit tokens); the failed-link limit only stops floods of guesses. A member behind the
+  same address as someone who keeps failing waits one window; another address is not affected.
 
 ### First chairman
 - `infra/stand/first-chairman.sh` runs the backend jar once (`docker compose run --rm --no-deps`, profile `command`,

@@ -49,8 +49,8 @@ export const getInspectInvitationUrl = () => {
  * the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
  * `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
  * expired, or of a member whose access was turned off or who was archived): the answer never says which.
- * 429 `TOO_MANY_REQUESTS` when the limit of the public invitation endpoints is reached (see
- * `InvitationRateLimited`).
+ * 429 `TOO_MANY_REQUESTS` when the caller's address has had too many links refused (see
+ * `InvitationRateLimited`). Opening a usable link is never counted.
  * @summary Check an invitation link
  */
 export const inspectInvitation = async (invitationTokenInput: InvitationTokenInput, options?: Parameters<typeof nadelFetch>[1]): Promise<InvitationInfo> => {

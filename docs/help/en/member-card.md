@@ -83,7 +83,8 @@ Other rules:
 - archiving a member switches their access off, and restoring does not switch it on: invite the person again;
 - nobody can switch off their own access: their own card has no "{{ui:memberAccess.disable}}" button;
 - the access of the last chairman who has access cannot be switched off, and that chairman cannot be archived either: the system says "{{ui:memberAccess.lastChairman}}";
-- when the e-mail of a member who has access is changed, a new link is sent to the new address.
+- when the e-mail of a member who has access is changed, the old password stops working and every session ends; a new link is sent to the new address, and the member signs in again only after setting a new password with it;
+- one member can be sent at most 5 invitations (first and repeated together) within 15 minutes, and one computer at most 30; after that the system says "{{ui:problem.TOO_MANY_REQUESTS}}"
 
 Invitations, resends and switching access off are written to the [change log](help:audit).
 

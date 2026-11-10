@@ -461,7 +461,8 @@ paths:
         502 `INVITATION_NOT_SENT` (with `failureCode`): the letter could not be sent; nothing changes, the access
         status stays as it was and no audit entry is written. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service
         could not be reached. A sent invitation is written to the audit log (`MEMBER_INVITED`, with the channels only:
-        never the link).
+        never the link). 429 `TOO_MANY_REQUESTS` when the member, or the caller's address, has had too many sent
+        invitations within the window (see `InvitationRateLimited`); nothing is sent.
       parameters:
         - name: id
           in: path
@@ -486,6 +487,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/InvitationConflict'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
         '502':
           $ref: '#/components/responses/InvitationNotSent'
         '503':
@@ -505,7 +508,8 @@ paths:
         Refused like `inviteMember`: 409 `MEMBER_ARCHIVED`, `MEMBER_EMAIL_MISSING`, `DELIVERY_NOT_CONFIGURED`,
         `EMAIL_IN_OTHER_COOPERATIVE`, `SIGN_IN_ACCOUNT_IN_USE`; 502 `INVITATION_NOT_SENT` (with `failureCode`; the
         previous link still works and no audit entry is written); 503 `SIGN_IN_SERVICE_UNAVAILABLE`. A sent invitation
-        is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only).
+        is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only). 429 `TOO_MANY_REQUESTS` as in
+        `inviteMember`; nothing is sent.
       parameters:
         - name: id
           in: path
@@ -530,6 +534,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/InvitationConflict'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
         '502':
           $ref: '#/components/responses/InvitationNotSent'
         '503':
@@ -583,8 +589,8 @@ paths:
         the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
         `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
         expired, or of a member whose access was turned off or who was archived): the answer never says which.
-        429 `TOO_MANY_REQUESTS` when the limit of the public invitation endpoints is reached (see
-        `InvitationRateLimited`).
+        429 `TOO_MANY_REQUESTS` when the caller's address has had too many links refused (see
+        `InvitationRateLimited`). Opening a usable link is never counted.
       security: []
       requestBody:
         required: true
@@ -8068,9 +8074,11 @@ components:
             $ref: '#/components/schemas/Problem'
     InvitationRateLimited:
       description: >-
-        Too many requests to the public invitation endpoints (code `TOO_MANY_REQUESTS`): by default more than 5 within
-        15 minutes from one client address, or for the e-mail of one invitation, counted for each endpoint. Nothing was
-        checked or changed; the request can be tried again after the window
+        Too many invitations or failed links (code `TOO_MANY_REQUESTS`), by default within 15 minutes: more than 5 sent
+        invitations (invite and resend together) for one member or more than 30 from one client address; or, on the
+        public invitation endpoints, more than 5 links refused as `INVITATION_INVALID` from one client address, after
+        which every public invitation request from it is refused. Opening a usable link is never counted. Nothing was
+        checked, sent or changed; the request can be tried again after the window
       content:
         application/problem+json:
           schema:

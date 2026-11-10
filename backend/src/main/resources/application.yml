@@ -93,11 +93,14 @@ nadel:
   invitations:
     # How long an invitation link works (feature 020: 72 hours, once)
     ttl: 72h
-    # The public set-password endpoints (inspect, accept): at most max-requests per window from one client address and
-    # for the e-mail of one invitation, counted per endpoint; over it 429 TOO_MANY_REQUESTS. Kept in memory of this
-    # instance (at most max-keys counters, the least recently used go first), see ADR 0020
+    # Invitation limits, per window, over them 429 TOO_MANY_REQUESTS (page loads of a usable link are never counted):
+    # sent invitations and resends, at most max-requests for one member and max-sends-per-address from one client
+    # address; failed links on the public set-password endpoints (404 INVITATION_INVALID), at most max-requests from
+    # one client address, after which that address is refused. Kept in memory of this instance (at most max-keys
+    # counters, the least recently used go first), see ADR 0020
     rate-limit:
       max-requests: 5
+      max-sends-per-address: 30
       window: 15m
       max-keys: 10000
   privacy:

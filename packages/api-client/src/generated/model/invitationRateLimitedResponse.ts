@@ -12,6 +12,6 @@
 import type { Problem } from './problem';
 
 /**
- * Too many requests to the public invitation endpoints (code `TOO_MANY_REQUESTS`): by default more than 5 within 15 minutes from one client address, or for the e-mail of one invitation, counted for each endpoint. Nothing was checked or changed; the request can be tried again after the window
+ * Too many invitations or failed links (code `TOO_MANY_REQUESTS`), by default within 15 minutes: more than 5 sent invitations (invite and resend together) for one member or more than 30 from one client address; or, on the public invitation endpoints, more than 5 links refused as `INVITATION_INVALID` from one client address, after which every public invitation request from it is refused. Opening a usable link is never counted. Nothing was checked, sent or changed; the request can be tried again after the window
  */
 export type InvitationRateLimitedResponse = Problem;

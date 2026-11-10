@@ -27,7 +27,7 @@ Press "{{ui:setPassword.submit}}". When the password is saved, the system says "
 
 The link is valid for 72 hours and works once. If it has expired, was already used or the board sent a newer one, the system says: "{{ui:setPassword.invalid}}" Ask the board to press "{{ui:memberAccess.resend}}" on your [member card](help:member-card).
 
-The page can be opened, and the password saved, at most 5 times within 15 minutes. After too many attempts the system says: "{{ui:problem.TOO_MANY_REQUESTS}}" The link still works: wait and open it again.
+A working link can be opened as often as you like. After 5 wrong or expired links within 15 minutes from one computer the page says: "{{ui:problem.TOO_MANY_REQUESTS}}" Your link is not spoiled by this: wait 15 minutes and open it again.
 
 ## Related pages
 

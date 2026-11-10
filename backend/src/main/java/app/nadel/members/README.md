@@ -156,7 +156,8 @@ the application may set only those three times and deletes nothing; one open sen
   the module and carry ids only (never the e-mail or a link). `MemberAccessRevoked`: only while the access is still
   `DISABLED`, the account is turned off (`enabled: false`) and logged out; a missing account needs nothing.
   `MemberLoginChanged`: only while still `INVITED`, the account's user name and e-mail become the current e-mail with
-  `emailVerified: false` and its sessions end; then, when the mailbox is set up and no open link exists for that e-mail
+  `emailVerified: false` and `enabled: false`, its credentials are removed and its sessions end (a password of the old
+  login never signs in under the new one; only the new link turns the account on); then, when the mailbox is set up and no open link exists for that e-mail
   yet, `MemberInvitations.sendForNewLogin` issues and sends a new link through the resend steps (no actor, no audit
   entry of its own: the change is `MEMBER_UPDATED`). Without a mailbox the member stays `INVITED` without a link until
   the board resends. Failures that may pass (503, 502) are thrown so the outbox resubmits the publication (each retry a
@@ -173,15 +174,17 @@ the application may set only those three times and deletes nothing; one open sen
   `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true` (the
   only place an account is turned on), then
   `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
-- **Rate limit of the public endpoints** (`InvitationRateLimiter`, ADR 0020): before anything else each request is
-  counted by the client address (`request.getRemoteAddr()`, the client behind Caddy through
-  `server.forward-headers-strategy: native`) and, when the token belongs to a link
-  (`MemberInvitations.rateLimitKey`: the cooperative and the link's e-mail blind index, never the e-mail), by that
-  e-mail; each endpoint counts apart. Over `nadel.invitations.rate-limit.max-requests` (5) within `window` (15 min)
-  the answer is 429 `TOO_MANY_REQUESTS` and is not counted. The counters are in memory (`max-keys`, 10,000, least
-  recently used dropped): with several instances each counts on its own, and a restart clears them. The tests raise
-  the limit (`nadel.test.invitation-rate-limit`), `make e2e` and the CI e2e job set
-  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000`.
+- **Invitation limits** (`InvitationRateLimiter`, ADR 0020): a page load is never counted. `InvitationController`
+  counts sent invitations: before an invite or a resend, `ensureSendAllowed` refuses with 429 `TOO_MANY_REQUESTS` when
+  the member (cooperative and member id) has `nadel.invitations.rate-limit.max-requests` (5) or the client address has
+  `max-sends-per-address` (30) sends within `window` (15 min); `recordSend` counts only after the letter went out.
+  `PublicInvitationController` counts failed links: `ensureNotBlocked` refuses every public request of an address with
+  `max-requests` failed links within the window, and each 404 `INVITATION_INVALID` is recorded for the address. The
+  client address is `request.getRemoteAddr()` (the client behind Caddy through
+  `server.forward-headers-strategy: native`). The counters are in memory (`max-keys`, 10,000, least recently used
+  dropped): with several instances each counts on its own, and a restart clears them. The tests raise the limits
+  (`nadel.test.invitation-rate-limit`); `make e2e` and the CI e2e job set
+  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000` and `NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000`.
 - **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
   no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
 - **Last sign-in** (`lastSignInAt` on the card): when a linked member's row is `ACTIVE` and `last_sign_in_at` is missing

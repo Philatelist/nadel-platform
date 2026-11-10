@@ -90,9 +90,12 @@ public abstract class IntegrationTest {
         // No JobRunr background job server: the delivery tests run the dispatcher themselves, and enqueued jobs only
         // stay in jobrunr_jobs. A test class that wants the server sets nadel.test.job-server=true (JobRunrTests).
         registry.add("jobrunr.background-job-server.enabled", () -> "${nadel.test.job-server:false}");
-        // Feature 020: every MockMvc request comes from 127.0.0.1, so the invitation rate limit (5 per 15 minutes) would
-        // refuse the invitation tests; a test class that tests the limit sets nadel.test.invitation-rate-limit
+        // Feature 020: every MockMvc request comes from 127.0.0.1, so the invitation limits (5 sends per member, 30 per
+        // address, 5 failed links per 15 minutes) would refuse the invitation tests; a test class that tests the limits
+        // sets nadel.test.invitation-rate-limit
         registry.add("nadel.invitations.rate-limit.max-requests", () -> "${nadel.test.invitation-rate-limit:100000}");
+        registry.add("nadel.invitations.rate-limit.max-sends-per-address",
+                () -> "${nadel.test.invitation-rate-limit:100000}");
     }
 
     private static String randomMasterKey() {
