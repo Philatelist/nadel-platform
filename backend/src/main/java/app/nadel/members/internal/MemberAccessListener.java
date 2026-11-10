@@ -34,8 +34,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>{@link MemberAccessRevoked}: only while the access is still {@code DISABLED}, the account is turned off and its
  *       sessions are ended; a missing account needs nothing;</li>
  *   <li>{@link MemberLoginChanged}: only while the access is still {@code INVITED}, the account's user name and e-mail
- *       become the member's current e-mail (not verified) and its sessions end; then, when the cooperative's mailbox
- *       is set up and the member has no open link for that e-mail yet, a new link is sent through
+ *       become the member's current e-mail (not verified), the account is turned off, its credentials are removed and
+ *       its sessions end, in this order (owner decision on PR 71: a password of the old login never signs in under the
+ *       new one; only the new link turns the account on again, with a new password); then, when the cooperative's
+ *       mailbox is set up and the member has no open link for that e-mail yet, a new link is sent through
  *       {@link MemberInvitations#sendForNewLogin} (each retry makes a new token). Without a mailbox the member stays
  *       {@code INVITED} without a link until the board sends one.</li>
  * </ul>
@@ -107,7 +109,10 @@ class MemberAccessListener {
         });
     }
 
-    /** Moves the account to the new login and sends a new link while the access is still {@code INVITED}. */
+    /**
+     * Moves the account to the new login, locks it out (off, no credential, no session) and sends a new link while the
+     * access is still {@code INVITED}.
+     */
     void loginChanged(MemberLoginChanged event) {
         TenantContext.runAs(event.tenantId(), () -> {
             Optional<Target> found = reading.execute(status -> members.findById(event.memberId())
@@ -120,6 +125,7 @@ class MemberAccessListener {
             if (target.subject() != null && target.email() != null) {
                 try {
                     accounts.update(target.subject(), SignInAccountChange.newLogin(target.email()));
+                    accounts.removeCredentials(target.subject());
                     accounts.logout(target.subject());
                 } catch (SignInAccountMissingException e) {
                     // the new link makes a new account for the new e-mail

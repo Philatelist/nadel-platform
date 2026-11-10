@@ -24,7 +24,8 @@ import tools.jackson.databind.JsonNode;
  * Disable, archive and e-mail change of feature 020 against a real Keycloak with the project's realm
  * ({@link TestKeycloak}) and Mailpit: {@link MemberAccessListener} turns the account off after a disable or an archive
  * (and a restore leaves it off), moves it to the new e-mail (not verified) after an e-mail change and sends the new link,
- * with which the member signs in under the new login; an e-mail that signs in to another cooperative is refused.
+ * with which the member signs in under the new login (until then the account is off, without its password and
+ * sessions); an e-mail that signs in to another cooperative is refused.
  * Inviting a disabled member again turns the account off, removes its password and ends its sessions, so only the new
  * link lets the member in, to the same account and the same member.
  */
@@ -116,7 +117,10 @@ class MemberAccessKeycloakTests extends KeycloakIntegrationTest {
                 .bearer();
     }
 
-    /** After the board invited again: the account is off, has no password and no session, so the old one is useless. */
+    /**
+     * After the board invited again, or changed the e-mail: the account of {@code email} is off, has no password and no
+     * session, so the old one is useless.
+     */
     private void assertLockedOut(String email, String keycloakId) {
         assertThat(keycloak.signIn(email, PASSWORD)).as("the old password is refused").isNotEqualTo(200);
         JsonNode account = user(email);
@@ -219,6 +223,33 @@ class MemberAccessKeycloakTests extends KeycloakIntegrationTest {
         assertThat(user(newEmail).path("emailVerified").asBoolean()).isTrue();
         http.me(TestTokens.bearer(DEMO_TENANT, keycloakId, newEmail)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(member.toString()));
+    }
+
+    @Test
+    void anEmailChangeOfAMemberWithAccessLocksOutTheOldPasswordUntilTheNewLink() throws Exception {
+        String email = freshEmail();
+        UUID member = newMember(DEMO_TENANT, "Коваль", "Олена", null, email);
+        String keycloakId = activate(member, email);
+        keycloak.userToken(email, PASSWORD); // a session of the old password
+        assertThat(keycloak.sessions(keycloakId)).isNotEmpty();
+        String newEmail = freshEmail();
+
+        http.update(chairman(), member, "Коваль", "Олена", newEmail).andExpect(status().isOk())
+                .andExpect(jsonPath("$.access.status").value("INVITED"));
+
+        await().atMost(Duration.ofSeconds(20)).until(() -> mailpit.lettersTo(newEmail).size() == 1);
+        assertLockedOut(newEmail, keycloakId);
+        assertThat(keycloak.signIn(email, PASSWORD)).as("the old login is gone").isNotEqualTo(200);
+
+        http.accept(InvitationRequests.tokenOfLetterTo(newEmail), NEW_PASSWORD).andExpect(status().isNoContent());
+
+        assertThat(keycloak.signIn(newEmail, PASSWORD)).as("the old password stays refused").isNotEqualTo(200);
+        http.me(bearerOfSignIn(newEmail, NEW_PASSWORD)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.memberId").value(member.toString()));
+        assertThat(keycloak.usersByEmail(newEmail)).singleElement()
+                .satisfies(account -> assertThat(account.path("id").asString()).isEqualTo(keycloakId));
+        assertThat(subjectOf(DEMO_TENANT, member)).isEqualTo(keycloakId);
+        http.card(chairman(), member).andExpect(jsonPath("$.access.status").value("ACTIVE"));
     }
 
     @Test

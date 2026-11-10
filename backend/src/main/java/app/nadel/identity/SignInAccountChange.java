@@ -31,10 +31,11 @@ public record SignInAccountChange(@Nullable String login, @Nullable Boolean emai
 
     /**
      * A new login after the member's e-mail changed: the user name and the e-mail become {@code login}, which is not
-     * verified until the member opens the link sent to it.
+     * verified until the member opens the link sent to it, and the account is turned off until then (the caller also
+     * removes its credentials and ends its sessions), so a password set for the old login no longer signs in.
      */
     public static SignInAccountChange newLogin(String login) {
-        return new SignInAccountChange(login, false, null, null);
+        return new SignInAccountChange(login, false, false, null);
     }
 
     /**

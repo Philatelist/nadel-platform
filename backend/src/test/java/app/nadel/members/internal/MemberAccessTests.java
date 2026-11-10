@@ -445,7 +445,14 @@ class MemberAccessTests extends IntegrationTest {
         FakeSignInAccounts.Account account = accounts.account(subject).orElseThrow();
         assertThat(account.login()).isEqualTo(newEmail);
         assertThat(account.emailVerified()).isFalse();
+        assertThat(account.enabled()).as("off until the new link is used").isFalse();
+        assertThat(account.password()).as("the old password is removed").isNull();
+        assertThat(account.credentialRemovals()).isEqualTo(1);
         assertThat(account.logouts()).isEqualTo(1);
+
+        http.accept(InvitationRequests.tokenOfLetterTo(newEmail), PASSWORD).andExpect(status().isNoContent());
+        assertThat(accounts.account(subject).orElseThrow().enabled()).isTrue();
+        assertThat(state(member)).isEqualTo("ACTIVE");
     }
 
     @Test
