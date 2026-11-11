@@ -9,6 +9,7 @@ import {
 import { normalizeMoneyInput, normalizePercentInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useDirtyGuard } from '../pwa/dirtyForms';
 import { Link } from 'react-router';
 import { RequisitesPanel } from '../components/RequisitesPanel';
 import { DeliverySettingsPanel } from '../components/settings/DeliverySettingsPanel';
@@ -77,6 +78,7 @@ function SettingsForm({ saved }: { saved: PlotStatusVisibility }) {
   const s = t.settings;
   const queryClient = useQueryClient();
   const [choice, setChoice] = useState<PlotStatusVisibility>(saved);
+  useDirtyGuard(choice !== saved);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
   const update = useUpdateSettings({
@@ -136,6 +138,7 @@ function StatusThresholdSection({ saved }: { saved: Settings }) {
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState(saved.redAmount);
   const [days, setDays] = useState(String(saved.redDays));
+  useDirtyGuard(amount !== saved.redAmount || days !== String(saved.redDays));
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
@@ -217,6 +220,7 @@ function LossesSettingsSection({ saved }: { saved: Settings }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<LossesMode>(saved.lossesMode);
   const [percent, setPercent] = useState(saved.lossesPercent);
+  useDirtyGuard(mode !== saved.lossesMode || percent !== saved.lossesPercent);
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
@@ -293,6 +297,7 @@ function PaymentsSettingsSection({ saved }: { saved: Settings }) {
   const s = t.settings;
   const queryClient = useQueryClient();
   const [auto, setAuto] = useState(saved.autoAllocatePrepayment);
+  useDirtyGuard(auto !== saved.autoAllocatePrepayment);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
   const update = useUpdateSettings({
@@ -348,6 +353,7 @@ function ReadingsSettingsSection({ saved }: { saved: Settings }) {
   const s = t.settings;
   const queryClient = useQueryClient();
   const [required, setRequired] = useState(saved.readingPhotoRequired);
+  useDirtyGuard(required !== saved.readingPhotoRequired);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
   const update = useUpdateSettings({

@@ -11,7 +11,7 @@ import '@fontsource/ibm-plex-mono/cyrillic-400.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/cyrillic-500.css';
 import { ApiError, configureApi } from '@nadel/api-client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { User } from 'oidc-client-ts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -19,6 +19,9 @@ import { AuthProvider } from 'react-oidc-context';
 import { App } from './App';
 import { OIDC_AUTHORITY, OIDC_CLIENT_ID, oidcConfig } from './auth';
 import { I18nProvider } from './i18n';
+import './pwa/installPrompt';
+import { registerPwa } from './pwa/registerPwa';
+import { refetchOnReconnect } from './pwa/useOnline';
 import { ThemeProvider } from './themeContext';
 import './index.css';
 
@@ -30,6 +33,11 @@ function currentAccessToken(): string | null {
 
 configureApi({ getToken: currentAccessToken });
 
+document.documentElement.dataset.build = __BUILD_ID__;
+void registerPwa();
+// the manager only learns about changes: tell it where the page starts (a PWA can be opened with no connection)
+onlineManager.setOnline(navigator.onLine);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -40,6 +48,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+refetchOnReconnect(queryClient);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -8,7 +8,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 # process, never exported by Make and never referenced by docker compose.
 LOAD_ENV := set -a; . infra/.env; set +a
 
-.PHONY: help install up down infra backend web dev gen test check lint format format-check clean e2e-install e2e stand-test help-shots guide-shots guide
+.PHONY: help install up down infra backend web dev gen test check lint format format-check clean e2e-install e2e e2e-pwa stand-test help-shots guide-shots guide
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -16,7 +16,7 @@ help: ## Show available targets
 install: ## Install client dependencies
 	pnpm install --frozen-lockfile
 
-infra: ## Start Postgres + PostGIS, Keycloak, Mailpit and the fake Telegram API, wait until healthy (NADEL_DB_PORT=5433 moves Postgres)
+infra: ## Start Postgres + PostGIS, Keycloak, Mailpit, the fake Telegram API and the fake push service, wait until healthy (NADEL_DB_PORT=5433 moves Postgres)
 	$(COMPOSE) up -d --wait
 
 down: ## Stop local infrastructure
@@ -101,6 +101,41 @@ e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, ru
 	wait_for backend http://localhost:8080/actuator/health/readiness; \
 	wait_for web http://localhost:5173/; \
 	pnpm --filter web test:e2e
+
+# Same stack as `e2e`, but the web is the production build served by `vite preview` on 5173 (service worker and manifest
+# exist only in a build). Runs web/playwright.pwa.config.ts (web/e2e/pwa). Needs JDK 25; ports 8080 and 5173 must be free. Not part of `check`.
+e2e-pwa: infra infra/.env ## PWA end-to-end specs: backend jar + production web build on `vite preview`, runs Playwright (NADEL_DB_PORT=5433 for another DB port)
+	cd backend && ./mvnw -B -q -DskipTests package
+	pnpm --filter web exec vite build
+	@set -e -m; mkdir -p backend/target; \
+	pids=""; \
+	psql_su() { docker compose -f infra/docker-compose.yml exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 "$$@"; }; \
+	drop_db() { psql_su -q -c "DROP DATABASE IF EXISTS $(E2E_DB) WITH (FORCE)" >/dev/null; }; \
+	cleanup() { trap - EXIT INT TERM; \
+	  for p in $$pids; do kill -TERM -- -$$p 2>/dev/null || true; done; \
+	  for i in 1 2 3 4 5 6 7 8 9 10; do \
+	    lsof -nP -iTCP:8080 -iTCP:5173 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 1; done; \
+	  for p in $$pids; do kill -KILL -- -$$p 2>/dev/null || true; done; \
+	  sleep 1; \
+	  drop_db || echo "warning: could not drop database $(E2E_DB)"; \
+	  if lsof -nP -iTCP:8080 -iTCP:5173 -sTCP:LISTEN >/dev/null 2>&1; then \
+	    echo "warning: port 8080 or 5173 is still in use after e2e cleanup"; fi; }; \
+	trap cleanup EXIT INT TERM; \
+	drop_db; \
+	psql_su -q -c "CREATE DATABASE $(E2E_DB) OWNER nadel_owner"; \
+	psql_su -q -d $(E2E_DB) -c "CREATE EXTENSION IF NOT EXISTS postgis; GRANT USAGE ON SCHEMA public TO nadel_app"; \
+	NADEL_DB_URL=jdbc:postgresql://localhost:$(NADEL_DB_PORT)/$(E2E_DB) \
+	NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000 \
+	NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000 \
+	java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend/target/e2e-backend.log 2>&1 & pids="$$pids $$!"; \
+	pnpm --filter web exec vite preview > backend/target/e2e-web.log 2>&1 & pids="$$pids $$!"; \
+	wait_for() { for i in $$(seq 1 90); do \
+	  curl -sf -o /dev/null "$$2" && return 0; sleep 2; done; \
+	  echo "timeout waiting for $$1 ($$2); see backend/target/e2e-*.log"; return 1; }; \
+	wait_for keycloak http://localhost:8180/realms/nadel/.well-known/openid-configuration; \
+	wait_for backend http://localhost:8080/actuator/health/readiness; \
+	wait_for web http://localhost:5173/; \
+	pnpm --filter web exec playwright test -c playwright.pwa.config.ts
 
 check: gen format-check lint test stand-test ## Everything CI runs: contract, format, lint, tests
 

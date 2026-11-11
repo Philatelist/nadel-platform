@@ -11,6 +11,7 @@ import {
 import { format, formatDay, formatMeterValue, parseMeterValue } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
+import { useDirtyGuard } from '../../pwa/dirtyForms';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
@@ -62,6 +63,7 @@ export function RoundRow({
   const [processing, setProcessing] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const photoUrl = useObjectUrl(photo);
+  useDirtyGuard(input !== '' || photo !== undefined);
 
   const parsed = parseMeterValue(input, locale);
   const valueError = submitted && parsed === undefined ? t.meters.valueInvalid : undefined;

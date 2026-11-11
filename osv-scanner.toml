@@ -4,3 +4,11 @@
 [[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
 reason = "minimatch 10.2.6 via eslint (web dev dependency): lint tooling only, patterns come from our own ESLint config, never user input, nothing ships in the web bundle or the server; the fix (11.0.1) is a major version eslint 10 does not accept yet; moderate, so not in pnpm-workspace.yaml; revisit on the next ESLint upgrade"
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+reason = "glob (minimatch denial of service) via workbox-build (web dev dependency of vite-plugin-pwa): runs at build time only to list our own dist files with our own patterns, never on user input; nothing ships in the web bundle or the server; moderate, so not in pnpm-workspace.yaml; revisit when workbox-build updates glob"
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+reason = "deepmerge (low) via workbox-build > @rollup/plugin-node-resolve (web dev dependency of vite-plugin-pwa): build time only, merges our own build options, never user input; nothing ships in the web bundle or the server; low, so not in pnpm-workspace.yaml; revisit when workbox-build updates the plugin"

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p help && tsc --noEmit -p e2e",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json && tsc --noEmit -p help && tsc --noEmit -p e2e",
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "e2e:install": "playwright install chromium",
@@ -51,7 +51,12 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",
     "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0",
     "vitest": "5.0.5",
+    "workbox-build": "7.4.1",
+    "workbox-precaching": "7.4.1",
+    "workbox-routing": "7.4.1",
+    "workbox-window": "7.4.1",
     "yaml": "2.9.1"
   }
 }

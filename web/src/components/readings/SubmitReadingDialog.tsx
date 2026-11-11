@@ -2,6 +2,7 @@ import { getListMeterReadingsQueryKey, useSubmitPlotReadingWithPhoto, type Meter
 import { parseMeterValue } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
+import { useDirtyGuard } from '../../pwa/dirtyForms';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
 import { problemFieldErrors, problemMessage, type FieldErrors } from '../../problem';
@@ -37,6 +38,7 @@ export function SubmitReadingDialog({
   const [processing, setProcessing] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const photoUrl = useObjectUrl(photo);
+  useDirtyGuard(input !== '' || photo !== undefined || takenOn !== undefined);
 
   const parsed = parseMeterValue(input, locale);
   const valueError = submitted && parsed === undefined ? t.meters.valueInvalid : undefined;

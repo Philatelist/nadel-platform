@@ -9,6 +9,7 @@ import {
 import { isZeroMoney, normalizeMoneyInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { useDirtyGuard } from '../../pwa/dirtyForms';
 import { useLocale, useT } from '../../i18n';
 import { usePlotPayerOwners } from '../../hooks/usePlotPayerOwners';
 import { kyivToday } from '../../kyivToday';
@@ -97,6 +98,17 @@ export function PaymentForm({ initialPlotId }: { initialPlotId?: string }) {
     payments: SavedPayment[];
     plotNumbers: Record<string, string>;
   }>();
+
+  useDirtyGuard(
+    saved === undefined &&
+      savedGroup === undefined &&
+      (amountText !== '' ||
+        note !== '' ||
+        reference !== '' ||
+        splitPayer !== null ||
+        splitEdits !== null ||
+        edits !== null),
+  );
 
   // The only owner of the plot pays by default, until the user touches the payer.
   useEffect(() => {

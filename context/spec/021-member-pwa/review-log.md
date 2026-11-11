@@ -27,3 +27,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `81269a4..323e274` | PASS | — | minor: V38 also adds `reading_photo_required` (used by Slice 5, as the tasks plan); one `photos.has` query per round row (N+1); PNG > 2000 px becomes JPEG (transparency flattened); `photoError` not cleared by «Прибрати»; thumbnail contentType hard-coded |
+
+## Slice 5 — The photo rule and photos from the board and the electrician
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `323e274..a4d349f` | PASS | — | minor: a javadoc line over 120 chars in ReadingsController; RoundRow photo buttons inside the form rely on Button's default type |

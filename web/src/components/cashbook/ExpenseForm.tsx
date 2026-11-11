@@ -9,6 +9,7 @@ import {
 import { normalizeMoneyInput } from '@nadel/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { useDirtyGuard } from '../../pwa/dirtyForms';
 import { useLocale, useT } from '../../i18n';
 import { kyivToday } from '../../kyivToday';
 import { problemFieldErrors, type FieldErrors } from '../../problem';
@@ -65,6 +66,29 @@ export function ExpenseForm({
         contentType: a.contentType,
         load: () => downloadExpenseAttachment(prefill.id, a.n),
       })) ?? [],
+  );
+  const [initial] = useState(() => ({
+    account,
+    date,
+    amountText,
+    categoryId,
+    counterparty,
+    description,
+    documentNumber,
+    documentDate,
+    reused: reused.length,
+  }));
+  useDirtyGuard(
+    account !== initial.account ||
+      date !== initial.date ||
+      amountText !== initial.amountText ||
+      categoryId !== initial.categoryId ||
+      counterparty !== initial.counterparty ||
+      description !== initial.description ||
+      documentNumber !== initial.documentNumber ||
+      documentDate !== initial.documentDate ||
+      files.length > 0 ||
+      reused.length !== initial.reused,
   );
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});

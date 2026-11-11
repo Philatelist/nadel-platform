@@ -143,7 +143,6 @@ async function noSideScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-
 async function setPhotoRule(browser: Browser, required: boolean): Promise<void> {
   const chairman = await signedInPage(browser, 'chairman@demo.local');
   try {

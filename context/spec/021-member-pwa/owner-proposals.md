@@ -34,6 +34,25 @@ Agents never edit `CLAUDE.md`, `.claude/`, `.github/` or `.env.example` files. A
   ```yaml
       - run: make stand-test
   ```
+- Slice 6: add the PWA end-to-end specs. They run on the production build served by `vite preview`, so they are a
+  separate step from the dev-server `e2e` job (same job, after the smoke step, keeps the backend and Keycloak that the
+  job already starts; `make e2e-pwa` is for a machine with no stack running, because it starts its own). In the `e2e`
+  job, after the smoke step, with the backend already running on 8080 and the Vite dev server stopped (the preview
+  server takes port 5173):
+
+  ```yaml
+      - name: Build the web and serve it with vite preview
+        run: |
+          pnpm --filter web exec vite build
+          pnpm --filter web exec vite preview > web-preview.log 2>&1 &
+          npx --yes wait-on http://localhost:5173/
+      - name: PWA e2e (production build)
+        run: pnpm --filter web exec playwright test -c playwright.pwa.config.ts
+  ```
+
+  If the `e2e` job runs the dev server as a background step, stop it first (`kill` its PID) or give the PWA specs their
+  own job that runs `make e2e-pwa` after `make e2e-install` (it needs Docker and JDK 25 like `make e2e`). Keycloak's
+  `nadel-web` client already accepts `http://localhost:5173/*`, so the preview origin needs no realm change.
 
 ## infra/stand/.env.example
 

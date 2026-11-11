@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 // The stack (infra, backend on :8080, Vite on :5173) is started outside Playwright.
 export default defineConfig({
   testDir: './e2e',
+  // the production-build specs run through playwright.pwa.config.ts (`make e2e-pwa`)
+  testIgnore: ['**/e2e/pwa/**'],
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',

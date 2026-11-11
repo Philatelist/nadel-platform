@@ -12,6 +12,7 @@ import { Badge, PageHeader, Panel } from '../components/ui';
 import { useMe } from '../me';
 import { RoleName } from '../components/RoleName';
 import { UserContent } from '../components/UserContent';
+import { InstallCard } from '../pwa/InstallCard';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 export function AccountPage() {
@@ -26,6 +27,8 @@ export function AccountPage() {
   return (
     <div className="flex flex-col gap-4 text-base" lang={locale}>
       <PageHeader title={t.account.title} />
+
+      <InstallCard />
 
       <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
         <section className="flex min-w-0 flex-col gap-3">

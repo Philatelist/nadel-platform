@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
-import { useAuth } from 'react-oidc-context';
 import { useMe } from '../me';
 import { landingPath } from '../landing';
 import { menuItems } from '../nav';
@@ -13,6 +12,9 @@ import { RoleNameList } from './RoleName';
 import { UserContent } from './UserContent';
 import { LocaleSwitch } from './LocaleSwitch';
 import { ThemeSwitch } from './ThemeSwitch';
+import { OfflineBanner } from '../pwa/OfflineBanner';
+import { UpdateBar } from '../pwa/UpdateBar';
+import { useSignOut } from '../pwa/useSignOut';
 import { Button } from './ui';
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
@@ -22,7 +24,7 @@ const itemClass = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const me = useMe();
-  const auth = useAuth();
+  const signOut = useSignOut();
   const t = useT();
   const [open, setOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -47,6 +49,8 @@ export function Layout() {
   return (
     <HelpPanelSlotContext value={helpSlot}>
       <div className="flex h-full flex-col">
+        <OfflineBanner />
+        <UpdateBar />
         {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
           <Link
@@ -73,7 +77,7 @@ export function Layout() {
             <div className="hidden md:flex">
               <ThemeSwitch />
             </div>
-            <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
+            <Button variant="secondary" onClick={() => void signOut()}>
               {t.auth.signOut}
             </Button>
           </div>
