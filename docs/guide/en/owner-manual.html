@@ -468,9 +468,9 @@ curl -s -X POST localhost:8091/control/reset</pre>
         Nobody can disable their own access, and the access of the last chairman who has access can be neither
         disabled nor removed by archiving: a cooperative always keeps a chairman who can sign in. The
         set-password page counts only failed links: after 5 wrong or expired ones within 15 minutes an address
-        waits for the window to end, while a working link opens as often as needed. A member gets at most 5
-        invitations (first and repeated) within 15 minutes, and one address sends at most 30
-        (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>,
+        gets "Too many attempts" for further ones until the window ends, while a working link always opens. A
+        member gets at most 5 invitations (first and repeated) within 15 minutes, and one address sends at
+        most 30 (<code>NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS</code>,
         <code>NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS</code>,
         <code>NADEL_INVITATIONS_RATE_LIMIT_WINDOW</code>). Changing the e-mail of a member with access turns
         their account off and removes its password and sessions; the new link goes to the new address. The

@@ -49,8 +49,8 @@ export const getInspectInvitationUrl = () => {
  * the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
  * `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
  * expired, or of a member whose access was turned off or who was archived): the answer never says which.
- * 429 `TOO_MANY_REQUESTS` when the caller's address has had too many links refused (see
- * `InvitationRateLimited`). Opening a usable link is never counted.
+ * 429 `TOO_MANY_REQUESTS` instead of 404 when the caller's address has had too many links refused (see
+ * `InvitationRateLimited`). A usable link is never counted and never refused, from any address.
  * @summary Check an invitation link
  */
 export const inspectInvitation = async (invitationTokenInput: InvitationTokenInput, options?: Parameters<typeof nadelFetch>[1]): Promise<InvitationInfo> => {
@@ -144,7 +144,8 @@ export const useInspectInvitation = <TError = BadRequestResponse | InvitationInv
  *
  * 400 `VALIDATION_FAILED` with `errors[{field: password}]`: `TOO_SHORT` under 8 characters, `TOO_LONG` over 128,
  * `PASSWORD_POLICY` the sign-in service refused it by its own rules. 404 `INVITATION_INVALID` as in
- * `inspectInvitation`. 429 `TOO_MANY_REQUESTS` as in `inspectInvitation`; nothing changed. 503
+ * `inspectInvitation`. 429 `TOO_MANY_REQUESTS` as in `inspectInvitation` (only for a link that cannot be used);
+ * nothing changed. 503
  * `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link stays usable.
  * @summary Set the password with an invitation link
  */

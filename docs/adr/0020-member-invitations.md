@@ -81,9 +81,9 @@ any further one needs one); cross-module side effects go through the outbox (ADR
     failed invitation is not counted. The address limit is higher so a chairman can invite the cooperative at
     go-live.
   - **Failed links** on the public endpoints (404 `INVITATION_INVALID`: unknown, used, replaced or expired): at most 5
-    from one client address within the window. Past that, every public invitation request from that address is 429
-    before the token is looked at, so guessing tokens stops; the address is free again one window after its oldest
-    failure.
+    from one client address within the window. Past that, a further unusable link from that address is 429 instead
+    of 404, until one window after its oldest failure. The token is looked at first: a usable link always opens and
+    sets the password, from a blocked address too.
 - The client address is `request.getRemoteAddr()`. Behind Caddy, `server.forward-headers-strategy: native` lets
   Tomcat's `RemoteIpValve` take it from `X-Forwarded-For`, but only from a proxy on a private or loopback address; the
   application never reads that header itself.
@@ -91,8 +91,9 @@ any further one needs one); cross-module side effects go through the outbox (ADR
   used dropped first). No new dependency and no table: one backend instance runs per stand. With several instances
   each counts on its own, so the effective limit is multiplied by the number of instances; a shared store (the
   database or a cache) is the change to make then. A restart clears the counters.
-- Links cannot be guessed (256-bit tokens); the failed-link limit only stops floods of guesses. A member behind the
-  same address as someone who keeps failing waits one window; another address is not affected.
+- Links cannot be guessed (256-bit tokens), so guessing is not the risk and a usable link is never refused (owner
+  decision on PR 71): a member behind the same address as someone who keeps failing still opens their link. The
+  failed-link limit only stops floods of wrong or expired links.
 
 ### First chairman
 - `infra/stand/first-chairman.sh` runs the backend jar once (`docker compose run --rm --no-deps`, profile `command`,

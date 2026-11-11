@@ -23,11 +23,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  *       {@code nadel.invitations.rate-limit.max-sends-per-address} (default 30) from one client address within
  *       {@code nadel.invitations.rate-limit.window} (default 15 minutes); one more is 429 {@code TOO_MANY_REQUESTS}
  *       before anything is sent ({@link #ensureSendAllowed}, then {@link #recordSend} once the letter is out);</li>
- *   <li><b>failed links</b> (the public endpoints answered 404 {@code INVITATION_INVALID}: unknown, used, replaced or
- *       expired): at most {@code max-requests} from one client address within the window; past that every public
- *       request from that address is 429 {@code TOO_MANY_REQUESTS} before the token is looked at
- *       ({@link #ensureNotBlocked}), so guessing tokens stops. Opening a usable link, however often, is never
- *       counted.</li>
+ *   <li><b>failed links</b> (the public endpoints refused the link as 404 {@code INVITATION_INVALID}: unknown, used,
+ *       replaced or expired): at most {@code max-requests} from one client address within the window; past that such
+ *       a link from that address is 429 {@code TOO_MANY_REQUESTS} instead ({@link #countFailedLink}). A usable link
+ *       is never counted and never refused, from any address: the token is 256 random bits, so guessing is not the
+ *       risk; the limit only stops floods of wrong or expired links.</li>
  * </ul>
  * A refused request is not counted, so a counter frees itself one window after its oldest counted event. The check
  * and the record of a send are two steps, so two sends at the very same moment may pass one over the limit.
@@ -74,16 +74,16 @@ class InvitationRateLimiter {
                 .getRemoteAddr();
     }
 
-    /** 429 {@code TOO_MANY_REQUESTS} when the address used up its failed links within the window. */
-    synchronized void ensureNotBlocked(String address) {
-        if (count(failedKey(address)) >= maxRequests) {
+    /**
+     * Counts a link the public endpoints refused as {@code INVITATION_INVALID} for the address; once the address used
+     * up its failed links within the window, 429 {@code TOO_MANY_REQUESTS} instead, and that refusal is not counted.
+     */
+    synchronized void countFailedLink(String address) {
+        String key = failedKey(address);
+        if (count(key) >= maxRequests) {
             throw tooMany();
         }
-    }
-
-    /** Counts a link the public endpoints refused as {@code INVITATION_INVALID} for the address. */
-    synchronized void recordFailedLink(String address) {
-        record(failedKey(address));
+        record(key);
     }
 
     /** 429 {@code TOO_MANY_REQUESTS} when the member, or the address, used up its sent invitations within the window. */

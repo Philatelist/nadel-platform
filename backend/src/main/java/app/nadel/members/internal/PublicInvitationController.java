@@ -17,9 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
  * password. The token travels in the body, never in the URL. The token and the password are secrets: neither they nor
  * the request bodies are ever logged (the generated input types print them as {@code *}).
  * <p>
- * The limit counts failed links only ({@link InvitationRateLimiter}): an address that used up its failed links is 429
- * {@code TOO_MANY_REQUESTS} before anything else runs, and each 404 {@code INVITATION_INVALID} is counted for the
- * address. A usable link can be opened any number of times.
+ * The limit counts failed links only ({@link InvitationRateLimiter}): each 404 {@code INVITATION_INVALID} is counted
+ * for the address, and once the address used up its failed links such a link is 429 {@code TOO_MANY_REQUESTS} instead.
+ * A usable link is looked at first, so it opens and sets the password any number of times, from any address, blocked
+ * or not.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -47,13 +48,11 @@ class PublicInvitationController implements PublicInvitationsApi {
     }
 
     private <T> T limited(Supplier<T> call) {
-        String address = InvitationRateLimiter.clientAddress();
-        limiter.ensureNotBlocked(address);
         try {
             return call.get();
         } catch (ApiProblemException e) {
             if (ProblemCodes.INVITATION_INVALID.equals(e.code())) {
-                limiter.recordFailedLink(address);
+                limiter.countFailedLink(InvitationRateLimiter.clientAddress());
             }
             throw e;
         }

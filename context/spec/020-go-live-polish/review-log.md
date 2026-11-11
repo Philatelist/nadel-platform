@@ -94,3 +94,4 @@ Related, not changed: an e-mail change of a member with access moves the account
 ## Owner round 3 fix review (c7c11ae, 9c994e7) — r1 MAJOR_ISSUES → fixed
 - M1: README claimed the CI e2e job sets the limit variables; ci.yml is the owner's to change (diff handed over). README reworded.
 - Minors (not fixed, reported to the owner): an address blocked by 5 failed links also gets 429 for a valid link (token-guess protection; shared NAT waits one window); failed-link, send and member counters share one LRU map; check/record of a send not atomic (+1 possible); no test that a PASSWORD_POLICY refusal is not a failed link.
+- Owner decisions (round 4): the blocked-address minor is changed — a usable link always opens and sets the password, from a blocked address too. Accepted as is, not fixed: the send check/record is not atomic (+1 possible at the same moment); the three counters share one LRU map (`max-keys`).

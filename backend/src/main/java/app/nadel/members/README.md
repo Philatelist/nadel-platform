@@ -178,8 +178,9 @@ the application may set only those three times and deletes nothing; one open sen
   counts sent invitations: before an invite or a resend, `ensureSendAllowed` refuses with 429 `TOO_MANY_REQUESTS` when
   the member (cooperative and member id) has `nadel.invitations.rate-limit.max-requests` (5) or the client address has
   `max-sends-per-address` (30) sends within `window` (15 min); `recordSend` counts only after the letter went out.
-  `PublicInvitationController` counts failed links: `ensureNotBlocked` refuses every public request of an address with
-  `max-requests` failed links within the window, and each 404 `INVITATION_INVALID` is recorded for the address. The
+  `PublicInvitationController` counts failed links: the link is looked at first, and each 404 `INVITATION_INVALID` is
+  counted for the address by `countFailedLink`, which answers 429 instead once the address has `max-requests` failed
+  links within the window. A usable link always opens and sets the password, from a blocked address too. The
   client address is `request.getRemoteAddr()` (the client behind Caddy through
   `server.forward-headers-strategy: native`). The counters are in memory (`max-keys`, 10,000, least recently used
   dropped): with several instances each counts on its own, and a restart clears them. The tests raise the limits

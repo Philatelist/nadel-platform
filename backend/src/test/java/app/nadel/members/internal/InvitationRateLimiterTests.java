@@ -19,7 +19,7 @@ import org.springframework.http.HttpStatus;
  * The sliding window of {@link InvitationRateLimiter} with a clock the test moves: per member five sent invitations,
  * per address thirty (here three, to keep the test short) and five failed links per fifteen minutes; the window frees
  * one slot when the oldest counted event leaves it, a refusal is not counted, the keys are apart, and the number of
- * keys is bounded.
+ * keys is bounded. A usable link never reaches the limiter (see {@link InvitationRateLimitTests}).
  */
 class InvitationRateLimiterTests {
 
@@ -43,24 +43,15 @@ class InvitationRateLimiterTests {
     }
 
     @Test
-    void theSixthFailedLinkFromOneAddressBlocksItAndOtherAddressesAreNot() {
+    void theSixthFailedLinkFromOneAddressIsRefusedAndOtherAddressesAreNot() {
         for (int i = 0; i < 5; i++) {
-            limiter.ensureNotBlocked(ADDRESS);
-            limiter.recordFailedLink(ADDRESS);
+            limiter.countFailedLink(ADDRESS);
             clock.advance(Duration.ofMinutes(1));
         }
-        assertTooMany(() -> limiter.ensureNotBlocked(ADDRESS));
-        assertThatCode(() -> limiter.ensureNotBlocked("203.0.113.8")).doesNotThrowAnyException();
+        assertTooMany(() -> limiter.countFailedLink(ADDRESS));
+        assertThatCode(() -> limiter.countFailedLink("203.0.113.8")).doesNotThrowAnyException();
         // failed links and sends are counted apart
         assertThatCode(() -> send(limiter, ADDRESS, UUID.randomUUID())).doesNotThrowAnyException();
-    }
-
-    @Test
-    void anAddressWithoutFailedLinksIsNeverBlocked() {
-        for (int i = 0; i < 100; i++) {
-            limiter.ensureNotBlocked(ADDRESS); // a usable link opened again and again
-        }
-        assertThatCode(() -> limiter.ensureNotBlocked(ADDRESS)).doesNotThrowAnyException();
     }
 
     @Test
@@ -114,24 +105,26 @@ class InvitationRateLimiterTests {
     @Test
     void aBlockedAddressIsFreedOneWindowAfterItsOldestFailedLink() {
         for (int i = 0; i < 5; i++) {
-            limiter.recordFailedLink(ADDRESS);
+            limiter.countFailedLink(ADDRESS);
         }
-        assertTooMany(() -> limiter.ensureNotBlocked(ADDRESS));
+        for (int i = 0; i < 10; i++) {
+            assertTooMany(() -> limiter.countFailedLink(ADDRESS)); // refusals are not counted
+        }
         clock.advance(WINDOW);
-        assertThatCode(() -> limiter.ensureNotBlocked(ADDRESS)).doesNotThrowAnyException();
+        assertThatCode(() -> limiter.countFailedLink(ADDRESS)).doesNotThrowAnyException();
     }
 
     @Test
     void theLeastRecentlyUsedKeyIsDroppedPastTheBound() {
         InvitationRateLimiter small = new InvitationRateLimiter(1, 1, WINDOW, 2, clock);
-        small.recordFailedLink("a");
-        small.recordFailedLink("b");
-        assertTooMany(() -> small.ensureNotBlocked("a")); // "a" is now the most recent
-        small.recordFailedLink("c"); // drops "b"
+        small.countFailedLink("a");
+        small.countFailedLink("b");
+        assertTooMany(() -> small.countFailedLink("a")); // "a" is now the most recent
+        small.countFailedLink("c"); // drops "b"
 
-        assertTooMany(() -> small.ensureNotBlocked("a"));
-        assertTooMany(() -> small.ensureNotBlocked("c"));
-        assertThatCode(() -> small.ensureNotBlocked("b")).doesNotThrowAnyException();
+        assertTooMany(() -> small.countFailedLink("a"));
+        assertTooMany(() -> small.countFailedLink("c"));
+        assertThatCode(() -> small.countFailedLink("b")).doesNotThrowAnyException();
     }
 
     @Test

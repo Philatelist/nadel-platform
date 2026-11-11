@@ -32,8 +32,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The invitation limits over HTTP (feature 020, owner decisions on PR 71), here 5 per 15 minutes for each counter: a
- * usable link opens any number of times from one address; the sixth link refused as {@code INVITATION_INVALID}
- * (unknown or expired) from one address blocks every public request from it, other addresses are not affected; the
+ * usable link opens any number of times from one address; from one address the sixth link refused as
+ * {@code INVITATION_INVALID} (unknown or expired) is 429, other addresses are not affected, and a usable link still
+ * opens and sets the password from the blocked address; the
  * sixth sent invitation of one member (invite and resend together) is 429 {@code TOO_MANY_REQUESTS} from any address,
  * and so is the sixth from one address; an invitation that is refused is not counted. The window itself is tested with
  * a moving clock in {@link InvitationRateLimiterTests}. Every test uses its own addresses and members, as the counters
@@ -139,7 +140,7 @@ class InvitationRateLimitTests extends IntegrationTest {
     }
 
     @Test
-    void theSixthFailedLinkFromOneAddressBlocksItAndOtherAddressesAreNot() throws Exception {
+    void theSixthFailedLinkFromOneAddressIsRefusedAndAUsableLinkStillOpensFromIt() throws Exception {
         String email = freshEmail();
         invite(address(), invitee(email)).andExpect(status().isOk());
         String usable = InvitationRequests.tokenOfLetterTo(email);
@@ -152,18 +153,21 @@ class InvitationRateLimitTests extends IntegrationTest {
                     .andExpect(jsonPath("$.code").value("INVITATION_INVALID"));
         }
 
-        // blocked: even a usable link is refused from this address, on both endpoints
-        inspect(client, usable).andExpect(status().isTooManyRequests())
+        // blocked for wrong links, on both endpoints
+        inspect(client, InvitationTokens.newToken()).andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"))
                 .andExpect(jsonPath("$.status").value(429));
-        accept(client, usable).andExpect(status().isTooManyRequests());
+        accept(client, expiredLink()).andExpect(status().isTooManyRequests());
+        // another address is not
+        inspect(address(), InvitationTokens.newToken()).andExpect(status().isNotFound());
 
-        // another address opens it, again and again
-        String other = address();
+        // a usable link still opens from the blocked address, again and again, and sets the password
         for (int i = 0; i < 6; i++) {
-            inspect(other, usable).andExpect(status().isOk());
+            inspect(client, usable).andExpect(status().isOk()).andExpect(jsonPath("$.email").value(email));
         }
-        accept(other, usable).andExpect(status().isNoContent());
+        accept(client, usable).andExpect(status().isNoContent());
+        // used now, so it is a wrong link again: still blocked
+        inspect(client, usable).andExpect(status().isTooManyRequests());
     }
 
     @Test
