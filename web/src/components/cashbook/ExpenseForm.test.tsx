@@ -110,6 +110,21 @@ describe('ExpenseForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('refuses the same file twice and accepts it again after removal', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    const input = screen.getByTestId('file-input');
+    await user.upload(input, new File(['p'], 'a.png', { type: 'image/png' }));
+    expect(await screen.findByText('a.png')).toBeInTheDocument();
+    await user.upload(input, new File(['p'], 'a.png', { type: 'image/png' }));
+    expect(await screen.findByText('Цей файл уже додано')).toBeInTheDocument();
+    expect(screen.getAllByText('a.png')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Прибрати: a.png' }));
+    await user.upload(input, new File(['p'], 'a.png', { type: 'image/png' }));
+    expect(await screen.findByText('a.png')).toBeInTheDocument();
+    expect(screen.queryByText('Цей файл уже додано')).not.toBeInTheDocument();
+  });
+
   it('refuses a file of a wrong type and has a camera input', async () => {
     const user = userEvent.setup({ applyAccept: false });
     renderForm();

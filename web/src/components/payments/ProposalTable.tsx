@@ -52,9 +52,9 @@ export function ProposalTable({
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[15px]">
+        <table className="block w-full border-collapse text-[15px] sm:table">
           <caption className="sr-only">{p.caption}</caption>
-          <thead>
+          <thead className="sr-only sm:not-sr-only sm:table-header-group">
             <tr className="border-b border-line text-sm font-semibold text-ink-muted">
               <th scope="col" className="px-3 py-2 text-left">
                 {p.charge}
@@ -70,10 +70,10 @@ export function ProposalTable({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block sm:table-row-group">
             {listed.length === 0 && automatic.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-center text-ink-muted">
+              <tr className="block sm:table-row">
+                <td colSpan={4} className="block px-3 py-4 text-center sm:table-cell text-ink-muted">
                   {p.empty}
                 </td>
               </tr>
@@ -82,19 +82,41 @@ export function ProposalTable({
                 const period = servicePeriodLabel(line.serviceFrom, line.serviceTo, t, locale);
                 const error = lineErrors[line.chargeId] ?? amountError[line.chargeId];
                 return (
-                  <tr key={line.chargeId} className="border-b border-line-subtle align-top last:border-b-0">
-                    <td className="px-3 py-2">
+                  <tr
+                    key={line.chargeId}
+                    className="block rounded-md border border-line-subtle p-3 mb-2 sm:mb-0 sm:table-row sm:rounded-none sm:border-0 sm:border-b sm:p-0 align-top sm:last:border-b-0"
+                  >
+                    <td
+                      data-label={p.charge}
+                      className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none"
+                    >
                       <ChargeTypeName type={line.chargeType} />
                     </td>
-                    <td className="px-3 py-2">{period}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td
+                      data-label={p.period}
+                      className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none"
+                    >
+                      {period}
+                    </td>
+                    <td
+                      data-label={p.open}
+                      className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none sm:text-right"
+                    >
                       <Money amount={line.open} />
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td
+                      data-label={p.allocate}
+                      className="flex flex-col gap-1 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:text-right sm:before:content-none"
+                    >
+                      {error && (
+                        <p role="alert" className="mb-1 text-sm text-danger">
+                          {error}
+                        </p>
+                      )}
                       <input
                         type="text"
                         inputMode="decimal"
-                        className={`${controlClass} w-32 text-right font-mono`}
+                        className={`${controlClass} w-full text-right font-mono sm:w-32`}
                         aria-label={format(p.allocateFor, {
                           charge: chargeTypeName(line.chargeType, t),
                           period,
@@ -103,11 +125,6 @@ export function ProposalTable({
                         value={values?.[line.chargeId] ?? line.proposed}
                         onChange={(e) => onEdit(line.chargeId, e.target.value)}
                       />
-                      {error && (
-                        <p role="alert" className="mt-1 text-sm text-danger">
-                          {error}
-                        </p>
-                      )}
                     </td>
                   </tr>
                 );
@@ -120,16 +137,30 @@ export function ProposalTable({
               return (
                 <tr
                   key={`auto-${placed.chargeId}`}
-                  className="border-b border-line-subtle align-top last:border-b-0"
+                  className="block rounded-md border border-line-subtle p-3 mb-2 sm:mb-0 sm:table-row sm:rounded-none sm:border-0 sm:border-b sm:p-0 align-top sm:last:border-b-0"
                 >
-                  <td className="px-3 py-2">
+                  <td
+                    data-label={p.charge}
+                    className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none"
+                  >
                     <ChargeTypeName type={line.chargeType} />
                   </td>
-                  <td className="px-3 py-2">{period}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td
+                    data-label={p.period}
+                    className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none"
+                  >
+                    {period}
+                  </td>
+                  <td
+                    data-label={p.open}
+                    className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none sm:text-right"
+                  >
                     <Money amount={line.open} />
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td
+                    data-label={p.allocate}
+                    className="flex items-baseline justify-between gap-3 py-1 before:text-sm before:font-semibold before:text-ink-muted before:content-[attr(data-label)] sm:table-cell sm:px-3 sm:py-2 sm:before:content-none sm:text-right"
+                  >
                     <Money amount={placed.amount} />
                     <span className="block text-sm text-ink-muted">{p.automatic}</span>
                   </td>
@@ -137,26 +168,28 @@ export function ProposalTable({
               );
             })}
           </tbody>
-          <tfoot>
-            <tr className="border-t border-line font-medium">
-              <th scope="row" colSpan={3} className="px-3 py-2 text-right">
-                {p.allocatedTotal}
+          <tfoot className="mt-2 block sm:table-footer-group">
+            <tr className="block border-t border-line font-medium sm:table-row">
+              <th
+                scope="row"
+                colSpan={4}
+                className="block px-3 py-2 text-right text-sm font-medium sm:table-cell sm:whitespace-nowrap sm:text-[15px]"
+              >
+                {p.allocatedTotal} <Money amount={part.allocatedTotal} /> {p.of}{' '}
+                <Money amount={part.amount} />
               </th>
-              <td className="whitespace-nowrap px-3 py-2 text-right">
-                <Money amount={part.allocatedTotal} /> {p.of} <Money amount={part.amount} />
-              </td>
             </tr>
             {totalError && (
-              <tr>
-                <td colSpan={4} className="px-3 pb-2 text-right">
+              <tr className="block sm:table-row">
+                <td colSpan={4} className="block px-3 pb-2 text-right sm:table-cell">
                   <p role="alert" className="text-sm text-danger">
                     {totalError}
                   </p>
                 </td>
               </tr>
             )}
-            <tr className="font-medium">
-              <th scope="row" colSpan={3} className="px-3 py-2 text-right">
+            <tr className="flex justify-between sm:table-row font-medium">
+              <th scope="row" colSpan={3} className="px-3 py-2 text-left sm:text-right">
                 {p.prepayment}
               </th>
               <td className="px-3 py-2 text-right">
@@ -164,8 +197,11 @@ export function ProposalTable({
               </td>
             </tr>
             {hasAutomatic && (
-              <tr>
-                <td colSpan={4} className="px-3 pb-2 text-right text-sm font-normal text-ink-muted">
+              <tr className="block sm:table-row">
+                <td
+                  colSpan={4}
+                  className="block px-3 pb-2 text-right sm:table-cell text-sm font-normal text-ink-muted"
+                >
                   {p.automaticNote}
                 </td>
               </tr>

@@ -20,6 +20,11 @@ shots:
     open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
     steps:
       - { click: Змінити ролі }
+  - name: member-card-access
+    user: chairman
+    path: /members
+    open: { css: 'main a[href^="/members/"]:not([href$="/new"])' }
+    element: { heading: Доступ до системи }
 ---
 
 ## Для чого цей екран
@@ -32,9 +37,10 @@ shots:
 
 - «{{ui:memberForm.edit}}» і «{{ui:memberForm.archive}}» або «{{ui:memberForm.restore}}»: «{{ui:permission.MEMBERS_EDIT.name}}»;
 - «{{ui:rolesPage.memberRoles}}»: «{{ui:permission.ROLES_MANAGE.name}}»;
-- «{{ui:members.history}}»: «{{ui:permission.AUDIT_VIEW.name}}».
+- «{{ui:members.history}}»: «{{ui:permission.AUDIT_VIEW.name}}»;
+- кнопки блоку «{{ui:memberAccess.title}}»: «{{ui:permission.MEMBERS_INVITE.name}}».
 
-Примітки бачать лише ті, хто має «{{ui:permission.MEMBERS_VIEW.name}}». Свої дані кожен член бачить у «{{ui:nav.account}}».
+Примітки бачать лише ті, хто має «{{ui:permission.MEMBERS_VIEW.name}}». Блок «{{ui:memberAccess.title}}» бачать ті, хто має «{{ui:permission.MEMBERS_VIEW.name}}»; сам член його на своїй картці не бачить. Свої дані кожен член бачить у «{{ui:nav.account}}».
 
 ## Елементи екрана
 
@@ -53,6 +59,34 @@ shots:
 ### Дані члена
 
 Таблиця показує: {{ui:member.fields.name}}, {{ui:member.fields.phones}}, {{ui:member.fields.email}}, {{ui:member.fields.postalAddress}}, {{ui:member.fields.deliveryChannel}}, нікнейм у Telegram і телефон у Viber (коли вони є), стан Telegram, {{ui:member.fields.notes}} і {{ui:member.fields.roles}}. Для Telegram картка показує лише «{{ui:telegramLink.memberLinked}}» або «{{ui:telegramLink.memberNotLinked}}», без даних облікового запису самого члена. Підключення й відключення потрапляють у журнал змін.
+
+### Блок «{{ui:memberAccess.title}}»
+
+Показує, чи може людина входити в систему. Є чотири стани:
+
+- «{{ui:memberAccess.status.NOT_INVITED}}»: запрошення ще не було;
+- «Запрошено <дата>, чекає на пароль»: лист надіслано, людина ще не задала пароль;
+- «Має доступ, останній вхід <дата>» або «Має доступ, ще не входив»: пароль задано;
+- «{{ui:memberAccess.status.DISABLED}}»: вхід вимкнено.
+
+Кнопки бачить той, хто має дозвіл «{{ui:permission.MEMBERS_INVITE.name}}»:
+
+- **{{ui:memberAccess.invite}}** надсилає лист «{{ui:setPassword.title}}» на e-mail з картки: у ньому посилання на [сторінку задання пароля](help:set-password). Лист іде з поштової скриньки кооперативу, посилання діє 72 години й спрацьовує один раз. Якщо член підключив Telegram, посилання приходить також від бота. Система пише: «{{ui:memberAccess.invited}}»
+- **{{ui:memberAccess.resend}}** надсилає нове посилання; попереднє перестає діяти. Система пише: «{{ui:memberAccess.resent}}»
+- **{{ui:memberAccess.disable}}** забирає вхід, але картка й дані лишаються. Система питає підтвердження: «{{ui:memberAccess.disableTitle}}». Потім людину можна запросити знову: нове запрошення видаляє старий пароль і завершує всі сеанси, тож людина ввійде лише після того, як задасть новий пароль за новим посиланням, — у той самий обліковий запис і з тією самою карткою.
+
+Якщо кнопка недоступна, поруч написано причину: «{{ui:memberAccess.blocked.EMAIL_MISSING}}» (e-mail є логіном) або «{{ui:memberAccess.blocked.MAILBOX_NOT_CONFIGURED}}» (див. [налаштування кооперативу](help:settings)). Коли лист не вдалося надіслати, система пише, що запрошення не надіслано, і пропонує спробувати ще раз.
+
+Інші правила:
+
+- e-mail, який уже використовує член іншого кооперативу, система відхиляє;
+- архівування члена вимикає його доступ, а відновлення доступ не вмикає: запросіть людину знову;
+- власний доступ вимкнути не можна: на своїй картці кнопки «{{ui:memberAccess.disable}}» немає;
+- доступ останнього голови, який має доступ, вимкнути не можна, і архівувати такого голову теж: система пише «{{ui:memberAccess.lastChairman}}»;
+- коли змінюють e-mail члена, який має доступ, старий пароль перестає діяти й усі сеанси завершуються; нове посилання надсилається на нову адресу, і член увійде знову лише після того, як задасть за ним новий пароль;
+- одному членові можна надіслати не більше 5 запрошень (перших і повторних разом) за 15 хвилин, а з одного комп’ютера — не більше 30; далі система пише «{{ui:problem.TOO_MANY_REQUESTS}}»
+
+Запрошення, повторне надсилання й вимкнення потрапляють у [журнал змін](help:audit).
 
 ### Панель «{{ui:ownership.plotsTitle}}»
 
@@ -74,6 +108,8 @@ shots:
 
 ![Вибір ролей на картці члена](shot:member-card-roles)
 
+![Блок доступу до системи на картці члена](shot:member-card-access)
+
 ## Пов’язані сторінки
 
 - [Члени кооперативу](help:members)
@@ -81,3 +117,4 @@ shots:
 - [Ролі](help:roles)
 - [Картка ділянки](help:plot-card)
 - [Журнал змін](help:audit)
+- [Задайте пароль](help:set-password)

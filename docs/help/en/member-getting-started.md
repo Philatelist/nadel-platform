@@ -15,7 +15,7 @@ This page is for a cooperative member, that is, a plot owner. It has everything 
 
 ## How to sign in
 
-Open the address of the system given by the board and press {{ui:auth.signIn}}. On the sign-in page enter your e-mail and password. The account used to sign in is created by the board; there is no self-registration. If signing in fails or the system does not find you among the members, contact the board: perhaps a different e-mail is in your member card.
+Open the address of the system given by the board and press {{ui:auth.signIn}}. On the sign-in page enter your e-mail and password. There is no self-registration: the board invites you, and a letter "{{ui:setPassword.title}}" with a link arrives at your e-mail. The link is valid for 72 hours and works once; you set the password on the [set-password page](help:set-password) and then sign in with your e-mail. If the link has expired, ask the board to send a new one. If signing in fails or the system does not find you among the members, contact the board: perhaps a different e-mail is in your member card.
 
 ## Your home page
 
@@ -40,3 +40,4 @@ The "?" button in the header opens the help for the screen you are on. It appear
 - [How to read my invoice](help:member-bill)
 - [Documents for a member](help:member-documents)
 - [How to connect Telegram](help:member-telegram)
+- [Set a password](help:set-password)

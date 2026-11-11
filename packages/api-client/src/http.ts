@@ -39,8 +39,11 @@ export function responseHeadersOf(blob: Blob): Headers | undefined {
   return blobHeaders.get(blob);
 }
 
+/** Public endpoints take no token: a stale or foreign bearer could make the server reject a valid public call. */
+const publicPathPrefix = '/api/v1/public/';
+
 export async function nadelFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = await tokenProvider();
+  const token = url.startsWith(publicPathPrefix) ? null : await tokenProvider();
   const headers = new Headers(init?.headers);
   // Never set Content-Type here: for FormData the browser adds multipart/form-data with the boundary.
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');

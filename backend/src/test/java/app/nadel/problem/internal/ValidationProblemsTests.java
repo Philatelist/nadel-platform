@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ValidationProblems;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.validation.FieldError;
@@ -30,6 +34,34 @@ class ValidationProblemsTests {
             assertThat(map("notes", constraint, "").code()).isEqualTo("REQUIRED");
             assertThat(map("notes", constraint, 7).code()).isEqualTo("TOO_LONG");
         }
+    }
+
+    /** A body with the password constraint of the contract's {@code InvitationAcceptInput}. */
+    record Secret(@Size(min = 8, max = 128) String password, @Size(min = 2) List<String> items) {
+    }
+
+    /** A field error as Spring builds it for a request body: wrapping the Bean Validation violation. */
+    private static FieldProblem mapViolation(Secret secret, String field) {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            ConstraintViolation<Secret> violation = factory.getValidator().validate(secret).stream()
+                    .filter(v -> v.getPropertyPath().toString().equals(field)).findFirst().orElseThrow();
+            FieldError error = new FieldError("input", field, violation.getInvalidValue(), false,
+                    new String[] {"Size"}, null, null);
+            error.wrap(violation);
+            return ValidationProblems.fieldProblem(error);
+        }
+    }
+
+    @Test
+    void aValueUnderTheMinimumIsTooShortAndOverTheMaximumTooLong() {
+        assertThat(mapViolation(new Secret("short", null), "password"))
+                .isEqualTo(new FieldProblem("password", "TOO_SHORT"));
+        assertThat(mapViolation(new Secret("x".repeat(129), null), "password"))
+                .isEqualTo(new FieldProblem("password", "TOO_LONG"));
+        assertThat(mapViolation(new Secret("", null), "password"))
+                .isEqualTo(new FieldProblem("password", "REQUIRED"));
+        assertThat(mapViolation(new Secret("long-enough", List.of("one")), "items"))
+                .isEqualTo(new FieldProblem("items", "TOO_SHORT"));
     }
 
     @Test

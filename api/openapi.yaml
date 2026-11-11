@@ -16,6 +16,14 @@ tags:
     description: Current user
   - name: members
     description: Cooperative members (people), their contacts and roles
+  - name: member-access
+    description: >-
+      A member's access to the system (feature 020): inviting them by e-mail, sending the invitation again and turning
+      access off
+  - name: public-invitations
+    description: >-
+      Public, without a token: the person who opened an invitation link sees the e-mail it was sent to and sets their
+      password
   - name: permissions
     description: The fixed list of permissions
   - name: roles
@@ -208,8 +216,8 @@ paths:
       description: |
         Returns one member of the current cooperative.
         A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
-        answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
-        caller has `MEMBERS_VIEW`.
+        answer is 404, exactly as for an id that does not exist. The `notes` and `access` fields are present only
+        when the caller has `MEMBERS_VIEW`, so a member never sees `access` on their own card.
       parameters:
         - name: id
           in: path
@@ -243,6 +251,14 @@ paths:
         Requires the `MEMBERS_EDIT` permission. A caller without `MEMBERS_VIEW` cannot change `notes`;
         the field is ignored and the stored value is kept.
         The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+
+        The email is the login of a member with access or an open invitation (feature 020). When it changes for such
+        a member, the new address is checked with the sign-in service first: a login of another cooperative is 409
+        `EMAIL_IN_OTHER_COOPERATIVE` (with `errors[{field: email}]`, never saying which), a sign-in account of this
+        cooperative linked to someone else is 409 `SIGN_IN_ACCOUNT_IN_USE`, and an unreachable sign-in service is 503
+        `SIGN_IN_SERVICE_UNAVAILABLE` (nothing changed). Then the access becomes `INVITED`, the old link stops working,
+        the sign-in login moves to the new address (not confirmed yet) and, when the cooperative's mailbox is set up, a
+        letter with a new link goes to the new address.
       parameters:
         - name: id
           in: path
@@ -273,6 +289,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
 
   /members/{id}/archive:
     post:
@@ -282,8 +300,11 @@ paths:
       description: |
         Moves the member to the archive; the member keeps their history but is hidden from the default list and
         can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
-        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), and neither can a member who currently
-        owns a plot (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+        The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), nor the last active chairman whose access
+        is on (`INVITED` or `ACTIVE`; also 409 `LAST_CHAIRMAN`), and neither can a member who currently owns a plot
+        (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+        Archiving turns off the member's access to the system (feature 020): a member with access or an open
+        invitation becomes `DISABLED`, the open link stops working and the sign-in account is turned off.
       parameters:
         - name: id
           in: path
@@ -315,7 +336,8 @@ paths:
       operationId: restoreMember
       summary: Restore a member from the archive
       description: |
-        Returns an archived member to the active list. Restoring an active member is a no-op.
+        Returns an archived member to the active list. Restoring an active member is a no-op. Access to the system
+        stays as it was (`DISABLED` after an archive); the board invites the member again.
         Requires `MEMBERS_EDIT`. The member's email must still be unique among members (409 `EMAIL_TAKEN`).
       parameters:
         - name: id
@@ -416,6 +438,213 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /members/{id}/invitation:
+    post:
+      tags: [member-access]
+      operationId: inviteMember
+      summary: Invite a member into the system
+      description: |
+        Invites the member: makes (or links) their sign-in account with the member's e-mail as the login and sends a
+        letter «Задайте пароль» with a one-time link from the cooperative's own mailbox (and, best effort, through the
+        cooperative's bot when the member has linked Telegram). The link works for 72 hours and only once. Allowed when
+        the access status is `NOT_INVITED` or `DISABLED`. Requires `MEMBERS_VIEW` and `MEMBERS_INVITE`. An unknown id
+        or a member of another cooperative is 404. Answers the member's new access (`INVITED`).
+
+        Refused with 409: the member is archived (`MEMBER_ARCHIVED`), has no e-mail (`MEMBER_EMAIL_MISSING`), the
+        cooperative has no mailbox (`DELIVERY_NOT_CONFIGURED`), the member is already invited (`INVITATION_PENDING`,
+        send it again with `resendMemberInvitation`) or already has access (`ACCESS_ALREADY_ACTIVE`), the e-mail is
+        already a login in another cooperative (`EMAIL_IN_OTHER_COOPERATIVE`, which one is never said), or the sign-in
+        account with the e-mail is already linked to another member of this cooperative (`SIGN_IN_ACCOUNT_IN_USE`).
+        Nothing is sent then.
+
+        502 `INVITATION_NOT_SENT` (with `failureCode`): the letter could not be sent; nothing changes, the access
+        status stays as it was and no audit entry is written. 503 `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service
+        could not be reached. A sent invitation is written to the audit log (`MEMBER_INVITED`, with the channels only:
+        never the link). 429 `TOO_MANY_REQUESTS` when the member, or the caller's address, has had too many sent
+        invitations within the window (see `InvitationRateLimited`); nothing is sent.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access after the invitation was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
+        '502':
+          $ref: '#/components/responses/InvitationNotSent'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
+
+  /members/{id}/invitation/resend:
+    post:
+      tags: [member-access]
+      operationId: resendMemberInvitation
+      summary: Send the invitation again with a new link
+      description: |
+        Sends the invited member a new letter with a new one-time link (72 hours, once); the previous link stops
+        working as soon as the new one is sent. Allowed only when the access status is `INVITED` (otherwise 409
+        `NOT_INVITED`). Requires `MEMBERS_VIEW` and `MEMBERS_INVITE`. An unknown id or a member of another cooperative
+        is 404. Answers the member's access (`INVITED`, with the new `invitedAt`).
+
+        Refused like `inviteMember`: 409 `MEMBER_ARCHIVED`, `MEMBER_EMAIL_MISSING`, `DELIVERY_NOT_CONFIGURED`,
+        `EMAIL_IN_OTHER_COOPERATIVE`, `SIGN_IN_ACCOUNT_IN_USE`; 502 `INVITATION_NOT_SENT` (with `failureCode`; the
+        previous link still works and no audit entry is written); 503 `SIGN_IN_SERVICE_UNAVAILABLE`. A sent invitation
+        is written to the audit log (`MEMBER_INVITE_RESENT`, with the channels only). 429 `TOO_MANY_REQUESTS` as in
+        `inviteMember`; nothing is sent.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access after the new invitation was sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
+        '502':
+          $ref: '#/components/responses/InvitationNotSent'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
+
+  /members/{id}/access/disable:
+    post:
+      tags: [member-access]
+      operationId: disableMemberAccess
+      summary: Turn a member's access off
+      description: |
+        Turns off the access of an invited member or a member with access: their open invitation link stops working
+        and they can no longer sign in. The member card and all the member's data stay. Requires `MEMBERS_VIEW` and
+        `MEMBERS_INVITE`. An unknown id or a member of another cooperative is 404. Access that is already `DISABLED`
+        is a no-op (200, no audit entry); a member who was never invited is 409 `ACCESS_NOT_GRANTED`. A member cannot
+        turn off their own access (409 `OWN_ACCESS`), and the access of the last active chairman whose access is on
+        (`INVITED` or `ACTIVE`) cannot be turned off (409 `LAST_CHAIRMAN`). Answers the member's access (`DISABLED`).
+        Written to the audit log (`MEMBER_ACCESS_DISABLED`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The member's access, now turned off
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberAccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/InvitationConflict'
+
+  /public/invitations/inspect:
+    post:
+      tags: [public-invitations]
+      operationId: inspectInvitation
+      summary: Check an invitation link
+      description: |
+        Public, without a token. The set-password page sends the token from the invitation link (in the body, never in
+        the URL) and gets the e-mail the invitation was sent to, which is the login. Nothing changes. 404
+        `INVITATION_INVALID` for every link that cannot be used (unknown, already used, replaced by a newer one,
+        expired, or of a member whose access was turned off or who was archived): the answer never says which.
+        429 `TOO_MANY_REQUESTS` instead of 404 when the caller's address has had too many links refused (see
+        `InvitationRateLimited`). A usable link is never counted and never refused, from any address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenInput'
+      responses:
+        '200':
+          description: The invitation can be used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/InvitationInvalid'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
+
+  /public/invitations/accept:
+    post:
+      tags: [public-invitations]
+      operationId: acceptInvitation
+      summary: Set the password with an invitation link
+      description: |
+        Public, without a token. Sets the member's sign-in password from the invitation link and gives them access
+        (`ACTIVE`); the link is used up. The member then signs in normally with their e-mail and this password.
+        The password is never logged or stored by the application.
+
+        400 `VALIDATION_FAILED` with `errors[{field: password}]`: `TOO_SHORT` under 8 characters, `TOO_LONG` over 128,
+        `PASSWORD_POLICY` the sign-in service refused it by its own rules. 404 `INVITATION_INVALID` as in
+        `inspectInvitation`. 429 `TOO_MANY_REQUESTS` as in `inspectInvitation` (only for a link that cannot be used);
+        nothing changed. 503
+        `SIGN_IN_SERVICE_UNAVAILABLE`: the sign-in service could not be reached; the link stays usable.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationAcceptInput'
+      responses:
+        '204':
+          description: The password is set; the member has access
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/InvitationInvalid'
+        '429':
+          $ref: '#/components/responses/InvitationRateLimited'
+        '503':
+          $ref: '#/components/responses/SignInServiceUnavailable'
 
   /permissions:
     get:
@@ -2274,12 +2503,31 @@ paths:
       summary: List the tariffs of the cooperative
       description: |
         Returns the tariffs of the non-archived charge types, ordered like the charge types (by position), then by name.
-        Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
+        `status` chooses the active tariffs (`ACTIVE`, the default) or the archived ones (`ARCHIVED`, those with
+        `archivedAt`; an archived tariff leaves the active list at once, even while its `validUntil` is still ahead);
+        `chargeTypeId` keeps only the tariffs of that charge type (an unknown id or one of another cooperative gives an
+        empty list).
+        Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one; for an
+        archived tariff whose last day has passed, its last version.
         `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
         common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
         common land. When the shown version is meter-based (`PER_KWH` electricity, `PER_M3` water) only the plots
         among those that have an active meter of that resource are counted: such a tariff applies to the plots with a
-        meter. Requires `TARIFFS_VIEW`.
+        meter. `plotNumbers` names the plots of the scope (see the schema). Requires `TARIFFS_VIEW`.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Active (default) or archived tariffs
+          schema:
+            $ref: '#/components/schemas/TariffListStatus'
+        - name: chargeTypeId
+          in: query
+          required: false
+          description: Only the tariffs of this charge type
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: OK
@@ -2335,7 +2583,8 @@ paths:
       summary: A tariff with its versions
       description: |
         Returns the tariff, its charge type (also an archived one) and every version, newest first. `validTo` of a
-        version is the day before the next version starts; the last version has none. `pastDated` marks a version
+        version is the day before the next version starts; the last version has none, unless the tariff is archived
+        (then it is the tariff's `validUntil`). `pastDated` marks a version
         whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
         `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
         order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
@@ -2362,6 +2611,84 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    delete:
+      tags: [tariffs]
+      operationId: deleteTariff
+      summary: Delete a tariff that was never charged
+      description: |
+        Deletes a tariff entered by mistake together with all its versions and its scope (selected and excluded plots).
+        Only a tariff from which no charge was ever made can be deleted (`deletable`): a charge or a charge part made
+        from any of its versions, a reversed one included, refuses it with 409 `TARIFF_IN_USE` (archive the tariff
+        instead). A tariff of another cooperative or an unknown id is 404. Requires `TARIFFS_VIEW` and
+        `TARIFFS_MANAGE`; the deletion is written to the audit log (`TARIFF_DELETED`, with the tariff's name).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tariffs/{id}/archive:
+    post:
+      tags: [tariffs]
+      operationId: archiveTariff
+      summary: Archive a tariff from an end date
+      description: |
+        Ends a tariff that was charged (one that was never charged is deleted instead): from `endsOn` on the tariff
+        applies no more. Its last version ends the day before (`validUntil` = `endsOn` − 1 on the tariff and `validTo`
+        of the last version), no charge is made from it for a later day (month run, meter readings, recalculation,
+        expected amounts), it leaves the list of active tariffs at once (`GET /tariffs?status=ARCHIVED` lists it, with
+        `archivedAt`) and its page stays readable with its history. An archived tariff gets no new version, no
+        version correction or deletion and no scope change (409 `TARIFF_ARCHIVED`); archiving cannot be undone.
+        `endsOn` must be after the start of the last version (400 `VALIDATION_FAILED`,
+        `errors[{field: endsOn, code: TARIFF_END_BEFORE_LAST_VERSION}]`). A charge that is not reversed must not be made
+        from the tariff for `endsOn` or a later day (409 `TARIFF_CHARGED_AFTER_END`: reverse it or choose a later
+        date). A tariff that is already archived is refused (409 `TARIFF_ARCHIVED`). A tariff of another cooperative
+        or an unknown id is 404. The answer is the archived tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the
+        archive is written to the audit log (`TARIFF_ARCHIVED`, with `endsOn`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TariffArchive'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tariff'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /tariffs/{id}/versions:
     post:
       tags: [tariffs]
@@ -2371,8 +2698,8 @@ paths:
         Adds a version that applies from `validFrom`. A change of rate is a new version; a mistake in a version can be
         corrected or the version deleted until a charge uses it (`PUT` and `DELETE` of
         `/tariffs/{id}/versions/{versionId}`). Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
-        `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
-        past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
+        `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the tariff
+        (409 `TARIFF_ARCHIVED`). A date in the past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
         `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
         `FIXED_ONE_TIME` only with `ONE_OFF`); `dueDate` `REQUIRED` (a one-time amount has a due date) or `INVALID`
         (a due date for a basis other than `FIXED_ONE_TIME`). The answer is the new version with `validTo` derived
@@ -2421,7 +2748,8 @@ paths:
         request that changes no term (only the note, or nothing), which changes no amount. The tariff and the version are 404 when unknown or of
         another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
         start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
-        not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create
+        not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the tariff (409 `TARIFF_ARCHIVED`: its versions are
+        frozen). Field codes of 400 `VALIDATION_FAILED` are those of the create
         operation (`rate` `RATE_INVALID`, `frequency` `FREQUENCY_BASIS_MISMATCH`, `dueDate` `REQUIRED` or `INVALID`).
         A date in the past is accepted (`pastDated: true` in the answer). The answer is the version with `validTo`
         derived from the versions that follow it; the end dates of the neighbours are derived on every read, so they
@@ -2474,9 +2802,9 @@ paths:
         cannot be deleted (409 `TARIFF_LAST_VERSION`): archive the charge type or keep the tariff instead. The end
         dates of the neighbours are derived on every read, so the version before the deleted one then lasts until the
         next one starts. The tariff and the version are 404 when unknown or of another cooperative, and also when the
-        version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). Requires
-        `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_DELETED`, the old
-        values).
+        version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the
+        tariff (409 `TARIFF_ARCHIVED`). Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit
+        log (`TARIFF_VERSION_DELETED`, the old values).
       parameters:
         - name: id
           in: path
@@ -2517,7 +2845,7 @@ paths:
         `PLOT_ARCHIVED` (an archived plot cannot be added; one already in the scope may stay), `UNKNOWN_PLOT` (no such
         plot in the cooperative) or `DUPLICATE` (the plot is listed twice); `exclusions[i].reason` `REQUIRED` (blank)
         or `TOO_LONG`. At most 5000 plots per list (`TOO_LONG`). The charge type must not be archived (409
-        `CHARGE_TYPE_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
+        `CHARGE_TYPE_ARCHIVED`), nor the tariff (409 `TARIFF_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
         change of kind or of the selected plots is written to the audit log as `TARIFF_SCOPE_CHANGED`, and each
         exclusion added or removed as `TARIFF_EXCLUSION_ADDED` or `TARIFF_EXCLUSION_REMOVED`.
       parameters:
@@ -7535,7 +7863,9 @@ components:
         `errors[{field: month}]` for a bank month that ends before it); the four figures of a bank statement do not
         agree (code `STATEMENT_INCONSISTENT`, with `errors[{field: closing}]`); more
         than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
-        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`)
+        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`); a tariff is archived
+        from a date that is not after the start of its last version (code `VALIDATION_FAILED`, with
+        `errors[{field: endsOn, code: TARIFF_END_BEFORE_LAST_VERSION}]`)
       content:
         application/problem+json:
           schema:
@@ -7614,8 +7944,12 @@ components:
         `CHARGE_TYPE_ORDER_STALE`), a tariff version with the same start date exists (code
         `TARIFF_VERSION_DATE_TAKEN`, with `errors[{field: validFrom}]`), a tariff version is corrected or deleted
         although a charge uses it (code `TARIFF_VERSION_IN_USE`), the only version of a tariff is deleted (code
-        `TARIFF_LAST_VERSION`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
-        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a plot that has a meter is
+        `TARIFF_LAST_VERSION`), or a tariff from which a charge was made (a reversed one included) is deleted (code
+        `TARIFF_IN_USE`), or a tariff is added to, a version is added to, corrected or deleted, or the scope is
+        changed of a tariff under an archived charge type (code `CHARGE_TYPE_ARCHIVED`), or a version is added to,
+        corrected or deleted, the scope is changed of, or an archive is asked for an archived tariff (code
+        `TARIFF_ARCHIVED`), or a tariff is archived from a date for which (or after which) a charge that is not
+        reversed was made from it (code `TARIFF_CHARGED_AFTER_END`), or a plot that has a meter is
         deleted or turned into common land, or a plot with an active meter is archived (code `PLOT_HAS_METER`, with
         `errors[{field: kind}]` for the update), or a plot with a lasting water connection is archived or turned into
         common land (code `PLOT_HAS_WATER_CONNECTION`, with `errors[{field: kind}]` for the update), or a meter is
@@ -7679,6 +8013,73 @@ components:
         statement of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a
         bank difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
         entered (code `BANK_STATEMENT_MISSING`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationConflict:
+      description: >-
+        The member's access cannot change this way (feature 020): the member is archived (code `MEMBER_ARCHIVED`), has
+        no e-mail, which is the login (code `MEMBER_EMAIL_MISSING`), the cooperative has no mailbox to send the letter
+        from (code `DELIVERY_NOT_CONFIGURED`), the member is already invited (code `INVITATION_PENDING`) or already has
+        access (code `ACCESS_ALREADY_ACTIVE`), the e-mail is already a login in another cooperative (code
+        `EMAIL_IN_OTHER_COOPERATIVE`, never saying which), the sign-in account with the e-mail is linked to another
+        member of this cooperative (code `SIGN_IN_ACCOUNT_IN_USE`), the invitation is sent again for a member who is
+        not invited (code `NOT_INVITED`), access is turned off for a member who was never invited (code
+        `ACCESS_NOT_GRANTED`), a member turns off their own access (code `OWN_ACCESS`), or the access of the last active
+        chairman whose access is on is turned off (code `LAST_CHAIRMAN`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationNotSent:
+      description: >-
+        The invitation letter could not be sent (code `INVITATION_NOT_SENT`, with `failureCode`: `SMTP_AUTH_FAILED`
+        the mail server refused the mailbox's user name or password, `SMTP_REJECTED` it refused the letter,
+        `CONNECTION_FAILED` it could not be reached or did not answer in time, `SMTP_HOST_NOT_ALLOWED` it is not a
+        server the application may connect to); the access status is unchanged and an earlier link still works
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    SignInServiceUnavailable:
+      description: >-
+        The sign-in service (Keycloak) could not be reached or did not answer in time (code
+        `SIGN_IN_SERVICE_UNAVAILABLE`); nothing changed and the request can be tried again later
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationInvalid:
+      description: >-
+        The invitation link cannot be used (code `INVITATION_INVALID`): it is unknown, already used, replaced by a newer
+        one, expired, or the member's access was turned off or the member was archived. The answer never says which
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvitationRateLimited:
+      description: >-
+        Too many invitations or failed links (code `TOO_MANY_REQUESTS`), by default within 15 minutes: more than 5 sent
+        invitations (invite and resend together) for one member or more than 30 from one client address; or, on the
+        public invitation endpoints, more than 5 links refused as `INVITATION_INVALID` from one client address, after
+        which a further unusable link from it is 429 instead of 404. A usable link is never counted and never refused,
+        from any address. Nothing was sent or changed; the request can be tried again after the window
       content:
         application/problem+json:
           schema:
@@ -7960,6 +8361,7 @@ components:
       enum:
         - MEMBERS_VIEW
         - MEMBERS_EDIT
+        - MEMBERS_INVITE
         - ROLES_MANAGE
         - AUDIT_VIEW
         - PLOTS_VIEW
@@ -8259,7 +8661,8 @@ components:
     Member:
       type: object
       description: |
-        A person of the cooperative. `notes` is present only when the caller has the `MEMBERS_VIEW` permission.
+        A person of the cooperative. `notes` and `access` are present only when the caller has the `MEMBERS_VIEW`
+        permission.
       required: [id, lastName, firstName, phones, deliveryChannel, roles, archived]
       properties:
         id:
@@ -8304,6 +8707,98 @@ components:
           description: >-
             Whether the member has linked Telegram through the cooperative's bot (feature 017 §2.2). Always present in
             responses; read-only. Only this flag is shown: never the member's Telegram account details
+        access:
+          allOf:
+            - $ref: '#/components/schemas/MemberAccess'
+          readOnly: true
+          description: >-
+            The member's access to the system (feature 020). Present only when the caller has `MEMBERS_VIEW`; the key
+            is absent otherwise, so a member never sees it on their own card. Read-only: it changes only through the
+            invitation endpoints (`inviteMember`, `resendMemberInvitation`, `disableMemberAccess`)
+
+    MemberAccessStatus:
+      type: string
+      description: >-
+        A member's access to the system: `NOT_INVITED` never invited, `INVITED` the invitation was sent and the member
+        has not set a password yet, `ACTIVE` the member set a password and may sign in, `DISABLED` the board turned
+        access off or the member was archived (the board invites again to give it back)
+      enum: [NOT_INVITED, INVITED, ACTIVE, DISABLED]
+
+    InviteBlockedReason:
+      type: string
+      description: >-
+        Why the member cannot be invited now: `EMAIL_MISSING` the member has no e-mail, which is the login;
+        `MAILBOX_NOT_CONFIGURED` the cooperative's mailbox is not set up
+      enum: [EMAIL_MISSING, MAILBOX_NOT_CONFIGURED]
+
+    MemberAccess:
+      type: object
+      description: >-
+        A member's access to the system (feature 020), on the member card for callers with `MEMBERS_VIEW` and as the
+        answer of the invitation endpoints
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/MemberAccessStatus'
+        invitedAt:
+          type: string
+          format: date-time
+          description: When the latest invitation was sent; present for `INVITED` (and kept afterwards)
+        lastSignInAt:
+          type: string
+          format: date-time
+          description: >-
+            The member's latest sign-in, recorded at most once an hour; absent before the first sign-in
+        disabledAt:
+          type: string
+          format: date-time
+          description: When access was turned off; present for `DISABLED`
+        inviteBlockedBy:
+          allOf:
+            - $ref: '#/components/schemas/InviteBlockedReason'
+          description: >-
+            Present when an invitation (or a new one) could not be sent now, so the client disables the action and
+            shows the reason; absent when nothing blocks it
+
+    InvitationTokenInput:
+      type: object
+      description: The token from an invitation link (`inspectInvitation`)
+      required: [token]
+      properties:
+        token:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+          description: The one-time token from the link. A secret like a password, never logged
+
+    InvitationInfo:
+      type: object
+      description: What a usable invitation link shows on the set-password page (`inspectInvitation`)
+      required: [email]
+      properties:
+        email:
+          type: string
+          description: The e-mail the invitation was sent to; it is the member's login
+
+    InvitationAcceptInput:
+      type: object
+      description: >-
+        The token from an invitation link and the new password (`acceptInvitation`). The password is never logged or
+        stored by the application
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+          description: The one-time token from the link. A secret like a password, never logged
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
 
     MemberInput:
       type: object
@@ -8420,6 +8915,9 @@ components:
         - MEMBER_ARCHIVED
         - MEMBER_RESTORED
         - MEMBER_ROLES_CHANGED
+        - MEMBER_INVITED
+        - MEMBER_INVITE_RESENT
+        - MEMBER_ACCESS_DISABLED
         - ROLE_CREATED
         - ROLE_UPDATED
         - ROLE_DELETED
@@ -8443,6 +8941,8 @@ components:
         - TARIFF_SCOPE_CHANGED
         - TARIFF_EXCLUSION_ADDED
         - TARIFF_EXCLUSION_REMOVED
+        - TARIFF_DELETED
+        - TARIFF_ARCHIVED
         - METER_REGISTERED
         - METER_UPDATED
         - METER_REMOVED
@@ -8547,7 +9047,10 @@ components:
         about the member whose Telegram was linked or unlinked (label "Last First"), never with Telegram account
         details: `TELEGRAM_LINKED` has no fields, `TELEGRAM_UNLINKED` has `endReason` (new value only: `UNLINKED` the
         member unlinked it in the bot or the account, `BLOCKED` the member blocked the bot, `MOVED` the chat was
-        linked to another member). `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
+        linked to another member). `MEMBER_INVITED`, `MEMBER_INVITE_RESENT` and `MEMBER_ACCESS_DISABLED` (feature
+        020) are `MEMBER` entries about the member whose access changed (label "Last First"): the invitation entries
+        have `channels` (new value only: the channels the link went through, codes `EMAIL` and `TELEGRAM` joined by
+        ", "), `MEMBER_ACCESS_DISABLED` has no fields; never the link, a token or a password. `INVOICES_SENT` (feature 017, a send of a month's invoices or of one invoice) is a
         `BILLING_MONTH` entry with the entity id of `INVOICES_ISSUED`; its fields (new values only) are `month`
         (`YYYY-MM`), `telegram`, `email` and `paper` (the deliveries created per channel) and, for one invoice,
         `number`. An `ANNOUNCEMENT` entry (`ANNOUNCEMENT_SENT`, feature 017) is about an announcement of the board:
@@ -9388,6 +9891,12 @@ components:
           description: >-
             For `CASH_INSUFFICIENT`: the earliest day that lowest cash balance is reached; absent on every other
             problem
+        failureCode:
+          allOf:
+            - $ref: '#/components/schemas/DeliveryFailureCode'
+          description: >-
+            For `INVITATION_NOT_SENT`: why the letter was not sent (`SMTP_AUTH_FAILED`, `SMTP_REJECTED`,
+            `CONNECTION_FAILED` or `SMTP_HOST_NOT_ALLOWED`, as for a delivery); absent on every other problem
 
     InvoiceBuildRequest:
       type: object
@@ -9806,6 +10315,8 @@ components:
           type: string
           description: >-
             Field error code: `REQUIRED` (missing or blank), `TOO_LONG` (over the maximum length or item count),
+            `TOO_SHORT` (under the minimum length, for example a password under 8 characters), `PASSWORD_POLICY` (the
+            sign-in service refused the password by its own rules),
             `INVALID` (wrong format, for example an email), `PHONE_INVALID` (not a valid phone number),
             `CHANNEL_CONTACT_MISSING` (the chosen delivery channel has no contact to deliver to),
             `CADASTRAL_INVALID` (not of the form `NNNNNNNNNN:NN:NNN:NNNN`), `AREA_INVALID` (more than two decimal
@@ -10035,7 +10546,9 @@ components:
         validTo:
           type: string
           format: date
-          description: The day before the next version starts; absent for the last version
+          description: >-
+            The day before the next version starts; for the last version absent, or the tariff's `validUntil` when it
+            is archived
         basis:
           $ref: '#/components/schemas/Basis'
         frequency:
@@ -10107,7 +10620,7 @@ components:
     TariffSummary:
       type: object
       description: A tariff in the list, with the version that is shown
-      required: [id, name, chargeTypeId, scopeKind, version, conflicts]
+      required: [id, name, chargeTypeId, scopeKind, version, conflicts, deletable, plotNumbers]
       properties:
         id:
           type: string
@@ -10134,11 +10647,35 @@ components:
             empty when there is no conflict or the charge type is inactive
           items:
             $ref: '#/components/schemas/TariffConflict'
+        deletable:
+          type: boolean
+          description: >-
+            True when no charge was ever made from any version of the tariff (a reversed one counts as made), so it
+            may be deleted (`DELETE /tariffs/{id}`); otherwise it is archived instead
+        validUntil:
+          type: string
+          format: date
+          description: >-
+            The last day the tariff applies (inclusive), the day before the `endsOn` of its archive; absent for a
+            tariff that was not archived
+        archivedAt:
+          type: string
+          format: date-time
+          description: When the tariff was archived; absent for an active tariff
+        plotNumbers:
+          type: array
+          description: >-
+            The numbers of the active plots in the scope of the tariff (for `ALL_PLOTS` every active plot minus the
+            excluded ones, for `SELECTED_PLOTS` the selected active ones; common land never; not narrowed to the plots
+            with a meter), in the natural order of the number. These are the plots on which another tariff of the same
+            charge type would conflict; the new tariff form shows them. User content
+          items:
+            type: string
 
     Tariff:
       type: object
       description: A tariff with its charge type, all versions and its scope
-      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts]
+      required: [id, name, chargeType, scopeKind, versions, selectedPlots, exclusions, conflicts, deletable]
       properties:
         id:
           type: string
@@ -10176,6 +10713,36 @@ components:
           description: As in the list
           items:
             $ref: '#/components/schemas/TariffConflict'
+        deletable:
+          type: boolean
+          description: As in the list
+        validUntil:
+          type: string
+          format: date
+          description: As in the list; also `validTo` of the last version of an archived tariff
+        archivedAt:
+          type: string
+          format: date-time
+          description: As in the list
+
+    TariffArchive:
+      type: object
+      description: The archive of a tariff
+      required: [endsOn]
+      properties:
+        endsOn:
+          type: string
+          format: date
+          description: >-
+            The first day the tariff no longer applies; after the start of its last version. The tariff's last day
+            (`validUntil`) is the day before
+
+    TariffListStatus:
+      type: string
+      description: >-
+        Which tariffs the list shows: `ACTIVE` the tariffs that are not archived, `ARCHIVED` the archived ones
+      enum: [ACTIVE, ARCHIVED]
+      default: ACTIVE
 
     ExpectedChargeStatus:
       type: string

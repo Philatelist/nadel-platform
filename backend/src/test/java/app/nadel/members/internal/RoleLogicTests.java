@@ -24,7 +24,8 @@ class RoleLogicTests {
             assertThat(p.getDescription()).isNotBlank();
         });
         assertThat(all.get(0).getName()).isEqualTo("View members");
-        assertThat(all.get(2).getName()).isEqualTo("Manage roles");
+        assertThat(all.get(2).getName()).isEqualTo("Invite to the system");
+        assertThat(all.get(3).getName()).isEqualTo("Manage roles");
     }
 
     @Test

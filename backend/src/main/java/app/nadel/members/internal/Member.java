@@ -60,7 +60,7 @@ class Member {
     @Column(name = "email_bidx")
     private byte[] emailBidx;
 
-    /** Keycloak user id, set on the first sign-in. */
+    /** Keycloak user id, set by the invitation (feature 020) or on the first sign-in of an account made by hand. */
     @Column(name = "keycloak_subject")
     private String keycloakSubject;
 
@@ -140,6 +140,14 @@ class Member {
 
     void setEmailBidx(byte[] emailBidx) {
         this.emailBidx = emailBidx;
+    }
+
+    /**
+     * Links the member to a Keycloak user (feature 020: the invitation links the account it made or found). Not
+     * audited by itself: the invitation is.
+     */
+    void linkTo(String subject) {
+        keycloakSubject = subject;
     }
 
     void touch(Instant now) {

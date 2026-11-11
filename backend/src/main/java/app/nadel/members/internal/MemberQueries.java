@@ -25,21 +25,19 @@ class MemberQueries {
     private final MemberRepository members;
     private final RoleGrantReader grants;
     private final MemberCrypto crypto;
-    private final TelegramLinkFlags telegram;
+    private final MemberCards cards;
 
-    MemberQueries(MemberRepository members, RoleGrantReader grants, MemberCrypto crypto, TelegramLinkFlags telegram) {
+    MemberQueries(MemberRepository members, RoleGrantReader grants, MemberCrypto crypto, MemberCards cards) {
         this.members = members;
         this.grants = grants;
         this.crypto = crypto;
-        this.telegram = telegram;
+        this.cards = cards;
     }
 
     /** The card of a member of the current cooperative (RLS hides other cooperatives), shaped for the viewer. */
     @Transactional(readOnly = true)
     Optional<nadel.contract.model.Member> card(UUID id, AccessProfile viewer) {
-        return members.findById(id)
-                .map(member -> MemberDtoMapper.toDto(member, crypto.open(member), grants.read(member), viewer,
-                        telegram.linked(member.getId())));
+        return members.findById(id).map(member -> cards.card(member, crypto.open(member), viewer));
     }
 
     /**

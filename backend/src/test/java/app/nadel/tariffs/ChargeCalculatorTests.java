@@ -428,6 +428,59 @@ class ChargeCalculatorTests {
         }
     }
 
+    // ---- the end of an archived tariff (feature 020): the last version carries validTo
+
+    @Test
+    void anEndInsideTheMonthCountsTheDaysUpToItAsAVersionChangeDoes() {
+        // 50 per sotka yearly on 600 m2 until 15.11: 25.00 x 15 / 30
+        VersionTerms ending = recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000")
+                .endingOn(LocalDate.parse("2026-11-15"));
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(ending), "600.00", NOV_2026, DaySet.ALL);
+
+        assertThat(result.amount().toString()).isEqualTo("12.50");
+        assertThat(result.parts()).singleElement().satisfies(part -> {
+            assertThat(part.days()).isEqualTo(15);
+            assertThat(part.from()).isEqualTo(LocalDate.parse("2026-11-01"));
+            assertThat(part.to()).isEqualTo(LocalDate.parse("2026-11-15"));
+        });
+        assertThat(amount(List.of(ending), "600.00", NOV_2026)).isEqualTo("12.50");
+        assertThat(amount(List.of(ending), "600.00", OCT_2026)).isEqualTo("25.00");
+    }
+
+    @Test
+    void nothingIsChargedForAMonthAfterTheEnd() {
+        VersionTerms ending = recurring("2026-01-01", Basis.PER_PLOT, Frequency.MONTHLY, "100.0000")
+                .endingOn(LocalDate.parse("2026-10-31"));
+
+        assertThat(amount(List.of(ending), "600.00", OCT_2026)).isEqualTo("100.00");
+        assertThat(ChargeCalculator.calculate(List.of(ending), area("600.00"), NOV_2026)).isEmpty();
+        assertThat(ChargeCalculator.breakdown(List.of(ending), area("600.00"), NOV_2026, DaySet.ALL)).isEmpty();
+        assertThat(ChargeCalculator.shownVersion(List.of(ending), NOV_2026)).isEmpty();
+    }
+
+    @Test
+    void theEndOfTheLastVersionFollowsAVersionChangeInTheSameMonth() {
+        // 50 until 15.11, 60 from 16.11 to 25.11: (50 x 6 x 15 + 60 x 6 x 10) / (30 x 12) = 22.50
+        VersionTerms first = recurring("2026-01-01", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "50.0000");
+        VersionTerms last = recurring("2026-11-16", Basis.PER_AREA_SOTKA, Frequency.YEARLY, "60.0000")
+                .endingOn(LocalDate.parse("2026-11-25"));
+
+        ChargeCalculator.Breakdown result = breakdown(List.of(last, first), "600.00", NOV_2026, DaySet.ALL);
+
+        assertThat(result.amount().toString()).isEqualTo("22.50");
+        assertThat(result.parts()).extracting(ChargeCalculator.Part::days).containsExactly(15L, 10L);
+        assertThat(result.parts().get(1).to()).isEqualTo(LocalDate.parse("2026-11-25"));
+    }
+
+    @Test
+    void aOneTimeFeeDueAfterTheEndIsNotCharged() {
+        VersionTerms fee = fixed("2026-01-01", "1200.0000", "2026-11-20").endingOn(LocalDate.parse("2026-11-15"));
+
+        assertThat(amount(List.of(fee), "600.00", NOV_2026)).isEqualTo("0.00");
+        assertThat(breakdown(List.of(fee), "600.00", NOV_2026, DaySet.ALL).parts()).isEmpty();
+    }
+
     @Test
     void theAreaInSotkasIsSquareMetresOverOneHundredExactly() {
         assertThat(ChargeCalculator.sotkas(area("600.00"))).isEqualTo(new BigDecimal("6.0000"));

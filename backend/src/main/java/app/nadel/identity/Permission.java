@@ -7,6 +7,7 @@ package app.nadel.identity;
 public enum Permission {
     MEMBERS_VIEW,
     MEMBERS_EDIT,
+    MEMBERS_INVITE,
     ROLES_MANAGE,
     AUDIT_VIEW,
     PLOTS_VIEW,

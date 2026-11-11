@@ -6,12 +6,16 @@
 // their own roles back in `finally`.
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
-import { api, expectCreated } from './support/api';
+import {
+  ELECTRICIAN_MEMBER_ID,
+  ELECTRICIAN_ROLE_ID,
+  api,
+  expectCreated,
+  restoreElectrician,
+} from './support/api';
 import { loginAs } from './support/login';
 
 const t = messages('en');
-const ELECTRICIAN_MEMBER_ID = 'aaaaaaaa-0000-0000-0000-000000000004';
-const ELECTRICIAN_ROLE_ID = 'cccccccc-0000-0000-0000-000000000001';
 
 interface RoleEntry {
   id: string;
@@ -65,9 +69,7 @@ test.describe('Reports access', () => {
         await electrician.context().close();
       }
     } finally {
-      await api(chairman, 'PUT', `/members/${ELECTRICIAN_MEMBER_ID}/roles`, {
-        roleIds: [memberRoleId, ELECTRICIAN_ROLE_ID].filter((id) => id !== undefined),
-      }).catch(() => undefined);
+      await restoreElectrician(chairman);
       if (roleId !== undefined) await api(chairman, 'DELETE', `/roles/${roleId}`).catch(() => undefined);
       await chairman.context().close();
     }

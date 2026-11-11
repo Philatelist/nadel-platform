@@ -79,6 +79,156 @@ e-mail index at the final flush, is 409 `IMPORT_STALE` (the import then asks for
 `ApiProblemException` to refuse. `plots` implements it (`OwnershipArchiveGuard`, 409 `MEMBER_OWNS_PLOT` while the member
 has a current ownership). A guard must only read and must take no lock that is ordered before a member lock.
 
+`InvitationDelivery` (feature 020) is an SPI implemented by `notifications`: `emailReady(tenantId)` (the cooperative's
+mailbox is set up) and `deliver(tenantId, memberId, email, link, expiresAt)`, which sends the invitation letter with the
+one-time link synchronously and answers `InvitationDeliveryResult` (the channels, or a `Failure`: `NOT_CONFIGURED` or
+a delivery code `SMTP_REJECTED`, `SMTP_AUTH_FAILED`, `CONNECTION_FAILED`, `SMTP_HOST_NOT_ALLOWED`). `InvitationDeliveries`
+reads it through an `ObjectProvider` (no implementation: no cooperative can invite). Synchronous on purpose: the link
+never enters the outbox.
+
+## Access to the system (feature 020)
+
+Tables `member_access` (one row per member: `state` `NONE` | `INVITED` | `ACTIVE` | `DISABLED` with `invited_at`,
+`activated_at`, `disabled_at`, `last_sign_in_at`; no row = never invited) and `member_invitation` (the links: only the
+SHA-256 of the token, the member's e-mail blind index at the time, `expires_at`, `sent_at`, `used_at`, `revoked_at`;
+the application may set only those three times and deletes nothing; one open sent link per member,
+`member_invitation_open_uq`), both under RLS (V36). `members_invitation_tenant(hash)` is the cross-tenant
+`SECURITY DEFINER` function that answers only the cooperative of a token hash (ADR 0020).
+
+- **Status** (`MemberAccessState`): `NONE` or no row is `NOT_INVITED`, except a member without a row who is linked to a
+  Keycloak subject (an account made by hand before feature 020, linked by the legacy sign-in): that member is `ACTIVE`.
+  V36 wrote `ACTIVE` for the members linked then; an invitation writes a row (`NONE`) before it links a subject.
+- **Card** (`MemberCards`, the only place that builds `Member` for output): `access` only for a viewer with
+  `MEMBERS_VIEW` (a member never sees it on their own card): `status`, `invitedAt`, `lastSignInAt`, `disabledAt` (only
+  for `DISABLED`) and `inviteBlockedBy` while the status allows an invitation (not `ACTIVE`): `EMAIL_MISSING` without an
+  e-mail, else `MAILBOX_NOT_CONFIGURED` when `InvitationDelivery.emailReady` is false.
+- **Invite** (`POST /members/{id}/invitation`, `InvitationController`, `MEMBERS_VIEW` and `MEMBERS_INVITE`;
+  `MemberInvitations.invite`), two-phase so a failed letter costs nothing: (1) a read checks 404, 409
+  `MEMBER_ARCHIVED`, `INVITATION_PENDING` (`INVITED`), `ACCESS_ALREADY_ACTIVE` (`ACTIVE`), `MEMBER_EMAIL_MISSING`,
+  `DELIVERY_NOT_CONFIGURED`; (2) outside any transaction `ensureAccount` with `identity.SignInAccounts`: an account of
+  the e-mail in another cooperative (or in none) is 409 `EMAIL_IN_OTHER_COOPERATIVE`; an account of this cooperative is
+  linked (never turned on here), unless another member of the cooperative holds it or this member is linked to another
+  account that still exists (409 `SIGN_IN_ACCOUNT_IN_USE`); otherwise a new account (no password, e-mail not verified,
+  `tenant_id`); (3) a transaction locks the member `FOR UPDATE`, checks again, sets `keycloak_subject` (the unique index
+  `member_tenant_subject_uq` maps to `SIGN_IN_ACCOUNT_IN_USE`) and inserts the link unsent; (3a) when the account
+  existed before step 2 (access turned off, or an account made before), outside any transaction `lockOut` turns it off,
+  removes every credential and ends every session, so a password from before signs in nowhere and only the new link
+  lets the member in (a failure revokes the unsent link: 503, nothing sent); (4) outside any transaction
+  `InvitationDelivery.deliver` with `{nadel.web.url}/set-password?token=…`, valid `nadel.invitations.ttl` (72 h);
+  (5) a transaction revokes the member's older open links, marks the new one sent, sets `INVITED` + `invited_at` and
+  publishes the audit event `MEMBER_INVITED` (entity `MEMBER`, field `channels` only: `EMAIL` or `EMAIL, TELEGRAM`).
+  A letter that is not sent revokes the unsent link in a compensating transaction and answers 502
+  `INVITATION_NOT_SENT` with `failureCode` (`NOT_CONFIGURED` is 409 `DELIVERY_NOT_CONFIGURED`): the state stays, nothing
+  is audited, an earlier link still works. Keycloak failures are 503 `SIGN_IN_SERVICE_UNAVAILABLE`.
+- **Resend** (`POST /members/{id}/invitation/resend`, same permissions; `MemberInvitations.resend`): the same five steps
+  for a member who is `INVITED` (otherwise 409 `NOT_INVITED`; archived 409 `MEMBER_ARCHIVED`) with a new token; only a
+  sent letter revokes the older links, so a 502 `INVITATION_NOT_SENT` leaves the previous link working. Audited as
+  `MEMBER_INVITE_RESENT` (field `channels`).
+- **Disable** (`POST /members/{id}/access/disable`, same permissions; `MemberInvitations.disable`): under the member's
+  lock, `INVITED` or `ACTIVE` (a legacy link without a row included: a `DISABLED` row is written) becomes `DISABLED` +
+  `disabled_at`, every unused link is revoked (`MemberInvitationRows.revokeUnused`) and `MemberAccessRevoked(tenantId,
+  memberId)` is published (`MemberAccessRevocation`); audited as `MEMBER_ACCESS_DISABLED` (no fields). Already
+  `DISABLED` is 200 without an audit entry; never invited is 409 `ACCESS_NOT_GRANTED`. The answer is the `MemberAccess`.
+  The actor's own access is 409 `OWN_ACCESS` (checked first, nothing read), and the access of the last active chairman
+  whose access is on is 409 `LAST_CHAIRMAN` (`LastChairmanGuard.ensureNotLastWithAccess`, chairman lock before the
+  member row, as the archive does), so a cooperative never locks its board out. The web card hides the button on the
+  member's own card.
+- **Archive and restore**: archiving a member with access or an open invitation does the same as disable (in the
+  archive transaction, audited as `MEMBER_ARCHIVED` only); a member never invited gets no row. Because the archive
+  turns access off, it also refuses the last active chairman whose access is on (409 `LAST_CHAIRMAN`). Restore leaves access as
+  it is: `DISABLED` stays, the board invites again.
+- **E-mail change** (`PUT /members/{id}`, `MemberCommands.update`): for a member with access or an open invitation
+  (`INVITED`, `ACTIVE`, legacy included) whose e-mail changes to another address, `MemberLoginGuard` first asks Keycloak
+  outside any transaction (`findByLogin`): a login of another cooperative is 409 `EMAIL_IN_OTHER_COOPERATIVE` on the
+  field `email`, an account of this cooperative that is not the member's is 409 `SIGN_IN_ACCOUNT_IN_USE`, Keycloak down
+  is 503 (nothing changed). Members without access, archived members and unchanged e-mails never ask Keycloak. Then
+  the update transaction (member locked `FOR UPDATE`) stores `INVITED`, revokes the unused links and publishes
+  `MemberLoginChanged(tenantId, memberId)`. Removing the e-mail of such a member does the same (the card then shows
+  `inviteBlockedBy: EMAIL_MISSING`). The Excel import never changes a login, so it needs none of this: a row with an
+  e-mail matches only the member who has that e-mail (case ignored; `MemberData` stores e-mails in lower case, so a
+  case-only difference is `UNCHANGED`), a blank e-mail keeps the stored one, and a row with a new e-mail and the name
+  and first phone of an existing member is a new member. The `email_bidx` of a matched member therefore never changes
+  through `MemberImport.apply`, no Keycloak call is needed, and the access and an open link stay as they were
+  (`ImportMemberLoginTests`). A change to the matching that let a row change an e-mail must route it through
+  `MemberLoginGuard` and `MemberLoginChanged` as `MemberCommands.update` does.
+- **`MemberAccessListener`** (ADR 0007: `@Async @TransactionalEventListener`, `TenantContext.runAs`, a read-only
+  `TransactionTemplate` that re-reads the member, Keycloak calls outside any transaction). The events are internal to
+  the module and carry ids only (never the e-mail or a link). `MemberAccessRevoked`: only while the access is still
+  `DISABLED`, the account is turned off (`enabled: false`) and logged out; a missing account needs nothing.
+  `MemberLoginChanged`: only while still `INVITED`, the account's user name and e-mail become the current e-mail with
+  `emailVerified: false` and `enabled: false`, its credentials are removed and its sessions end (a password of the old
+  login never signs in under the new one; only the new link turns the account on); then, when the mailbox is set up and no open link exists for that e-mail
+  yet, `MemberInvitations.sendForNewLogin` issues and sends a new link through the resend steps (no actor, no audit
+  entry of its own: the change is `MEMBER_UPDATED`). Without a mailbox the member stays `INVITED` without a link until
+  the board resends. Failures that may pass (503, 502) are thrown so the outbox resubmits the publication (each retry a
+  new token); refusals that will not pass (409: the account belongs to another cooperative or the login is taken) are
+  logged and the publication completes.
+- **Tokens** (`InvitationTokens`): 32 bytes of `SecureRandom`, base64url without padding; stored as SHA-256 of the
+  text. The token, the link and the password never reach the audit log, the outbox, a log line or an exception.
+- **Public endpoints** (`PublicInvitationController`, `/api/v1/public/**` open in `identity`'s `SecurityConfiguration`,
+  token in the body): `POST /public/invitations/inspect` answers the e-mail of a usable link; `POST
+  /public/invitations/accept` (password 8..128, Bean Validation `TOO_SHORT` / `TOO_LONG`) hashes the token, finds the
+  cooperative with `members_invitation_tenant`, binds it with `TenantContext.runAs` and, in one transaction, locks the
+  member then the link, checks it (sent, not used, not revoked, not expired by the `Clock`, member active and `INVITED`,
+  link e-mail = the member's current `email_bidx`), sets the password (`reset-password`, a refused one is 400
+  `PASSWORD_POLICY` and the link stays usable) and `emailVerified: true`, `requiredActions: []`, `enabled: true` (the
+  only place an account is turned on), then
+  `used_at` and `ACTIVE` + `activated_at`. Every unusable link is the same 404 `INVITATION_INVALID`.
+- **Invitation limits** (`InvitationRateLimiter`, ADR 0020): a page load is never counted. `InvitationController`
+  counts sent invitations: before an invite or a resend, `ensureSendAllowed` refuses with 429 `TOO_MANY_REQUESTS` when
+  the member (cooperative and member id) has `nadel.invitations.rate-limit.max-requests` (5) or the client address has
+  `max-sends-per-address` (30) sends within `window` (15 min); `recordSend` counts only after the letter went out.
+  `PublicInvitationController` counts failed links: the link is looked at first, and each 404 `INVITATION_INVALID` is
+  counted for the address by `countFailedLink`, which answers 429 instead once the address has `max-requests` failed
+  links within the window. A usable link always opens and sets the password, from a blocked address too. The
+  client address is `request.getRemoteAddr()` (the client behind Caddy through
+  `server.forward-headers-strategy: native`). The counters are in memory (`max-keys`, 10,000, least recently used
+  dropped): with several instances each counts on its own, and a restart clears them. The tests raise the limits
+  (`nadel.test.invitation-rate-limit`); `make e2e` sets
+  `NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000` and `NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000`; the CI
+  e2e job needs the same two variables (a change to `.github/workflows/ci.yml` the repository owner applies).
+- **Sign-in** (`MemberAccessProfileSource`): `INVITED` and `DISABLED` are refused at once (403 `MEMBER_NOT_LINKED`);
+  no row or `NONE` keeps the legacy rules (an account made by hand links by its verified e-mail and reads as `ACTIVE`).
+- **Last sign-in** (`lastSignInAt` on the card): when a linked member's row is `ACTIVE` and `last_sign_in_at` is missing
+  or older than `nadel.identity.last-sign-in-interval` (default 1 h, by the application `Clock`), `resolve` runs
+  `update member_access set last_sign_in_at = :now where member_id = ? and state = 'ACTIVE' and (last_sign_in_at is
+  null or last_sign_in_at < :now - interval)` in its own short transaction; the usual request writes nothing, and a
+  failed write never refuses the sign-in. A member linked by the legacy path without a row gets no row and no time.
+
+## First-chairman command (feature 020)
+
+`java -jar nadel-backend.jar --spring.profiles.include=command --nadel.command=first-chairman
+--nadel.first-chairman.cooperative="…" --nadel.first-chairman.email=… --nadel.first-chairman.last-name=…
+--nadel.first-chairman.first-name=… --nadel.first-chairman.resend=true|false` (run once by
+`infra/stand/first-chairman.sh` with `docker compose run --rm --no-deps backend`).
+
+- **Profile `command`** (`application.yml`): `spring.main.web-application-type=none` (no web server; `identity`'s
+  `SecurityConfiguration` is servlet-only), no JobRunr job server, `nadel.telegram.bot-enabled=false` (no bot polling,
+  no delivery sweep), no resubmission of the backend's outstanding events at start. It works together with `dev` (the
+  stand) or any other profile.
+- **`FirstChairmanCommand`** (`ApplicationRunner`, `@ConditionalOnProperty(nadel.command=first-chairman)`, first of all
+  runners, so the `dev` demo runners never run in a command): reads the arguments, runs `FirstChairman`, waits up to
+  30 s until the outbox publications made since its start are processed (a count of `event_publication` rows, never
+  their payload), then stops the JVM with `SpringApplication.exit`: exit code 0 done or nothing to do, 1 a step
+  failed, 2 invalid arguments. Errors go to standard error as a problem code or an exception class name only.
+- **`FirstChairman`** (the work): validates the arguments with the contract's `MemberInput` constraints (names 1..100,
+  e-mail format and length) plus a required e-mail and a cooperative name of 1..200 characters (refusal
+  `INVALID_ARGUMENTS` names the fields only). Cooperative id `UUID.nameUUIDFromBytes("nadel:cooperative:" + e-mail)`
+  (trimmed, lower-cased), created by `tenancy.TenantProvisioning.ensure`. Then, with the cooperative bound, one
+  transaction finds the active member with the e-mail (blind index) or creates it with `MemberCommands.create` (names,
+  e-mail, `PAPER`) and gives it the Chairman role with `MemberRoleCommands.setRoles`; an active member with the e-mail
+  without the Chairman role is refused (`MEMBER_NOT_CHAIRMAN`: the board gives roles, the command never does). Then the
+  access: `ACTIVE` prints "already has access"; `INVITED` prints the invitation date and issues nothing unless `resend`;
+  otherwise (and `INVITED` with `resend`) `MemberInvitations.issueForCommand` runs the invite (or resend) steps.
+- **The link**: without a mailbox (a new cooperative has none) the link goes to the command's printer instead of a
+  letter and is printed once to standard output by `println` (never a logger, the audit log or the outbox); with a
+  mailbox the letter is sent as for the board. The HTTP invite never has a printer, so without a mailbox it still answers
+  409 `DELIVERY_NOT_CONFIGURED`. A link printed but not marked sent (the last transaction failed) never works; the
+  command then exits 1 and a re-run issues a new one.
+- **Audit**: `MEMBER_CREATED`, `MEMBER_ROLES_CHANGED` and `MEMBER_INVITED` / `MEMBER_INVITE_RESENT` by the actor
+  subject `system:first-chairman` without a member (the audit page shows «Система»); a printed link's entry has no
+  `channels` field. A re-run that issues nothing writes nothing.
+
 ## What is here
 
 - `MemberAccessProfileSource` implements `identity`'s `AccessProfileSource`: finds the active member for a token and
@@ -108,6 +258,8 @@ has a current ownership). A guard must only read and must take no lock that is o
 
 - Writes (`MemberCommands`, one transaction each, `@PreAuthorize("hasAuthority('PERM_MEMBERS_EDIT')")` on the controller):
   `POST /members` (201 with `Location`), `PUT /members/{id}`, `POST /members/{id}/archive`, `POST /members/{id}/restore`.
+  A `PUT` first runs the login pre-check of feature 020 outside the transaction (above); an archive also switches access
+  off and a restore leaves it (above).
   The cooperative comes from the caller's profile, never from the request. Archiving an archived member and restoring an
   active one are no-ops (the card is returned, no audit event); a `PUT` that changes nothing writes no event either.
   - `MemberData.from` validates and normalises: names trimmed and required (`REQUIRED`), phones through `PhoneNumber`
@@ -120,7 +272,8 @@ has a current ownership). A guard must only read and must take no lock that is o
     `errors[{field: "email"}]`. Archived members free their e-mail; restore re-checks with the stored blind index.
   - Archive order of work (`MemberCommands.archive`): take the chairman lock (below), lock the member row `FOR UPDATE`
     (`MemberRepository.findByIdForUpdate`; 404 when missing or of another cooperative), and for a member who is not
-    archived yet run `LastChairmanGuard.ensureNotLast` and then every `MemberArchiveGuard`. The row lock serialises the
+    archived yet run `LastChairmanGuard.ensureNotLast`, `LastChairmanGuard.ensureNotLastWithAccess` and then every
+    `MemberArchiveGuard`. The row lock serialises the
     archive with a change of owner that adds the member (it holds `FOR SHARE` through `MemberDirectory.lockActive`): the
     archive sees the committed owner and answers `MEMBER_OWNS_PLOT`, or the change finds the member archived and answers
     `MEMBER_ARCHIVED`; an archived current owner cannot result. The chairman lock comes before the row lock because
@@ -128,21 +281,24 @@ has a current ownership). A guard must only read and must take no lock that is o
     opposite order would deadlock.
   - `LastChairmanGuard.ensureNotLast(tenant, member)` takes `pg_advisory_xact_lock(hashtextextended(tenant, 0))` in the
     transaction and refuses (409 `LAST_CHAIRMAN`) to take the only active chairman away. Archive and `setMemberRoles` use
-    it.
+    it. `ensureNotLastWithAccess` takes the same lock and refuses (409 `LAST_CHAIRMAN`) to turn off the access of the
+    only active chairman whose access is on (`member_access` `INVITED` or `ACTIVE`, or linked without a row; a chairman
+    who is `DISABLED` or never invited does not count). Disable and archive use it; a role change does not turn access
+    off and keeps the plain rule.
   - `notes` need `MEMBERS_VIEW`: a `PUT` by an editor without it keeps the stored notes, a `POST` stores none.
   - Each change publishes an `audit.AuditEvent` (`MEMBER_CREATED`, `MEMBER_UPDATED`, `MEMBER_ARCHIVED`, `MEMBER_RESTORED`)
     built from `MemberSnapshot.diff(before, after)`; see the `audit` README.
 
 - Roles, all `@PreAuthorize("hasAuthority('PERM_ROLES_MANAGE')")` on the controllers, one transaction each:
-  `GET /permissions` (`PermissionCatalog`: the nineteen permissions in enum order with English text), `GET /roles`
-  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all nineteen),
+  `GET /permissions` (`PermissionCatalog`: the thirty-two permissions in enum order with English text), `GET /roles`
+  (base roles first, then custom by name; `memberCount` counts active members only; Chairman always lists all thirty-two),
   `POST /roles`, `PUT /roles/{id}` (full replacement), `DELETE /roles/{id}`, and `PUT /members/{id}/roles` (replaces the
   member's whole role set). Permission changes apply on the next request: `AccessProfile` is resolved from the database on
   every request, nothing is cached.
   - Name: trimmed; empty is 400 `REQUIRED`, over 60 is 400 `TOO_LONG` (field `name`). Unique per cooperative ignoring case
     (`lower(name)` on both sides in the database, so Cyrillic works): a pre-check plus a mapping of the unique index
     `role_tenant_name_uq` give 409 `ROLE_NAME_TAKEN`.
-  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all nineteen (a PUT with the full
+  - Base roles: delete is 409 `BASE_ROLE_IMMUTABLE`; Chairman's permission set must stay all thirty-two (a PUT with the full
     set is accepted and changes nothing, and its name can be changed); Treasurer and Member permissions and every
     description are editable. A PUT omits `description` = clears it.
   - Renaming (feature 004): every role, base roles included, can be renamed; names stay unique per cooperative ignoring
@@ -228,4 +384,5 @@ roles have no base code. Electrician is no longer a base role.
   the same contacts again; a listed member that does not exist is skipped. The demo users sign in by e-mail through
   `email_bidx`.
 
-Depends on `identity`, `problem`, `audit` and `privacy`.
+Depends on `identity`, `problem`, `audit`, `privacy` and `tenancy` (`TenantContext`, and `TenantProvisioning` for the
+first-chairman command).

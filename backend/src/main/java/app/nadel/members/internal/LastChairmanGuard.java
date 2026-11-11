@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * A cooperative must always keep at least one active chairman. Call {@link #ensureNotLast} before anything that
- * makes a member stop being an active chairman: archiving them or taking the Chairman role away.
+ * makes a member stop being an active chairman: archiving them or taking the Chairman role away. Call
+ * {@link #ensureNotLastWithAccess} before anything that turns a member's access off: disabling it or archiving them.
  * <p>
  * Must run inside the transaction that makes the change: the per-cooperative advisory lock it takes lives until that
  * transaction ends, which is what makes two concurrent removals safe.
@@ -39,7 +40,23 @@ class LastChairmanGuard {
      */
     void ensureNotLast(UUID tenantId, UUID memberId) {
         lock(tenantId);
-        List<UUID> chairmen = members.findActiveChairmanIds(tenantId);
+        refuseIfOnly(members.findActiveChairmanIds(tenantId), memberId);
+    }
+
+    /**
+     * The same rule for turning a member's access off (feature 020: disabling it, or archiving the member): the
+     * cooperative must keep an active chairman whose access is on ({@code INVITED} or {@code ACTIVE}), so someone can
+     * still sign in as chairman. A chairman whose access is already off, or who was never invited, does not count.
+     *
+     * @throws ApiProblemException 409 {@code LAST_CHAIRMAN} when {@code memberId} is the only active chairman with
+     *                             access; nothing happens for a member who is not one
+     */
+    void ensureNotLastWithAccess(UUID tenantId, UUID memberId) {
+        lock(tenantId);
+        refuseIfOnly(members.findActiveChairmanIdsWithAccess(tenantId), memberId);
+    }
+
+    private static void refuseIfOnly(List<UUID> chairmen, UUID memberId) {
         if (chairmen.size() == 1 && chairmen.contains(memberId)) {
             throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.LAST_CHAIRMAN,
                     "The cooperative must keep at least one chairman.");

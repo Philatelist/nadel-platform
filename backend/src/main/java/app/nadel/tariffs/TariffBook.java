@@ -1,6 +1,7 @@
 package app.nadel.tariffs;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -56,9 +57,11 @@ public interface TariffBook {
      * @param selectedPlots the selected plots ({@link Scope#SELECTED_PLOTS}); empty otherwise
      * @param excludedPlots the excluded plots ({@link Scope#ALL_PLOTS}); empty otherwise
      * @param versions      every version, oldest first
+     * @param validUntil    the last day the tariff applies (inclusive) when it is archived (feature 020); null while it
+     *                      is active
      */
     record TariffEntry(UUID id, UUID chargeTypeId, String name, Scope scope, Set<UUID> selectedPlots,
-            Set<UUID> excludedPlots, List<VersionRef> versions) {
+            Set<UUID> excludedPlots, List<VersionRef> versions, @Nullable LocalDate validUntil) {
 
         public TariffEntry {
             selectedPlots = Set.copyOf(selectedPlots);
@@ -66,14 +69,39 @@ public interface TariffBook {
             versions = versions.stream().sorted(Comparator.comparing(v -> v.terms().validFrom())).toList();
         }
 
-        /** The terms of every version, oldest first (the input of {@link ChargeCalculator}). */
-        public List<VersionTerms> terms() {
-            return versions.stream().map(VersionRef::terms).toList();
+        /** An active tariff (not archived, no end). */
+        public TariffEntry(UUID id, UUID chargeTypeId, String name, Scope scope, Set<UUID> selectedPlots,
+                Set<UUID> excludedPlots, List<VersionRef> versions) {
+            this(id, chargeTypeId, name, scope, selectedPlots, excludedPlots, versions, null);
         }
 
-        /** The day the first version starts; versions never end, so the tariff applies from then on. */
+        /**
+         * The terms of every version, oldest first (the input of {@link ChargeCalculator}); the last one carries the
+         * tariff's {@link #validUntil()} as its {@link VersionTerms#validTo()}, so every calculation stops charging after
+         * the end of an archived tariff.
+         */
+        public List<VersionTerms> terms() {
+            List<VersionTerms> terms = versions.stream().map(VersionRef::terms).toList();
+            if (validUntil == null || terms.isEmpty()) {
+                return terms;
+            }
+            List<VersionTerms> ended = new ArrayList<>(terms);
+            ended.set(ended.size() - 1, ended.getLast().endingOn(validUntil));
+            return List.copyOf(ended);
+        }
+
+        /** The day the first version starts; the tariff applies from then on until {@link #validUntil()}, if any. */
         public Optional<LocalDate> firstDay() {
             return versions.stream().map(v -> v.terms().validFrom()).findFirst();
+        }
+
+        /**
+         * Whether the tariff applies on a day of {@code from..to}: its first version starts on or before {@code to}
+         * and it does not end before {@code from}.
+         */
+        public boolean validWithin(LocalDate from, LocalDate to) {
+            return firstDay().map(first -> !first.isAfter(to)).orElse(false)
+                    && (validUntil == null || !validUntil.isBefore(from));
         }
 
         /** Whether the plot is in the scope (selected, or not excluded from all plots). */

@@ -120,7 +120,9 @@ on the Kyiv clock) or `HAS_ERRORS` (no plan). The uploaded file itself is never 
 
 Members are matched among the active members by e-mail when the row has one, otherwise by last name, first name and
 first phone; a blank cell keeps the stored value; `MEMBER_KEY_MISSING`, `MEMBER_AMBIGUOUS`, `EMAIL_TAKEN` and
-`DUPLICATE_IN_FILE` are described in `members/README.md` and in the contract (`uploadImport`). The planner maps the
+`DUPLICATE_IN_FILE` are described in `members/README.md` and in the contract (`uploadImport`). Because of this matching
+an import never changes the e-mail (the sign-in login) of an existing member, so it never calls Keycloak and leaves
+the access state and open invitation links as they were (feature 020, `ImportMemberLoginTests`). The planner maps the
 fields of the plan to canonical columns (`lastName` to `last_name`, `phones` to `phones`, ...) and keeps the member of
 every importable row by its `external_id` in lower case (an existing member or the deterministic id of a new one), for
 the Ownership sheet.

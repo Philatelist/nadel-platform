@@ -33,9 +33,11 @@ import type {
   ConflictResponse,
   ForbiddenResponse,
   GetPlotTariffsParams,
+  ListTariffsParams,
   NotFoundResponse,
   PlotTariffs,
   Tariff,
+  TariffArchive,
   TariffCreate,
   TariffScopeUpdate,
   TariffSummary,
@@ -66,27 +68,39 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export const getListTariffsUrl = () => {
+export const getListTariffsUrl = (params?: ListTariffsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/tariffs`
+  return stringifiedParams.length > 0 ? `/api/v1/tariffs?${stringifiedParams}` : `/api/v1/tariffs`
 }
 
 /**
  * Returns the tariffs of the non-archived charge types, ordered like the charge types (by position), then by name.
- * Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one.
+ * `status` chooses the active tariffs (`ACTIVE`, the default) or the archived ones (`ARCHIVED`, those with
+ * `archivedAt`; an archived tariff leaves the active list at once, even while its `validUntil` is still ahead);
+ * `chargeTypeId` keeps only the tariffs of that charge type (an unknown id or one of another cooperative gives an
+ * empty list).
+ * Each tariff shows one version: the one valid today (Europe/Kyiv), otherwise the earliest future one; for an
+ * archived tariff whose last day has passed, its last version.
  * `plotCount` is the number of plots the tariff applies to: for `ALL_PLOTS` the active plots that are not
  * common land minus the excluded active ones, for `SELECTED_PLOTS` the active selected plots that are not
  * common land. When the shown version is meter-based (`PER_KWH` electricity, `PER_M3` water) only the plots
  * among those that have an active meter of that resource are counted: such a tariff applies to the plots with a
- * meter. Requires `TARIFFS_VIEW`.
+ * meter. `plotNumbers` names the plots of the scope (see the schema). Requires `TARIFFS_VIEW`.
  * @summary List the tariffs of the cooperative
  */
-export const listTariffs = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<TariffSummary[]> => {
+export const listTariffs = async (params?: ListTariffsParams, options?: Parameters<typeof nadelFetch>[1]): Promise<TariffSummary[]> => {
 
-  return nadelFetch<TariffSummary[]>(getListTariffsUrl(),
+  return nadelFetch<TariffSummary[]>(getListTariffsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -99,23 +113,23 @@ export const listTariffs = async ( options?: Parameters<typeof nadelFetch>[1]): 
 
 
 
-export const getListTariffsQueryKey = () => {
+export const getListTariffsQueryKey = (params?: ListTariffsParams,) => {
     return [
-    `/api/v1/tariffs`
+    `/api/v1/tariffs`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListTariffsQueryOptions = <TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+export const getListTariffsQueryOptions = <TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(params?: ListTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListTariffsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListTariffsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTariffs>>> = ({ signal }) => listTariffs({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTariffs>>> = ({ signal }) => listTariffs(params, { signal, ...requestOptions });
 
 
 
@@ -129,7 +143,7 @@ export type ListTariffsQueryError = UnauthorizedResponse | ForbiddenResponse
 
 
 export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
+ params: undefined |  ListTariffsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listTariffs>>,
           TError,
@@ -139,7 +153,7 @@ export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, 
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
+ params?: ListTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listTariffs>>,
           TError,
@@ -149,7 +163,7 @@ export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, 
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ params?: ListTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -157,11 +171,11 @@ export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, 
  */
 
 export function useListTariffs<TData = Awaited<ReturnType<typeof listTariffs>>, TError = UnauthorizedResponse | ForbiddenResponse>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ params?: ListTariffsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTariffs>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListTariffsQueryOptions(options)
+  const queryOptions = getListTariffsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -275,7 +289,8 @@ export const useCreateTariff = <TError = BadRequestResponse | UnauthorizedRespon
 
 /**
  * Returns the tariff, its charge type (also an archived one) and every version, newest first. `validTo` of a
- * version is the day before the next version starts; the last version has none. `pastDated` marks a version
+ * version is the day before the next version starts; the last version has none, unless the tariff is archived
+ * (then it is the tariff's `validUntil`). `pastDated` marks a version
  * whose `validFrom` is before today (Europe/Kyiv). A tariff of another cooperative or an unknown id is 404.
  * `selectedPlots` and `exclusions` hold the scope with plot numbers (and the reason of each exclusion) in natural
  * order of the number; a plot archived after it was added is still listed, marked `archived`, and not counted
@@ -372,7 +387,185 @@ export function useGetTariff<TData = Awaited<ReturnType<typeof getTariff>>, TErr
 
 
 
-export const getAddTariffVersionUrl = (id: string,) => {
+export const getDeleteTariffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}`
+}
+
+/**
+ * Deletes a tariff entered by mistake together with all its versions and its scope (selected and excluded plots).
+ * Only a tariff from which no charge was ever made can be deleted (`deletable`): a charge or a charge part made
+ * from any of its versions, a reversed one included, refuses it with 409 `TARIFF_IN_USE` (archive the tariff
+ * instead). A tariff of another cooperative or an unknown id is 404. Requires `TARIFFS_VIEW` and
+ * `TARIFFS_MANAGE`; the deletion is written to the audit log (`TARIFF_DELETED`, with the tariff's name).
+ * @summary Delete a tariff that was never charged
+ */
+export const deleteTariff = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeleteTariffUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTariffMutationKey = () => ['deleteTariff'] as const;
+
+export const getDeleteTariffMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTariffMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTariff>>, DeleteTariffMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTariff(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTariffMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTariff>>>
+
+    export type DeleteTariffMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type DeleteTariffMutationVariables = {id: string}
+
+    /**
+ * @summary Delete a tariff that was never charged
+ */
+export const useDeleteTariff = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTariff>>, TError,DeleteTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTariff>>,
+        TError,
+        DeleteTariffMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTariffMutationOptions(options), queryClient);
+    }
+    export const getArchiveTariffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/tariffs/${id}/archive`
+}
+
+/**
+ * Ends a tariff that was charged (one that was never charged is deleted instead): from `endsOn` on the tariff
+ * applies no more. Its last version ends the day before (`validUntil` = `endsOn` − 1 on the tariff and `validTo`
+ * of the last version), no charge is made from it for a later day (month run, meter readings, recalculation,
+ * expected amounts), it leaves the list of active tariffs at once (`GET /tariffs?status=ARCHIVED` lists it, with
+ * `archivedAt`) and its page stays readable with its history. An archived tariff gets no new version, no
+ * version correction or deletion and no scope change (409 `TARIFF_ARCHIVED`); archiving cannot be undone.
+ * `endsOn` must be after the start of the last version (400 `VALIDATION_FAILED`,
+ * `errors[{field: endsOn, code: TARIFF_END_BEFORE_LAST_VERSION}]`). A charge that is not reversed must not be made
+ * from the tariff for `endsOn` or a later day (409 `TARIFF_CHARGED_AFTER_END`: reverse it or choose a later
+ * date). A tariff that is already archived is refused (409 `TARIFF_ARCHIVED`). A tariff of another cooperative
+ * or an unknown id is 404. The answer is the archived tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the
+ * archive is written to the audit log (`TARIFF_ARCHIVED`, with `endsOn`).
+ * @summary Archive a tariff from an end date
+ */
+export const archiveTariff = async (id: string,
+    tariffArchive: TariffArchive, options?: Parameters<typeof nadelFetch>[1]): Promise<Tariff> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<Tariff>(getArchiveTariffUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tariffArchive)
+  }
+);}
+
+
+
+
+
+export const getArchiveTariffMutationKey = () => ['archiveTariff'] as const;
+
+export const getArchiveTariffMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveTariff>>, TError,ArchiveTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveTariff>>, TError,ArchiveTariffMutationVariables, TContext> => {
+
+const mutationKey = getArchiveTariffMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveTariff>>, ArchiveTariffMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  archiveTariff(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveTariffMutationResult = NonNullable<Awaited<ReturnType<typeof archiveTariff>>>
+    export type ArchiveTariffMutationBody = TariffArchive
+    export type ArchiveTariffMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type ArchiveTariffMutationVariables = {id: string;data: TariffArchive}
+
+    /**
+ * @summary Archive a tariff from an end date
+ */
+export const useArchiveTariff = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveTariff>>, TError,ArchiveTariffMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveTariff>>,
+        TError,
+        ArchiveTariffMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchiveTariffMutationOptions(options), queryClient);
+    }
+    export const getAddTariffVersionUrl = (id: string,) => {
 
 
 
@@ -384,8 +577,8 @@ export const getAddTariffVersionUrl = (id: string,) => {
  * Adds a version that applies from `validFrom`. A change of rate is a new version; a mistake in a version can be
  * corrected or the version deleted until a charge uses it (`PUT` and `DELETE` of
  * `/tariffs/{id}/versions/{versionId}`). Two versions of one tariff cannot start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`,
- * `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). A date in the
- * past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
+ * `errors[{field: validFrom}]`). The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the tariff
+ * (409 `TARIFF_ARCHIVED`). A date in the past is accepted (`pastDated: true` in the answer). Field codes of 400 `VALIDATION_FAILED`: `rate`
  * `RATE_INVALID`; `frequency` `FREQUENCY_BASIS_MISMATCH` (`ONE_OFF` goes only with `FIXED_ONE_TIME` and
  * `FIXED_ONE_TIME` only with `ONE_OFF`); `dueDate` `REQUIRED` (a one-time amount has a due date) or `INVALID`
  * (a due date for a basis other than `FIXED_ONE_TIME`). The answer is the new version with `validTo` derived
@@ -486,7 +679,8 @@ export const useAddTariffVersion = <TError = BadRequestResponse | UnauthorizedRe
  * request that changes no term (only the note, or nothing), which changes no amount. The tariff and the version are 404 when unknown or of
  * another cooperative, and also when the version belongs to another tariff. Two versions of one tariff cannot
  * start on the same date (409 `TARIFF_VERSION_DATE_TAKEN`, `errors[{field: validFrom}]`). The charge type must
- * not be archived (409 `CHARGE_TYPE_ARCHIVED`). Field codes of 400 `VALIDATION_FAILED` are those of the create
+ * not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the tariff (409 `TARIFF_ARCHIVED`: its versions are
+ * frozen). Field codes of 400 `VALIDATION_FAILED` are those of the create
  * operation (`rate` `RATE_INVALID`, `frequency` `FREQUENCY_BASIS_MISMATCH`, `dueDate` `REQUIRED` or `INVALID`).
  * A date in the past is accepted (`pastDated: true` in the answer). The answer is the version with `validTo`
  * derived from the versions that follow it; the end dates of the neighbours are derived on every read, so they
@@ -587,9 +781,9 @@ export const useUpdateTariffVersion = <TError = BadRequestResponse | Unauthorize
  * cannot be deleted (409 `TARIFF_LAST_VERSION`): archive the charge type or keep the tariff instead. The end
  * dates of the neighbours are derived on every read, so the version before the deleted one then lasts until the
  * next one starts. The tariff and the version are 404 when unknown or of another cooperative, and also when the
- * version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`). Requires
- * `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit log (`TARIFF_VERSION_DELETED`, the old
- * values).
+ * version belongs to another tariff. The charge type must not be archived (409 `CHARGE_TYPE_ARCHIVED`), nor the
+ * tariff (409 `TARIFF_ARCHIVED`). Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; the change is written to the audit
+ * log (`TARIFF_VERSION_DELETED`, the old values).
  * @summary Delete a version of a tariff
  */
 export const deleteTariffVersion = async (id: string,
@@ -673,7 +867,7 @@ export const useDeleteTariffVersion = <TError = UnauthorizedResponse | Forbidden
  * `PLOT_ARCHIVED` (an archived plot cannot be added; one already in the scope may stay), `UNKNOWN_PLOT` (no such
  * plot in the cooperative) or `DUPLICATE` (the plot is listed twice); `exclusions[i].reason` `REQUIRED` (blank)
  * or `TOO_LONG`. At most 5000 plots per list (`TOO_LONG`). The charge type must not be archived (409
- * `CHARGE_TYPE_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
+ * `CHARGE_TYPE_ARCHIVED`), nor the tariff (409 `TARIFF_ARCHIVED`). The answer is the updated tariff. Requires `TARIFFS_VIEW` and `TARIFFS_MANAGE`; a
  * change of kind or of the selected plots is written to the audit log as `TARIFF_SCOPE_CHANGED`, and each
  * exclusion added or removed as `TARIFF_EXCLUSION_ADDED` or `TARIFF_EXCLUSION_REMOVED`.
  * @summary Choose the plots a tariff applies to

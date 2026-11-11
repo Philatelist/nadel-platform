@@ -16,7 +16,8 @@ import java.util.UUID;
  * The rule. A charge type that is not active, or is archived, charges nothing ({@link NoneReason#TYPE_INACTIVE}); an
  * archived plot or common land neither ({@link NoneReason#OUTSIDE_SCOPE}). A tariff of the type applies to the plot
  * when the plot is in its scope (not excluded from all plots, or selected) and it has a version valid on a day of the
- * range; versions never end, so that is when its first version starts on or before the last day. Exactly one such
+ * range: its first version starts on or before the last day and, for an archived tariff, its last day
+ * ({@link TariffEntry#validUntil()}, feature 020) is not before the first day of the range. Exactly one such
  * tariff is {@link Single}; two or more are a {@link Conflict} (they apply on the same days, so none of them is
  * charged); none is {@link None}, with the reason: {@link NoneReason#NO_TARIFF} when the type has no tariff valid in the
  * range, {@link NoneReason#EXCLUDED} when the plot is excluded from one, otherwise {@link NoneReason#OUTSIDE_SCOPE}.
@@ -90,7 +91,7 @@ public final class TariffResolver {
             return new None(NoneReason.TYPE_INACTIVE);
         }
         List<TariffEntry> valid = snapshot.tariffsOf(chargeTypeId).stream()
-                .filter(tariff -> tariff.firstDay().map(first -> !first.isAfter(to)).orElse(false))
+                .filter(tariff -> tariff.validWithin(from, to))
                 .toList();
         if (valid.isEmpty()) {
             return new None(NoneReason.NO_TARIFF);

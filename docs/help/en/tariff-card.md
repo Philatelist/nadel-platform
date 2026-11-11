@@ -41,7 +41,7 @@ At the top there is the link "{{ui:tariffs.back}}", then the tariff name, the ch
 
 ### The overlap warning
 
-If the tariff overlaps another tariff of the same type, you see a yellow message "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the tariffs in the block "{{ui:tariffs.scope.title}}".
+If the tariff overlaps another tariff of the same type, you see a yellow message "{{ui:tariffs.conflict.overlaps}}" with the name of the other tariff, the number of shared plots and their numbers. Those plots are not charged until you change the plots of one of the tariffs in the block "{{ui:tariffs.scope.title}}". The warning reads: "{{ui:tariffs.conflict.text}}"
 
 ### The block "{{ui:tariffs.scope.title}}"
 
@@ -66,7 +66,7 @@ The button "{{ui:tariffs.scope.edit}}" (chairman only) opens the editor:
 Editor errors: "{{ui:tariffs.scope.errors.TARIFF_COMMON_LAND}}", "{{ui:tariffs.scope.errors.PLOT_ARCHIVED}}", "{{ui:tariffs.scope.errors.UNKNOWN_PLOT}}", "{{ui:tariffs.scope.errors.DUPLICATE}}" (the plot is given twice) and "{{ui:tariffs.scope.errors.TOO_LONG}}". Correct the row next to which they appear.
 
 > [!important]
-> A tariff cannot be deleted. If a tariff was created by mistake, switch it off: choose "{{ui:tariffs.scope.selected}}" and add no plot, or exclude all plots. Then it is charged to nobody.
+> If a tariff was created by mistake and has never produced a charge, you can delete it (see below). If it has produced charges, it can only be archived.
 
 > [!important]
 > Two tariffs of one type cannot apply to the same plot on the same day. Tariffs per kWh and per m³ apply only to plots that have a meter of that resource: on the plot card, where there is none, you see "{{ui:tariffs.expected.noMeter}}".
@@ -82,12 +82,34 @@ Every row has buttons (chairman only):
 | {{ui:tariffs.card.edit}} | Opens the form "{{ui:tariffs.card.editVersion}}" with the same fields as the [new tariff form](help:tariff-form). The button "{{ui:tariffs.card.save}}" saves. |
 | {{ui:tariffs.card.delete}} | Asks for confirmation "{{ui:tariffs.card.deleteTitle}}". This cannot be undone. |
 
-While a version has no charges, it can be corrected or deleted simply: you see "{{ui:tariffs.card.saved}}" or "{{ui:tariffs.card.deleted}}". The only version of a tariff cannot be deleted ("{{ui:problem.TARIFF_LAST_VERSION}}"): archive the tariff by switching off its plots, or add another version.
+While a version has no charges, it can be corrected or deleted simply: you see "{{ui:tariffs.card.saved}}" or "{{ui:tariffs.card.deleted}}". The only version of a tariff cannot be deleted ("{{ui:problem.TARIFF_LAST_VERSION}}"): add another version or, if the tariff is no longer needed, delete it (while it has no charges) or archive it.
 
 If a version already has charges, a hint "{{ui:tariffs.card.inUse}}" stands next to it. Then:
 
 - the chairman who can recalculate (the "{{ui:permission.RECALCULATION_RUN.name}}" permission), after "{{ui:tariffs.card.save}}" or the delete confirmation, sees the recalculation preview step: what will change in past charges. The version change and the recalculation are saved together or not at all. The action is completed by the button "{{ui:recalculation.step.book}}" after entering the reason. More on the page [New recalculation](help:recalculation-new);
 - without that permission the system says "{{ui:problem.TARIFF_VERSION_IN_USE}}" and changes nothing.
+
+### Deleting a tariff
+
+The "{{ui:tariffs.delete.action}}" button is shown only to people with the "{{ui:permission.TARIFFS_MANAGE.name}}" permission, and only for a tariff that has never produced a charge. Reversed charges count too: if a charge ever existed, the tariff is already used.
+
+1. Click "{{ui:tariffs.delete.action}}".
+2. Confirm: "Delete tariff "name" with all its versions? This cannot be undone." The name in the question is the name of your tariff.
+3. The tariff disappears from the list together with all its versions. The change log gets the entry "{{ui:audit.action.TARIFF_DELETED}}".
+
+If the tariff is already used in charges, the system says: "{{ui:problem.TARIFF_IN_USE}}" Such a tariff can only be archived.
+
+### Archiving a tariff
+
+The "{{ui:tariffs.archive.action}}" button is shown only to people with the "{{ui:permission.TARIFFS_MANAGE.name}}" permission, and only for a tariff that already has charges (instead of "{{ui:tariffs.delete.action}}").
+
+1. Click "{{ui:tariffs.archive.action}}". The dialog "{{ui:tariffs.archive.title}}" opens.
+2. In the "{{ui:tariffs.archive.endsOn}}" field choose a date. The hint says: "{{ui:tariffs.archive.endsOnHint}}"
+3. Click "{{ui:tariffs.archive.confirm}}".
+
+The date must be after the start of the tariff's last version ("{{ui:validation.TARIFF_END_BEFORE_LAST_VERSION}}") and after the last day for which the tariff already has charges ("{{ui:problem.TARIFF_CHARGED_AFTER_END}}").
+
+From that date the tariff charges nothing: neither in the month run nor in other calculations. Charges before it stay. The tariff leaves the "{{ui:tariffs.list.active}}" list and appears under "{{ui:tariffs.list.archived}}" on the [Tariffs](help:tariffs) screen. The card shows the mark "{{ui:tariffs.archivedBadge}}" and "Valid until" with a date: the last day it applies, the day before the chosen date. The version history is read-only, and no new versions or plot changes are possible ("{{ui:problem.TARIFF_ARCHIVED}}"). Archiving cannot be undone. The change log gets the entry "{{ui:audit.action.TARIFF_ARCHIVED}}".
 
 ### The block "{{ui:tariffs.card.newVersion}}"
 

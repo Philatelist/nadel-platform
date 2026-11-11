@@ -8,6 +8,8 @@ import { PaymentForm } from './PaymentForm';
 
 const enterPayment = vi.fn();
 const mutate = vi.fn();
+let currentOwners: { id: string; memberId: string; memberName: string; memberArchived: boolean }[] = [];
+const ownersByPlot: Record<string, typeof currentOwners> = {};
 
 vi.mock('../../me', () => ({
   useCan: () => true,
@@ -19,9 +21,13 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
   enterPayment: (...args: unknown[]) => enterPayment(...args),
   useEnterPayment: () => ({ mutate, isPending: false }),
   useGetPlot: () => ({ data: { id: 'p9', number: '9' } }),
-  useListPlotOwnerships: () => ({ data: { plotId: 'p9', current: [], history: [] } }),
+  useListPlotOwnerships: (plotId: string) => ({
+    data: { plotId, current: ownersByPlot[plotId] ?? currentOwners, history: [] },
+  }),
   useListMembers: () => ({ data: { items: [] } }),
-  useListPlots: () => ({ data: { items: [] } }),
+  useListPlots: () => ({
+    data: { items: [{ id: 'p10', number: '10', kind: 'PLOT', archived: false }] },
+  }),
 }));
 
 const chargeType = { id: 't1', code: 'MEMBERSHIP', name: 'Membership', nameCustomized: false };
@@ -90,6 +96,8 @@ describe('PaymentForm', () => {
     window.localStorage.setItem('nadel.locale', 'uk');
     enterPayment.mockReset();
     mutate.mockReset();
+    currentOwners = [];
+    for (const key of Object.keys(ownersByPlot)) delete ownersByPlot[key];
     enterPayment.mockResolvedValue(result('600.00', '100.00'));
   });
 
@@ -236,7 +244,7 @@ describe('PaymentForm', () => {
 
     expect(await screen.findByText(/^Більше, ніж залишок 600,00\s₴$/, {}, wait)).toBeInTheDocument();
     expect(screen.getByText('Розподілено більше, ніж сума платежу')).toBeInTheDocument();
-    expect(screen.getByRole('rowheader', { name: 'Розподілено' }).closest('tr')).toHaveTextContent(
+    expect(screen.getByRole('rowheader', { name: /^Розподілено/ }).closest('tr')).toHaveTextContent(
       /1\s000,00 ₴ з 700,00 ₴/,
     );
     expect(screen.getByRole('textbox', { name: /Сума до зарахування: Членський внесок/ })).toHaveValue('900');
@@ -289,5 +297,58 @@ describe('PaymentForm', () => {
     expect(screen.getByText('автоматично').closest('tr')).toHaveTextContent(
       /Електро.*250,00 ₴.*100,00 ₴автоматично/,
     );
+  });
+  describe('payer by default', () => {
+    const ivan = { id: 'o1', memberId: 'm1', memberName: 'Іван Петренко', memberArchived: false };
+    const olga = { id: 'o2', memberId: 'm2', memberName: 'Ольга Коваль', memberArchived: false };
+
+    it('preselects the only owner of the plot', async () => {
+      currentOwners = [ivan];
+      renderForm();
+      // chosen, not only offered: the picker shows the member with a change button and the owners are not offered
+      expect(await screen.findByRole('button', { name: 'Змінити' })).toBeInTheDocument();
+      expect(screen.getByText('Іван Петренко')).toBeInTheDocument();
+      expect(screen.queryByText('Власники ділянки')).not.toBeInTheDocument();
+      expect(screen.queryByText('Не вказано')).not.toBeInTheDocument();
+    });
+
+    it('leaves the payer empty with two owners and offers them first', () => {
+      currentOwners = [ivan, olga];
+      renderForm();
+      // nobody is chosen: the picker has no "Змінити" button, the owners are only offered as buttons
+      expect(screen.queryByRole('button', { name: 'Змінити' })).not.toBeInTheDocument();
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
+      expect(screen.getByText('Власники ділянки')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Іван Петренко' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ольга Коваль' })).toBeInTheDocument();
+    });
+
+    it('does not override a payer the user chose or cleared', async () => {
+      const user = userEvent.setup();
+      currentOwners = [ivan];
+      renderForm();
+      await screen.findByRole('button', { name: 'Змінити' });
+      await user.click(screen.getByRole('button', { name: 'Змінити' }));
+      // cleared: the owner is offered again, not selected
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
+      await typeAmount(user, '5');
+      expect(screen.queryByRole('button', { name: 'Змінити' })).not.toBeInTheDocument();
+      expect(screen.getByText('Не вказано')).toBeInTheDocument();
+    });
+
+    it('applies the default again when the plot changes', async () => {
+      const user = userEvent.setup();
+      currentOwners = [ivan];
+      ownersByPlot.p10 = [olga];
+      renderForm();
+      await screen.findByRole('button', { name: 'Змінити' });
+      expect(screen.getByText('Іван Петренко')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Змінити ділянку' }));
+      await user.type(screen.getByPlaceholderText('Номер ділянки'), '10');
+      await user.click(await screen.findByRole('option', { name: /10/ }, wait));
+      await waitFor(() => expect(screen.queryByText('Іван Петренко')).not.toBeInTheDocument());
+      expect(screen.getByText('Ольга Коваль')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Змінити' })).toBeInTheDocument();
+    });
   });
 });

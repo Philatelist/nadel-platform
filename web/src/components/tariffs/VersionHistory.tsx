@@ -50,7 +50,7 @@ export function VersionHistory({ tariff }: { tariff: Tariff }) {
   const { locale } = useLocale();
   const c = t.tariffs.card;
   const queryClient = useQueryClient();
-  const canManage = useCan('TARIFFS_MANAGE') && tariff.chargeType.active;
+  const canManage = useCan('TARIFFS_MANAGE') && tariff.chargeType.active && tariff.archivedAt === undefined;
   const [editingId, setEditingId] = useState<string>();
   const [deleting, setDeleting] = useState<TariffVersion>();
   const [recalcDelete, setRecalcDelete] = useState<TariffVersion>();

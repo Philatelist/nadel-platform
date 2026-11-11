@@ -1,0 +1,60 @@
+package app.nadel.members.internal;
+
+import app.nadel.problem.ApiProblemException;
+import app.nadel.problem.ProblemCodes;
+import java.util.function.Supplier;
+import nadel.contract.api.PublicInvitationsApi;
+import nadel.contract.model.InvitationAcceptInput;
+import nadel.contract.model.InvitationInfo;
+import nadel.contract.model.InvitationTokenInput;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Public invitation endpoints (feature 020, {@code security: []}, {@code /api/v1/public/**} is open in
+ * {@code identity.internal.SecurityConfiguration}): the set-password page inspects a link and accepts it with the new
+ * password. The token travels in the body, never in the URL. The token and the password are secrets: neither they nor
+ * the request bodies are ever logged (the generated input types print them as {@code *}).
+ * <p>
+ * The limit counts failed links only ({@link InvitationRateLimiter}): each 404 {@code INVITATION_INVALID} is counted
+ * for the address, and once the address used up its failed links such a link is 429 {@code TOO_MANY_REQUESTS} instead.
+ * A usable link is looked at first, so it opens and sets the password any number of times, from any address, blocked
+ * or not.
+ */
+@RestController
+@RequestMapping("/api/v1")
+class PublicInvitationController implements PublicInvitationsApi {
+
+    private final MemberInvitations invitations;
+    private final InvitationRateLimiter limiter;
+
+    PublicInvitationController(MemberInvitations invitations, InvitationRateLimiter limiter) {
+        this.invitations = invitations;
+        this.limiter = limiter;
+    }
+
+    @Override
+    public ResponseEntity<InvitationInfo> inspectInvitation(InvitationTokenInput invitationTokenInput) {
+        return limited(() -> ResponseEntity.ok(invitations.inspect(invitationTokenInput.getToken())));
+    }
+
+    @Override
+    public ResponseEntity<Void> acceptInvitation(InvitationAcceptInput invitationAcceptInput) {
+        return limited(() -> {
+            invitations.accept(invitationAcceptInput.getToken(), invitationAcceptInput.getPassword());
+            return ResponseEntity.noContent().build();
+        });
+    }
+
+    private <T> T limited(Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (ApiProblemException e) {
+            if (ProblemCodes.INVITATION_INVALID.equals(e.code())) {
+                limiter.countFailedLink(InvitationRateLimiter.clientAddress());
+            }
+            throw e;
+        }
+    }
+}

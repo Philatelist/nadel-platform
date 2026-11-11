@@ -45,8 +45,11 @@ public abstract class IntegrationTest {
     protected static final UUID DEMO_TENANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     protected static final UUID OTHER_TENANT = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
+    // max_connections: every cached Spring context keeps its own pool, and the Keycloak and command contexts of feature
+    // 020 made the suite hold more contexts than the default of 100 connections allows
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(TestPostgis.image())
-            .withInitScript("db/test-init.sql");
+            .withInitScript("db/test-init.sql")
+            .withCommand("postgres", "-c", "max_connections=400");
 
     /** The personal data master key of this JVM's contexts: random per run, never written anywhere. */
     protected static final String MASTER_KEY = randomMasterKey();
@@ -87,6 +90,12 @@ public abstract class IntegrationTest {
         // No JobRunr background job server: the delivery tests run the dispatcher themselves, and enqueued jobs only
         // stay in jobrunr_jobs. A test class that wants the server sets nadel.test.job-server=true (JobRunrTests).
         registry.add("jobrunr.background-job-server.enabled", () -> "${nadel.test.job-server:false}");
+        // Feature 020: every MockMvc request comes from 127.0.0.1, so the invitation limits (5 sends per member, 30 per
+        // address, 5 failed links per 15 minutes) would refuse the invitation tests; a test class that tests the limits
+        // sets nadel.test.invitation-rate-limit
+        registry.add("nadel.invitations.rate-limit.max-requests", () -> "${nadel.test.invitation-rate-limit:100000}");
+        registry.add("nadel.invitations.rate-limit.max-sends-per-address",
+                () -> "${nadel.test.invitation-rate-limit:100000}");
     }
 
     private static String randomMasterKey() {
@@ -326,6 +335,9 @@ public abstract class IntegrationTest {
     @AfterEach
     void removeFixtureMembers() {
         for (Fixture fixture : createdMembers) {
+            // feature 020: an invitation leaves access and link rows, which the application may not delete
+            ownerJdbc().update("delete from member_invitation where member_id = ?", fixture.id());
+            ownerJdbc().update("delete from member_access where member_id = ?", fixture.id());
             inTenant(fixture.tenant(), sql -> {
                 sql.update("delete from member_role where member_id = ?", fixture.id());
                 return sql.update("delete from member where id = ?", fixture.id());

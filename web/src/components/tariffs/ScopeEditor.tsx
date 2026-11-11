@@ -45,11 +45,11 @@ function serverFieldErrors(errors: Readonly<Record<string, string>>, error: unkn
 }
 
 /** The scope of a tariff: shown to everyone with TARIFFS_VIEW, editable (full replace) with TARIFFS_MANAGE. */
-export function ScopeEditor({ tariff }: { tariff: Tariff }) {
+export function ScopeEditor({ tariff, readOnly = false }: { tariff: Tariff; readOnly?: boolean }) {
   const t = useT();
   const { locale } = useLocale();
   const s = t.tariffs.scope;
-  const canManage = useCan('TARIFFS_MANAGE');
+  const canManage = useCan('TARIFFS_MANAGE') && !readOnly;
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [kind, setKind] = useState<TariffScopeKind>(tariff.scopeKind);

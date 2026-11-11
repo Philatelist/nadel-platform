@@ -18,9 +18,12 @@ import org.jspecify.annotations.Nullable;
  * @param frequency how often
  * @param rate      the rate, exactly as entered (never rounded)
  * @param dueDate   the due date of a one-time amount; null for every other basis
+ * @param validTo   the last day the version applies when the tariff itself ends there (feature 020: the last version
+ *                  of an archived tariff carries the tariff's {@code validUntil}); null otherwise. Without it a version
+ *                  applies until the day before the next version starts, and the last one without end
  */
 public record VersionTerms(LocalDate validFrom, Basis basis, Frequency frequency, Rate rate,
-        @Nullable LocalDate dueDate) {
+        @Nullable LocalDate dueDate, @Nullable LocalDate validTo) {
 
     /** A way the terms break the one-off rule. */
     public enum Violation {
@@ -41,6 +44,39 @@ public record VersionTerms(LocalDate validFrom, Basis basis, Frequency frequency
         if (!violations.isEmpty()) {
             throw new InvalidVersionTermsException(violations);
         }
+        if (validTo != null && validTo.isBefore(validFrom)) {
+            throw new IllegalArgumentException("A version ends on or after the day it starts");
+        }
+    }
+
+    /** Terms without an end of their own (the version applies until the next one starts). */
+    public VersionTerms(LocalDate validFrom, Basis basis, Frequency frequency, Rate rate,
+            @Nullable LocalDate dueDate) {
+        this(validFrom, basis, frequency, rate, dueDate, null);
+    }
+
+    /** The same terms ending on {@code lastDay} (the last version of an archived tariff). */
+    public VersionTerms endingOn(@Nullable LocalDate lastDay) {
+        return new VersionTerms(validFrom, basis, frequency, rate, dueDate, lastDay);
+    }
+
+    /**
+     * The last day the version at {@code index} applies: the day before the next version starts, or its own
+     * {@link #validTo()} when that is earlier (or when it is the last version); null when it runs on without end. The
+     * one rule every calculation uses for the end of a version (feature 020).
+     *
+     * @param oldestFirst the versions of one tariff, ordered by {@link #validFrom()}
+     * @param index       the position of the version in {@code oldestFirst}
+     */
+    public static @Nullable LocalDate lastDayOf(List<VersionTerms> oldestFirst, int index) {
+        VersionTerms terms = oldestFirst.get(index);
+        LocalDate beforeNext = index + 1 < oldestFirst.size()
+                ? oldestFirst.get(index + 1).validFrom().minusDays(1) : null;
+        LocalDate own = terms.validTo();
+        if (own == null) {
+            return beforeNext;
+        }
+        return beforeNext == null || own.isBefore(beforeNext) ? own : beforeNext;
     }
 
     /** Every way the basis, frequency and due date break the one-off rule; empty when they agree. */

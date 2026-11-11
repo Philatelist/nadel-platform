@@ -38,3 +38,6 @@ context/audits/
 # Playwright
 web/playwright-report/
 web/test-results/
+
+# Verification screenshots (local evidence of /awos:verify, not committed)
+docs/screenshots/

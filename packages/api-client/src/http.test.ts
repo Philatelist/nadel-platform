@@ -26,6 +26,14 @@ describe('nadelFetch', () => {
     expect(sentHeaders().get('Authorization')).toBe('Bearer tok');
   });
 
+  it('sends no Authorization header to public endpoints', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"a":1}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    await nadelFetch('/api/v1/public/invitations/inspect', { method: 'POST', body: '{}' });
+    expect(sentHeaders().has('Authorization')).toBe(false);
+  });
+
   it('keeps an Accept header set by the caller and never sets Content-Type', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await nadelFetch('/x', { method: 'POST', body: new FormData(), headers: { Accept: 'application/pdf' } });

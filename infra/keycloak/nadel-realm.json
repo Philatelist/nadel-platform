@@ -7,11 +7,13 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "loginWithEmailAllowed": true,
+  "editUsernameAllowed": true,
   "duplicateEmailsAllowed": false,
   "internationalizationEnabled": true,
   "supportedLocales": ["uk", "en"],
   "defaultLocale": "uk",
   "accessTokenLifespan": 300,
+  "passwordPolicy": "length(8)",
   "roles": {
     "realm": [
       {
@@ -90,8 +92,33 @@
       ],
       "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "basic", "email"],
       "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "nadel-backend-admin",
+      "name": "Nadel Backend Admin",
+      "description": "Service account the backend uses to create and update users (Keycloak Admin API)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "nadel-backend-admin-dev-secret",
+      "protocol": "openid-connect",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": []
     }
   ],
+  "clientScopeMappings": {
+    "realm-management": [
+      {
+        "client": "nadel-backend-admin",
+        "roles": ["manage-users", "view-users", "query-users"]
+      }
+    ]
+  },
   "users": [
     {
       "username": "chairman@demo.local",
@@ -103,7 +130,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"4kXXtCkJXSwIFgxkmwBG72UamWukFEOu8eDHb/xqG+KIOzqwfkUKvSwsXhts1eoPJDhYfxwxaSsW1em2oWV+wA==\",\"salt\":\"+4pvlpjBiJ9tQNVgYc8GZA==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -121,7 +149,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"LoGGAqXkTw8WI5guTQtqEep2vSgNJaj3BVpX0pUommuwdau3oQc4rjVC7ab0SmzBUDy5Nc2zfYKA1YhzKu6GeQ==\",\"salt\":\"WNyjIcussb8jMgqZ0V/cSw==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -139,7 +168,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"0LJhWXP5v9T2T+ScD6rYnNFGnXdfJhqtAoa0LsemFVByyEkSN7wLrqiBWg0YUGgtNdhkqgvHjTOX8yHAmxMozg==\",\"salt\":\"rtEPTYZp2wA4ElahDgvYZg==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -157,7 +187,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"X4Dm5sg6rh/lh6bS0c3LYHNrJYN+TDyRsBE54iYH3qxI4oY44dZpZNb1a8Bky1vguGyAFgoZionQ/jBv1dgAvg==\",\"salt\":\"ctkNqwbXTuoBk8s7pMnMoQ==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -175,7 +206,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"QlXclutrZfyNzXt9dlgQ79qJk5fvrfDgvV7gKd5BtbxkbGPRx385L6UlANo3QPwYmaSlTIfOW63ljNX4ZhK7bw==\",\"salt\":\"amOlVnP7AU4xjBiTVCjVGw==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
@@ -193,11 +225,20 @@
       "credentials": [
         {
           "type": "password",
-          "value": "nadel",
+          "credentialData": "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}",
+          "secretData": "{\"value\":\"KVmGg7wnolA02EN2u1M2MlKSussyZTCXwiWQ3FDmwAVH2NXR6pmI3iKUr7BHfs3uW47rii8/RCUQ7nRQiVVohw==\",\"salt\":\"nMMNbalOzlwh5v0Pzrrz/A==\",\"additionalParameters\":{}}",
           "temporary": false
         }
       ],
       "realmRoles": ["PLATFORM_OPERATOR"]
+    },
+    {
+      "username": "service-account-nadel-backend-admin",
+      "enabled": true,
+      "serviceAccountClientId": "nadel-backend-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users"]
+      }
     }
   ],
   "components": {
@@ -207,7 +248,7 @@
         "subComponents": {},
         "config": {
           "kc.user.profile.config": [
-            "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}, \"username-prohibited-characters\": {}, \"up-username-not-idn-homograph\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"tenant_id\", \"displayName\": \"Cooperative (tenant_id)\", \"validations\": {}, \"permissions\": {\"view\": [\"admin\"], \"edit\": [\"admin\"]}, \"multivalued\": false}], \"groups\": [{\"name\": \"user-metadata\", \"displayHeader\": \"User metadata\", \"displayDescription\": \"Attributes, which refer to user metadata\"}]}"
+            "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}, \"username-prohibited-characters\": {}, \"up-username-not-idn-homograph\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"required\": {\"roles\": [\"user\"]}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"tenant_id\", \"displayName\": \"Cooperative (tenant_id)\", \"validations\": {}, \"permissions\": {\"view\": [\"admin\"], \"edit\": [\"admin\"]}, \"multivalued\": false}], \"groups\": [{\"name\": \"user-metadata\", \"displayHeader\": \"User metadata\", \"displayDescription\": \"Attributes, which refer to user metadata\"}]}"
           ]
         }
       }

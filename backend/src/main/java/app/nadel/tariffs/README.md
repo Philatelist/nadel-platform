@@ -9,11 +9,13 @@ Tables (all under RLS `tenant_isolation`, an index on `tenant_id`, composite for
 | Table | What it holds |
 |---|---|
 | `charge_type` | What is charged for: the five seeded types (`code` MEMBERSHIP, ELECTRICITY, LAND_TAX, WATER, COMMON_CONSUMERS since V13) and custom ones |
-| `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`) |
+| `tariff` | A tariff of one charge type, with its `scope_kind` (`ALL_PLOTS` or `SELECTED_PLOTS`; new tariffs are `ALL_PLOTS`); `valid_until` and `archived_at` (V35, both or neither) once it is archived |
 | `tariff_version` | Rates by date (`valid_from`, basis, frequency, `rate numeric(14,4)`, due date, note); a new rate is a new version, a mistake is corrected or deleted until a charge uses the version; `deleted_at` (V19) marks a used version deleted softly by a recalculation (feature 012), and the unique start date applies only to versions that are not deleted |
 | `tariff_scope_plot` | Selected plots (`SELECTED`), or exclusions with a reason (`EXCLUDED`); written by `PUT /tariffs/{id}/scope`; cascades when a plot is deleted |
 
-All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type` and `tariff`.
+All four tables exist in V10 (one migration, one isolation test). `nadel_app` has no `DELETE`/`TRUNCATE` on `charge_type`;
+on `tariff` V35 (feature 020) grants `DELETE`, so a tariff no charge was ever made from can be deleted (see Deleting a
+tariff), and `TRUNCATE` stays revoked.
 `tariff_version` had no `UPDATE`/`DELETE` in V10; V11 grants both so a version can be corrected or deleted until a charge
 uses it (see Correcting a version). `TRUNCATE` stays revoked on all four, and RLS limits both statements to the caller's
 cooperative.
@@ -23,7 +25,7 @@ cooperative.
 The module root exports `ChargeCalculator` (pure, no Spring, no database), `VersionTerms` (with `InvalidVersionTermsException`),
 `Basis`, `Frequency`, `ExpectedCharge` (`Amount` or `ByReadings` with the meter basis), `DaySet` (pure: sorted disjoint
 closed date ranges, `ALL`, `NONE`, `of`, `count`, `intersect`, `contains`, `first`, `last`), `TariffResolver` (pure),
-the port `TariffVersionUsage`, the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
+the ports `TariffVersionUsage` and `TariffUsage` (feature 020, see Deleting a tariff), the read API `ChargeTypeCatalog` (`find`, `findAndLockShared`, `all`: `ChargeTypeFacts` with code, stored name, `nameCustomized`, active, archived, position and the audit token `auditName()`; `findByNames`: the types a typed name stands for, by the stored name and, while a seeded type is not renamed, its default names of `DefaultChargeTypeNames` in both languages, ignoring case and extra spaces, for the ledger's opening balances import; implemented by `JpaChargeTypeCatalog`) and the read API `TariffBook`
 (implemented by `JpaTariffBook`), the facade `TariffVersionChanges` (feature 012, see Correcting a used version), and
 the read facade of the reports `ExpectedAmounts` with `YearExpectation` and `VersionShare` (feature 013, see Expected
 amounts of a year); everything else is in `internal`. Feature 011 (the ledger) calls the same
@@ -68,6 +70,7 @@ Tag `tariffs` (`TariffsController`):
 | `GET /tariffs` | `listTariffs` | `TARIFFS_VIEW` |
 | `POST /tariffs` | `createTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `GET /tariffs/{id}` | `getTariff` | `TARIFFS_VIEW` |
+| `DELETE /tariffs/{id}` | `deleteTariff` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `POST /tariffs/{id}/versions` | `addTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `PUT /tariffs/{id}/versions/{versionId}` | `updateTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
 | `DELETE /tariffs/{id}/versions/{versionId}` | `deleteTariffVersion` | `TARIFFS_VIEW` and `TARIFFS_MANAGE` |
@@ -96,8 +99,10 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
 ## Tariffs and versions
 
 - A tariff is created together with its first version (`TariffCommands.create`, one transaction) and applies to all
-  plots until its scope is changed. Tariffs are never renamed or deleted. A change of rate is a new version; a mistake in a
-  version is corrected or the version deleted until a charge uses it (below).
+  plots until its scope is changed. Tariffs are never renamed. A tariff from which no charge was ever made (a reversed
+  charge counts as made) may be deleted as a whole, with its versions and scope (see Deleting a tariff); any other tariff
+  stays and may be archived from an end date (see Archiving a tariff). A change of rate is a new version; a mistake in a version is corrected or the version deleted until a charge
+  uses it (below).
 - `VersionTerms` (module root) holds the terms of a version and enforces `FIXED_ONE_TIME` iff `ONE_OFF` iff a due date.
   The controller maps its violations to field codes of `400 VALIDATION_FAILED`: `frequency` `FREQUENCY_BASIS_MISMATCH`,
   `dueDate` `REQUIRED` (a one-time amount without a due date) and `dueDate` `INVALID` (a due date with any other
@@ -110,11 +115,17 @@ Writes (`ChargeTypeCommands`, one transaction each, the audit event is published
   `CHARGE_TYPE_ARCHIVED`, an unknown or foreign one is 404. A second version on the same date violates
   `tariff_version_valid_from_uq`, which `problem.ConstraintViolations` maps to 409 `TARIFF_VERSION_DATE_TAKEN`
   (`errors[{field: validFrom}]`).
-- Reading: `validTo` of a version is the day before the next version starts (derived on every read, never stored);
-  `pastDated` is `validFrom` before today on the Kyiv `Clock`. A version dated before an existing later one is fine:
+- Reading: `validTo` of a version is the day before the next version starts (derived on every read, never stored); the
+  last version has none, unless the tariff is archived (then it is the tariff's `validUntil`); `pastDated` is `validFrom` before today on the Kyiv `Clock`. A version dated before an existing later one is fine:
   the answer to `POST .../versions` carries the `validTo` derived from the versions after it.
-- The list (`GET /tariffs`) holds the tariffs of non-archived charge types ordered by charge type position, then name
-  (ignoring case), each with the version valid today, else the earliest future one. `plotCount` for `ALL_PLOTS` is
+- The list (`GET /tariffs?status=&chargeTypeId=`) holds the tariffs of non-archived charge types ordered by charge type
+  position, then name (ignoring case), each with the version valid today, else the earliest future one. `status`
+  `ACTIVE` (the default) keeps the tariffs with `archived_at` null, `ARCHIVED` those with it set (an archived tariff
+  leaves the active list at once, even while its `validUntil` is ahead); `chargeTypeId` keeps one charge type's
+  tariffs (an unknown or foreign id gives an empty list). Each summary carries `validUntil` and `archivedAt` (archived
+  only) and `plotNumbers`: the numbers of the active, non-common plots of the scope (`ALL_PLOTS` minus exclusions,
+  `SELECTED_PLOTS` the selected ones; never narrowed to plots with a meter) in natural order, from one
+  `PlotCatalog.findChargeable()` per request (`TariffAssembler.plotNumbers`); the new tariff form shows them. `plotCount` for `ALL_PLOTS` is
   `plots.PlotCatalog.countChargeable()`; for `SELECTED_PLOTS` the selected rows whose plots are active and not common
   land (plots are read through `PlotCatalog.findAll`, never from the plot table). When the shown version is `PER_KWH`
   or `PER_M3` (such a tariff applies to the plots with a meter, spec 010 section 2.7), a plot also needs an active plot
@@ -140,7 +151,8 @@ be corrected or deleted until a charge uses it; after that a correction goes thr
 - **Order of checks.** Field problems (400); the tariff row `FOR UPDATE` (404 when unknown or foreign) and its charge type
   `FOR SHARE` (409 `CHARGE_TYPE_ARCHIVED`); the version, which must belong to that tariff (404 otherwise); the use check
   (409 `TARIFF_VERSION_IN_USE`); for `DELETE` the last-version check (409 `TARIFF_LAST_VERSION`: a tariff always has a
-  version, archive the charge type instead); then the write. A `validFrom` that another version of the tariff has is 409
+  version, archive the charge type instead); then the write. An archived tariff is 409 `TARIFF_ARCHIVED` after the
+  version lookup, before the use check. A `validFrom` that another version of the tariff has is 409
   `TARIFF_VERSION_DATE_TAKEN` (`errors[{field: validFrom}]`, from the unique index as on create).
 - **A request that changes nothing** (`rate` `50` against a stored `50.0000` is no change) writes nothing and no audit entry.
 - **A correction of the note alone** (or of nothing) skips the use check (feature 012 §2.4): it changes no amount, so a
@@ -197,6 +209,84 @@ tenant-aware transaction with the tariff row locked `FOR UPDATE`; the ledger wri
 `TARIFF_VERSION_IN_USE` tests against the real implementation are `ledger.TariffVersionUsageTests`; here a test bean
 stands in (`TariffVersionCorrectionTests`).
 
+## Deleting a tariff (feature 020)
+
+`DELETE /tariffs/{id}` (`TariffCommands.deleteTariff`, one transaction) removes a tariff entered by mistake, answering
+204. The rule: a tariff can be deleted only while no charge was ever made from it, from any of its versions; a reversed
+charge counts (the ledger is append-only and keeps it, and the audit trail must stay explainable). A used tariff is
+archived instead (see Archiving a tariff).
+
+- **Order.** The tariff row `FOR UPDATE` (404 when unknown or of another cooperative; RLS); the use check through
+  `TariffUsages` (409 `TARIFF_IN_USE`); then the scope rows (`tariff_scope_plot`), every version (`tariff_version`,
+  native, so the softly deleted ones go too) and the tariff. The charge type is not locked and may be archived: the
+  delete changes nothing a charge type reads.
+- **Last guard.** The `ON DELETE RESTRICT` foreign keys `charge.tariff_id` → `tariff` and `charge_part.tariff_version_id`
+  → `tariff_version` refuse the delete of anything a charge points at; their violation (SQLSTATE 23503, found anywhere in
+  the failure's causes) is the same 409 `TARIFF_IN_USE`.
+- **Race.** The month run, a retry and every other path that writes a charge from a tariff hold it `FOR SHARE`
+  (`TariffBook.lockShared`) until they commit, so a delete waits for them and then sees their charges.
+- **`deletable`** on `TariffSummary` (the list, one batched question for all tariffs) and on `Tariff` (the card, and the
+  answers of `POST /tariffs` and `PUT .../scope`) is the opposite of the use check, so the web offers the delete only
+  where it would succeed.
+- **Audit.** `TARIFF_DELETED` (entity type `TARIFF`, label and field `name` = the tariff's name as the old value).
+- Tests: `ledger.TariffDeleteTests` (against the ledger's real answer: unused deleted with its rows and the audit entry;
+  refused after the month run, after a reversal and for a softly deleted version's charge part; `deletable`; who may;
+  another cooperative), `ledger.internal.LedgerTariffUsageTests`, `TariffForeignKeyViolationTests`.
+
+## Archiving a tariff (feature 020)
+
+`POST /tariffs/{id}/archive {endsOn}` (`TariffCommands.archive`, one transaction) ends a tariff that was charged:
+`endsOn` is the first day it no longer applies, so its last day is `endsOn - 1`. Answer: 200 with the archived `Tariff`.
+
+- **Order.** The tariff row `FOR UPDATE` (404 when unknown or foreign); 409 `TARIFF_ARCHIVED` when it is archived
+  already (archiving cannot be undone); 400 `VALIDATION_FAILED` with `errors[{field: endsOn, code:
+  TARIFF_END_BEFORE_LAST_VERSION}]` unless `endsOn` is after the `validFrom` of the last version that is not softly
+  deleted (so every version keeps at least one day); 409 `TARIFF_CHARGED_AFTER_END` when
+  `TariffUsages.lastChargedDay` (unreversed charges) is on or after `endsOn` (reverse them or choose a later date);
+  then `valid_until = endsOn - 1` and `archived_at = now` (the `Clock`), both set together (`tariff_archive_ck`, V35).
+  The charge type is not locked. Whatever charges from a tariff holds it `FOR SHARE`, so the archive waits for a run in
+  progress and then sees its charges.
+- **Frozen.** An archived tariff gets no new version, no version correction or deletion (also through
+  `TariffVersionChanges`, so no recalculation can change it) and no scope change: 409 `TARIFF_ARCHIVED`. `POST
+  .../versions` now locks the tariff `FOR UPDATE` too, so it cannot race with an archive.
+- **The end reaches every calculation.** `TariffRecord.validUntil` goes into `TariffBook.TariffEntry.validUntil`;
+  `TariffEntry.terms()` puts it on the last version as `VersionTerms.validTo`, and `VersionTerms.lastDayOf` (the day
+  before the next version, or the version's own `validTo` when earlier) is the one rule `ChargeCalculator`, the ledger's
+  `ReadingChargeCalculator` and `CommonConsumerPlanning.noTariff` use for the end of a version.
+  `TariffResolver.resolve` skips a tariff whose `validUntil` is before the first day of the range
+  (`TariffEntry.validWithin`). So the month run charges the days up to `validUntil` (a part of a month by days, as for a
+  version change) and nothing for a later month, reading charges price only the days up to the end (a meter tariff
+  archived with no successor sends later intervals to the not-charged queue as `NO_TARIFF_FOR_ALL_DAYS`, accepted),
+  and recalculations, losses, common consumers, `ExpectedYearQueries` and `GET /plots/{id}/tariffs`
+  (`ExpectedAmountQueries` puts `validUntil` on the last version itself) follow. A handover in the middle of a month
+  from an archived tariff to a new tariff of the same type on the same plots is still a conflict for that month (the
+  resolver works by month); a handover on the 1st is not.
+- **Conflict warning.** `TariffConflicts` ignores an archived tariff whose last day is before today (the resolver),
+  and two tariffs are not a conflict when one ends in a month before the other starts (`TariffConflicts.shareAMonth`,
+  billing months, as the month run sees them): archiving a tariff from the 1st of a month and creating its successor
+  from that day shows no warning.
+- **Reading.** The tariff card and the list carry `validUntil` and `archivedAt`; the last version's `validTo` is
+  `validUntil`. An archived tariff whose last day has passed shows its last version in the list.
+- **Audit.** `TARIFF_ARCHIVED` (entity type `TARIFF`, label = the name), field `endsOn` (new value: the date).
+- Tests: `ledger.TariffArchiveTests` (validations, filters, `plotNumbers`, frozen versions and scope, audit, who may,
+  and the month run: a monthly tariff from 2026-01-01 archived from 2026-03-01 charges February and not March),
+  `TariffResolverTests`, `ChargeCalculatorTests`, `VersionTermsTests`, `ledger.internal.ReadingChargeCalculatorTests`.
+
+### The port `TariffUsage`
+
+`TariffUsage` (module root, feature 020) asks about whole tariffs, where `TariffVersionUsage` asks about one version:
+
+- `everCharged(tenantId, Map<tariffId, Set<versionId>>)` returns the tariffs that a `charge` row names
+  (`charge.tariff_id`) or that have a version pricing a `charge_part`, reversed charges and reversal rows included.
+  The map carries every version, softly deleted ones included, so the implementation never reads the tariff tables.
+- `lastChargedDay(tenantId, tariffId, versionIds)` returns the latest `service_to` of the regular charges made from the
+  tariff (by `tariff_id` or by a part of a version) that no reversal cancels; for the archive of slice 3.
+
+`TariffUsages` (internal) reads the version ids (`TariffVersionRepository.findAllVersionIdsOf`, native, past the
+`deleted_at` restriction), asks **every** bean of the type and joins the answers. The ledger implements it in
+`ledger.internal.LedgerTariffUsage` from its own tables (two batched queries for `everCharged`: the tariffs a charge
+names, then the parts of the remaining tariffs' versions). Both methods run in the caller's transaction, under RLS.
+
 ## Charging (feature 011): `TariffBook` and `TariffResolver`
 
 - **`TariffBook`** (`JpaTariffBook`): `snapshot()` reads every charge type (`ChargeTypeEntry`: code, active, archived)
@@ -205,7 +295,8 @@ stands in (`TariffVersionCorrectionTests`).
   tariffs `FOR SHARE` in id order until the end of the caller's transaction.
 - **`TariffResolver.resolve(snapshot, chargeTypeId, PlotFacts(plotId, commonLand, archived, areaM2), from, to)`**
   (pure): `None(TYPE_INACTIVE)` for an inactive, archived or unknown type; `None(NO_TARIFF)` when no tariff of the type
-  has a version valid in the range (versions never end, so: its first version starts on or before `to`);
+  has a version valid in the range (its first version starts on or before `to` and, for an archived tariff,
+  `validUntil` is not before `from`);
   `None(OUTSIDE_SCOPE)` for an archived plot or common land; then the tariffs whose scope covers the plot (selected,
   or all plots minus exclusions): exactly one is `Single`, two or more are `Conflict` (ordered by name, then id), none
   is `None(EXCLUDED)` when the plot is excluded from one, else `None(OUTSIDE_SCOPE)`. Tests: `TariffResolverTests`.
@@ -227,8 +318,8 @@ stands in (`TariffVersionCorrectionTests`).
   `exclusions`); each list holds at most 5000 entries (`TOO_LONG`). Switching the kind removes the rows of the other
   kind.
 - Order of checks: the tariff row is locked `FOR UPDATE` (404 when missing or foreign), then its charge type
-  `FOR SHARE` (409 `CHARGE_TYPE_ARCHIVED`), then all field problems are collected into one 400 `VALIDATION_FAILED`:
-  `plotIds[i]` or `exclusions[i].plotId` is `UNKNOWN_PLOT` (no such plot in the cooperative, which includes other
+  `FOR SHARE` (409 `CHARGE_TYPE_ARCHIVED`), then 409 `TARIFF_ARCHIVED` for an archived tariff, then all field
+  problems are collected into one 400 `VALIDATION_FAILED`: `plotIds[i]` or `exclusions[i].plotId` is `UNKNOWN_PLOT` (no such plot in the cooperative, which includes other
   cooperatives' plots), `TARIFF_COMMON_LAND`, `PLOT_ARCHIVED` or `DUPLICATE` (the later of two equal ids);
   `exclusions[i].reason` is `REQUIRED` when blank after trimming and `TOO_LONG` over 500 characters. A plot that is
   already in the stored scope with the same kind may stay although it was archived since, so the card can be saved
@@ -317,8 +408,10 @@ version, so the report compares it with `ledger.LedgerReadModel.chargedInYear` w
 
 ## Audit
 
-`TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED` and `TARIFF_VERSION_DELETED` (entity type `TARIFF`,
-label = the tariff name, user content). The first lists `name`, `chargeType` (a charge type name token, see below) and the
+`TARIFF_CREATED`, `TARIFF_VERSION_ADDED`, `TARIFF_VERSION_UPDATED`, `TARIFF_VERSION_DELETED`, `TARIFF_DELETED` and
+`TARIFF_ARCHIVED` (feature 020) (entity type `TARIFF`, label = the tariff name, user content). `TARIFF_DELETED` lists
+`name` (old value: the name; new is empty); `TARIFF_ARCHIVED` lists `endsOn` (new value: the first day the tariff no
+longer applies). The first lists `name`, `chargeType` (a charge type name token, see below) and the
 version fields; the second `validFrom`, `basis`, `frequency`, `rate` (four decimals), `dueDate` and `note` (the last two only
 when set). `TARIFF_VERSION_UPDATED` lists the changed fields only, each as old to new, in the order `validFrom`, `basis`,
 `frequency`, `rate`, `dueDate`, `note` (a field that was or becomes unset has no old or no new value; a request that
@@ -363,6 +456,6 @@ narrow exception to "everything in the repository is English", of the same kind 
 `plots` (the public `PlotCatalog` only: `find`, `findAll`, `inNaturalOrder`, `countChargeable`, `findChargeable`) and `meters` (the public
 `MeterCatalog` only: `plotIdsWithActiveMeter`, `hasMeterBetween`; `meters` never depends on `tariffs`). The module root exports
 `Basis`, `Frequency`, `VersionTerms`, `ExpectedCharge`, `ChargeCalculator`, `DaySet`, `TariffBook`, `TariffResolver`,
-`TariffVersionUsage`, `ChargeTypeCatalog`, `TariffVersionChanges` and `ExpectedAmounts` (with `YearExpectation` and
-`VersionShare`), which `reports` reads. The ledger (feature 011) depends on this module and implements
-`TariffVersionUsage`.
+`TariffVersionUsage`, `TariffUsage`, `ChargeTypeCatalog`, `TariffVersionChanges` and `ExpectedAmounts` (with
+`YearExpectation` and `VersionShare`), which `reports` reads. The ledger (feature 011) depends on this module and
+implements `TariffVersionUsage` and `TariffUsage` (feature 020).

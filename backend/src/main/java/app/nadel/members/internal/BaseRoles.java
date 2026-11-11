@@ -7,7 +7,7 @@ import java.util.Set;
 
 /**
  * The base roles of every cooperative and their initial permissions, as the application knows them. The SQL function
- * {@code seed_base_roles} (V2, last re-created by V32) writes the same matrix; {@code BaseRolesMatrixTests} fails when
+ * {@code seed_base_roles} (V2, last re-created by V36) writes the same matrix; {@code BaseRolesMatrixTests} fails when
  * the two drift apart.
  * Chairman always has every permission: {@link PermissionUnion} grants them in code whatever rows are stored.
  */

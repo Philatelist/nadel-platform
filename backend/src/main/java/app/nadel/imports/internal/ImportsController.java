@@ -1,7 +1,6 @@
 package app.nadel.imports.internal;
 
 import app.nadel.identity.CurrentUser;
-import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.UUID;
 import nadel.contract.api.ImportsApi;
@@ -17,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -35,11 +36,9 @@ class ImportsController implements ImportsApi {
     private final ImportService service;
     private final ImportCommitter committer;
     private final ImportHistory history;
-    private final HttpServletRequest request;
 
     ImportsController(CurrentUser currentUser, ImportService service, ImportCommitter committer,
-            ImportHistory history, HttpServletRequest request) {
-        this.request = request;
+            ImportHistory history) {
         this.currentUser = currentUser;
         this.service = service;
         this.committer = committer;
@@ -49,7 +48,7 @@ class ImportsController implements ImportsApi {
     @Override
     @PreAuthorize("hasAuthority('PERM_IMPORT_RUN')")
     public ResponseEntity<Resource> downloadImportTemplate(String lang) {
-        TemplateLanguage language = TemplateLanguage.resolve(lang, request.getHeader(HttpHeaders.ACCEPT_LANGUAGE));
+        TemplateLanguage language = TemplateLanguage.resolve(lang, acceptLanguage());
         byte[] template = templateWriter.write(language);
         return ResponseEntity.ok()
                 .contentType(XLSX)
@@ -78,5 +77,15 @@ class ImportsController implements ImportsApi {
     public ResponseEntity<ImportPage> listImports(Integer page, Integer size) {
         // The cooperative comes from the caller's profile (the token), never from the request.
         return ResponseEntity.ok(history.list(currentUser.profile().tenantId(), page, size));
+    }
+
+    /**
+     * The {@code Accept-Language} header of the current HTTP request, read per call from {@link RequestContextHolder}
+     * (where an injected request proxy reads it too), so the controller needs no request bean and the context also
+     * starts without a web server (the {@code command} profile).
+     */
+    private static String acceptLanguage() {
+        return ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest()
+                .getHeader(HttpHeaders.ACCEPT_LANGUAGE);
     }
 }

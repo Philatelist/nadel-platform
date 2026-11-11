@@ -93,6 +93,8 @@ e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, ru
 	psql_su -q -c "CREATE DATABASE $(E2E_DB) OWNER nadel_owner"; \
 	psql_su -q -d $(E2E_DB) -c "CREATE EXTENSION IF NOT EXISTS postgis; GRANT USAGE ON SCHEMA public TO nadel_app"; \
 	NADEL_DB_URL=jdbc:postgresql://localhost:$(NADEL_DB_PORT)/$(E2E_DB) \
+	NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000 \
+	NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000 \
 	java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend/target/e2e-backend.log 2>&1 & pids="$$pids $$!"; \
 	pnpm --filter web dev > backend/target/e2e-web.log 2>&1 & pids="$$pids $$!"; \
 	wait_for() { for i in $$(seq 1 90); do \

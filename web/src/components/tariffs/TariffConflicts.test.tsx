@@ -11,7 +11,7 @@ describe('TariffConflicts', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('names the other tariff, the plot count and the plot numbers', () => {
+  it('names the other tariff, the warning text and the plot numbers', () => {
     renderWithApp(
       <TariffConflicts
         conflicts={[
@@ -28,7 +28,11 @@ describe('TariffConflicts', () => {
       />,
     );
     expect(screen.getByRole('link', { name: 'Old fee' })).toHaveAttribute('href', '/tariffs/tf2');
-    expect(screen.getByText(/12 plots are covered by both tariffs/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Tariffs of the same charge type cannot apply to the same plots\. These plots are not being charged now\. Change the plots of one of the tariffs or choose a different charge type\./,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '2' })).toHaveAttribute('href', '/plots/p2');
     expect(screen.getByText(/and 10 more/)).toBeInTheDocument();
   });

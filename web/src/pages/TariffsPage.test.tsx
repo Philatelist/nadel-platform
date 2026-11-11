@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import type { ChargeType, Permission, TariffSummary } from '@nadel/api-client';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithApp } from '../test/render';
 import { TariffsPage } from './TariffsPage';
@@ -8,6 +9,7 @@ let types: ChargeType[];
 let permissions: Permission[];
 let tariffs: TariffSummary[];
 let tariffsState: { isPending: boolean; isError: boolean };
+const listTariffs = vi.fn();
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -18,12 +20,15 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     isError: false,
     refetch: vi.fn(),
   }),
-  useListTariffs: () => ({
-    data: tariffsState.isPending || tariffsState.isError ? undefined : tariffs,
-    error: null,
-    ...tariffsState,
-    refetch: vi.fn(),
-  }),
+  useListTariffs: (params: unknown) => {
+    listTariffs(params);
+    return {
+      data: tariffsState.isPending || tariffsState.isError ? undefined : tariffs,
+      error: null,
+      ...tariffsState,
+      refetch: vi.fn(),
+    };
+  },
 }));
 vi.mock('../me', () => ({
   useOptionalMe: () => null,
@@ -48,6 +53,26 @@ describe('TariffsPage', () => {
       { id: 'c2', name: 'Road repair', nameCustomized: true, active: true, position: 2 },
       { id: 'c3', code: 'WATER', name: 'Water', nameCustomized: false, active: false, position: 3 },
     ];
+  });
+
+  it('asks for active tariffs first and for archived ones after the switch', async () => {
+    const user = userEvent.setup();
+    renderWithApp(<TariffsPage />);
+    expect(listTariffs).toHaveBeenLastCalledWith({ status: 'ACTIVE' });
+    expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Archived' }));
+    expect(listTariffs).toHaveBeenLastCalledWith({ status: 'ARCHIVED' });
+    expect(screen.getByText('There are no archived tariffs')).toBeInTheDocument();
+  });
+
+  it('shows the last day of an archived tariff', async () => {
+    const user = userEvent.setup();
+    tariffs = [
+      { ...summary('t1', 'c1', 'Old', { rate: '1.0000', basis: 'PER_PLOT' }, 2), validUntil: '2026-12-31' },
+    ];
+    renderWithApp(<TariffsPage />);
+    await user.click(screen.getByRole('button', { name: 'Archived' }));
+    expect(screen.getByText(/Valid until 31 Dec 2026/)).toBeInTheDocument();
   });
 
   it('lists the charge types in order, each without tariffs, and marks the inactive one', () => {
@@ -162,6 +187,8 @@ function summary(
     scopeKind: 'ALL_PLOTS',
     plotCount,
     conflicts: [],
+    deletable: false,
+    plotNumbers: [],
     version: {
       id: `v-${id}`,
       validFrom: '2026-11-01',

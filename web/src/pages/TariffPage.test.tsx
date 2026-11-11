@@ -11,6 +11,10 @@ import { TariffPage } from './TariffPage';
 const mutate = vi.fn();
 const updateMutate = vi.fn();
 const deleteMutate = vi.fn();
+const deleteTariffMutate = vi.fn();
+const archiveMutate = vi.fn();
+const navigate = vi.fn();
+let deleteTariffOptions: { mutation: { onError: (e: unknown) => void } };
 let options: { mutation: { onError: (e: unknown) => void } };
 let updateOptions: { mutation: { onError: (e: unknown) => void } };
 let deleteOptions: { mutation: { onError: (e: unknown) => void } };
@@ -30,10 +34,19 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
     deleteOptions = o;
     return { mutate: deleteMutate, isPending: false };
   },
+  useDeleteTariff: (o: typeof deleteTariffOptions) => {
+    deleteTariffOptions = o;
+    return { mutate: deleteTariffMutate, isPending: false };
+  },
+  useArchiveTariff: () => ({ mutate: archiveMutate, isPending: false }),
   useAddTariffVersion: (o: typeof options) => {
     options = o;
     return { mutate, isPending: false };
   },
+}));
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router')>()),
+  useNavigate: () => navigate,
 }));
 vi.mock('../me', () => ({
   useOptionalMe: () => null,
@@ -56,6 +69,8 @@ describe('TariffPage', () => {
     mutate.mockClear();
     updateMutate.mockClear();
     deleteMutate.mockClear();
+    deleteTariffMutate.mockClear();
+    navigate.mockClear();
     permissions = ['TARIFFS_VIEW', 'TARIFFS_MANAGE'];
     tariff = {
       id: 't1',
@@ -64,6 +79,7 @@ describe('TariffPage', () => {
       selectedPlots: [],
       exclusions: [],
       conflicts: [],
+      deletable: false,
       chargeType: {
         id: 'c1',
         code: 'MEMBERSHIP',
@@ -250,5 +266,68 @@ describe('TariffPage', () => {
     renderPage();
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+
+  it('offers deleting a deletable tariff with TARIFFS_MANAGE and confirms before calling the API', async () => {
+    const user = userEvent.setup();
+    tariff = { ...tariff, deletable: true };
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Delete tariff' }));
+    expect(deleteTariffMutate).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Delete the tariff "Per sotka" with all its versions?');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(deleteTariffMutate).toHaveBeenCalledWith({ id: 't1' });
+  });
+
+  it('hides the delete button for a tariff that is not deletable or without TARIFFS_MANAGE', () => {
+    const { unmount } = renderPage();
+    expect(screen.queryByRole('button', { name: 'Delete tariff' })).not.toBeInTheDocument();
+    unmount();
+    tariff = { ...tariff, deletable: true };
+    permissions = ['TARIFFS_VIEW'];
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Delete tariff' })).not.toBeInTheDocument();
+  });
+
+  it('shows the mapped message when the tariff turns out to be in use', async () => {
+    const user = userEvent.setup();
+    tariff = { ...tariff, deletable: true };
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Delete tariff' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    act(() => deleteTariffOptions.mutation.onError(new ApiError(409, { code: 'TARIFF_IN_USE' })));
+    expect(screen.getByText(/already used in charges — it can only be archived/)).toBeInTheDocument();
+  });
+
+  it('offers archiving for a used tariff with TARIFFS_MANAGE and opens the dialog', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Delete tariff' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('hides archiving without TARIFFS_MANAGE and for a deletable tariff', () => {
+    permissions = ['TARIFFS_VIEW'];
+    const { unmount } = renderPage();
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    unmount();
+    permissions = ['TARIFFS_VIEW', 'TARIFFS_MANAGE'];
+    tariff = { ...tariff, deletable: true };
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+  });
+
+  it('shows an archived tariff read-only with its last day', () => {
+    tariff = { ...tariff, archivedAt: '2027-01-10T08:00:00Z', validUntil: '2027-02-28' };
+    renderPage();
+    expect(screen.getByText('Valid until 28 Feb 2027')).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+    for (const name of ['Archive', 'Delete tariff', 'Edit', 'Delete']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('form', { name: 'New version' })).not.toBeInTheDocument();
+    expect(screen.queryByText('New version')).not.toBeInTheDocument();
   });
 });

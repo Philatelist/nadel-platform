@@ -8,6 +8,7 @@ import { SignIn } from './components/SignIn';
 import { MeProvider } from './me';
 import { HelpIndexPage } from './help/HelpIndexPage';
 import { HelpPageView } from './help/HelpPageView';
+import { SetPasswordApp } from './pages/SetPasswordApp';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { useT } from './i18n';
 
@@ -367,6 +368,8 @@ export function App() {
   if (!auth.isAuthenticated && (pathname === '/help' || pathname.startsWith('/help/'))) {
     return <PublicHelpApp />;
   }
+  // the link of an invitation is public: it works signed out and also when someone is signed in
+  if (pathname === '/set-password') return <SetPasswordApp />;
   if (auth.isLoading) {
     return <div className="grid h-full place-items-center text-ink-muted">{t.auth.signingIn}</div>;
   }

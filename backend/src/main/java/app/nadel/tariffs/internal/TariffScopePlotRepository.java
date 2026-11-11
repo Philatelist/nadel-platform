@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,6 +17,11 @@ interface TariffScopePlotRepository extends JpaRepository<TariffScopePlotRecord,
     /** The selected-plot and exclusion rows of these tariffs. */
     @Query("select s from TariffScopePlotRecord s where s.tariffId in :tariffIds")
     List<TariffScopePlotRecord> findOf(@Param("tariffIds") Collection<UUID> tariffIds);
+
+    /** Deletes every selected-plot and exclusion row of the tariff (deleting the tariff, feature 020). */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from TariffScopePlotRecord s where s.tariffId = :tariffId")
+    int deleteAllOfTariff(@Param("tariffId") UUID tariffId);
 
     /** The selected-plot or exclusion rows that name the plot, one per tariff. */
     List<TariffScopePlotRecord> findByPlotId(UUID plotId);

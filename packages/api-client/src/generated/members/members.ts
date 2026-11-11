@@ -38,6 +38,7 @@ import type {
   MemberPage,
   MemberRolesInput,
   NotFoundResponse,
+  SignInServiceUnavailableResponse,
   UnauthorizedResponse
 } from '../model';
 
@@ -278,8 +279,8 @@ export const useCreateMember = <TError = BadRequestResponse | UnauthorizedRespon
 /**
  * Returns one member of the current cooperative.
  * A caller without the `MEMBERS_VIEW` permission can read only their own card; for any other id the
- * answer is 404, exactly as for an id that does not exist. The `notes` field is present only when the
- * caller has `MEMBERS_VIEW`.
+ * answer is 404, exactly as for an id that does not exist. The `notes` and `access` fields are present only
+ * when the caller has `MEMBERS_VIEW`, so a member never sees `access` on their own card.
  * @summary Member card
  */
 export const getMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
@@ -385,6 +386,14 @@ export const getUpdateMemberUrl = (id: string,) => {
  * Requires the `MEMBERS_EDIT` permission. A caller without `MEMBERS_VIEW` cannot change `notes`;
  * the field is ignored and the stored value is kept.
  * The email must be unique within the cooperative (409 `EMAIL_TAKEN`).
+ *
+ * The email is the login of a member with access or an open invitation (feature 020). When it changes for such
+ * a member, the new address is checked with the sign-in service first: a login of another cooperative is 409
+ * `EMAIL_IN_OTHER_COOPERATIVE` (with `errors[{field: email}]`, never saying which), a sign-in account of this
+ * cooperative linked to someone else is 409 `SIGN_IN_ACCOUNT_IN_USE`, and an unreachable sign-in service is 503
+ * `SIGN_IN_SERVICE_UNAVAILABLE` (nothing changed). Then the access becomes `INVITED`, the old link stops working,
+ * the sign-in login moves to the new address (not confirmed yet) and, when the cooperative's mailbox is set up, a
+ * letter with a new link goes to the new address.
  * @summary Update a member
  */
 export const updateMember = async (id: string,
@@ -419,7 +428,7 @@ return nadelFetch<Member>(getUpdateMemberUrl(id),
 
 export const getUpdateMemberMutationKey = () => ['updateMember'] as const;
 
-export const getUpdateMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+export const getUpdateMemberMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext> => {
 
@@ -448,13 +457,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateMemberMutationResult = NonNullable<Awaited<ReturnType<typeof updateMember>>>
     export type UpdateMemberMutationBody = MemberInput
-    export type UpdateMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type UpdateMemberMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SignInServiceUnavailableResponse
     export type UpdateMemberMutationVariables = {id: string;data: MemberInput}
 
     /**
  * @summary Update a member
  */
-export const useUpdateMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+export const useUpdateMember = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SignInServiceUnavailableResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,UpdateMemberMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateMember>>,
@@ -475,8 +484,11 @@ export const useUpdateMember = <TError = BadRequestResponse | UnauthorizedRespon
 /**
  * Moves the member to the archive; the member keeps their history but is hidden from the default list and
  * can no longer sign in. Archiving an already archived member is a no-op. Requires `MEMBERS_EDIT`.
- * The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), and neither can a member who currently
- * owns a plot (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+ * The last active chairman cannot be archived (409 `LAST_CHAIRMAN`), nor the last active chairman whose access
+ * is on (`INVITED` or `ACTIVE`; also 409 `LAST_CHAIRMAN`), and neither can a member who currently owns a plot
+ * (409 `MEMBER_OWNS_PLOT`): change the owner of the plot first.
+ * Archiving turns off the member's access to the system (feature 020): a member with access or an open
+ * invitation becomes `DISABLED`, the open link stops working and the sign-in account is turned off.
  * @summary Archive a member
  */
 export const archiveMember = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Member> => {
@@ -550,7 +562,8 @@ export const useArchiveMember = <TError = BadRequestResponse | UnauthorizedRespo
 }
 
 /**
- * Returns an archived member to the active list. Restoring an active member is a no-op.
+ * Returns an archived member to the active list. Restoring an active member is a no-op. Access to the system
+ * stays as it was (`DISABLED` after an archive); the board invites the member again.
  * Requires `MEMBERS_EDIT`. The member's email must still be unique among members (409 `EMAIL_TAKEN`).
  * @summary Restore a member from the archive
  */

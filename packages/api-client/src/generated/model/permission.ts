@@ -19,6 +19,7 @@ export type Permission = typeof Permission[keyof typeof Permission];
 export const Permission = {
   MEMBERS_VIEW: 'MEMBERS_VIEW',
   MEMBERS_EDIT: 'MEMBERS_EDIT',
+  MEMBERS_INVITE: 'MEMBERS_INVITE',
   ROLES_MANAGE: 'ROLES_MANAGE',
   AUDIT_VIEW: 'AUDIT_VIEW',
   PLOTS_VIEW: 'PLOTS_VIEW',

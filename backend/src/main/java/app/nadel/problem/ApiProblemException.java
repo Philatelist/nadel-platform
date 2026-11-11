@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
  * {@code REQUISITES_MISSING} ({@code IBAN}, {@code EDRPOU}); it is empty on every other problem. {@code limit} carries
  * the limit of {@code INVOICE_BUILD_TOO_LARGE}; it is null on every other problem. {@code balance} and {@code date}
  * carry the lowest cash balance and its day of {@code CASH_INSUFFICIENT}; they are null on every other problem.
+ * {@code failureCode} carries the delivery failure of {@code INVITATION_NOT_SENT} (a code of the contract's
+ * {@code DeliveryFailureCode}); it is null on every other problem.
  */
 public class ApiProblemException extends RuntimeException {
 
@@ -23,6 +25,7 @@ public class ApiProblemException extends RuntimeException {
     private final @Nullable Integer limit;
     private final @Nullable String balance;
     private final @Nullable LocalDate date;
+    private final @Nullable String failureCode;
 
     public ApiProblemException(HttpStatus status, String code, String detail) {
         this(status, code, detail, List.of());
@@ -34,6 +37,12 @@ public class ApiProblemException extends RuntimeException {
 
     private ApiProblemException(HttpStatus status, String code, String detail, List<FieldProblem> errors,
             List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date) {
+        this(status, code, detail, errors, missing, limit, balance, date, null);
+    }
+
+    private ApiProblemException(HttpStatus status, String code, String detail, List<FieldProblem> errors,
+            List<String> missing, @Nullable Integer limit, @Nullable String balance, @Nullable LocalDate date,
+            @Nullable String failureCode) {
         super(detail);
         this.status = status;
         this.code = code;
@@ -42,6 +51,7 @@ public class ApiProblemException extends RuntimeException {
         this.limit = limit;
         this.balance = balance;
         this.date = date;
+        this.failureCode = failureCode;
     }
 
     /**
@@ -74,6 +84,16 @@ public class ApiProblemException extends RuntimeException {
     public static ApiProblemException cashInsufficient(String balance, LocalDate date) {
         return new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.CASH_INSUFFICIENT,
                 "The entry would make the cash balance negative.", List.of(), List.of(), null, balance, date);
+    }
+
+    /**
+     * 502 {@code INVITATION_NOT_SENT}: the invitation letter of feature 020 could not be sent; {@code failureCode} is
+     * why, a code of the contract's {@code DeliveryFailureCode} ({@code SMTP_AUTH_FAILED}, {@code SMTP_REJECTED},
+     * {@code CONNECTION_FAILED}, {@code SMTP_HOST_NOT_ALLOWED}).
+     */
+    public static ApiProblemException invitationNotSent(String failureCode) {
+        return new ApiProblemException(HttpStatus.BAD_GATEWAY, ProblemCodes.INVITATION_NOT_SENT,
+                "The invitation letter could not be sent.", List.of(), List.of(), null, null, null, failureCode);
     }
 
     /** 404 {@code NOT_FOUND}: the resource does not exist or is not visible to the caller. */
@@ -111,5 +131,10 @@ public class ApiProblemException extends RuntimeException {
     /** The day of the lowest cash balance of {@code CASH_INSUFFICIENT}; null on every other problem. */
     public @Nullable LocalDate date() {
         return date;
+    }
+
+    /** The delivery failure of {@code INVITATION_NOT_SENT}; null on every other problem. */
+    public @Nullable String failureCode() {
+        return failureCode;
     }
 }

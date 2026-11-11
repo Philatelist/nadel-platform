@@ -160,8 +160,11 @@ jobs:
         working-directory: backend
         run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
       - name: Start backend (dev profile) and web
+        # every spec runs from localhost: the invitation limits (sends per address, failed links) would refuse a full run
         run: |
-          nohup java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend.log 2>&1 &
+          NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000 \
+          NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000 \
+            nohup java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend.log 2>&1 &
           nohup pnpm --filter web dev > web.log 2>&1 &
       - name: Wait for readiness
         run: |

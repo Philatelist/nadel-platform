@@ -1,9 +1,11 @@
 package app.nadel.ledger.internal;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -124,6 +126,16 @@ interface ChargeRepository extends JpaRepository<ChargeRecord, UUID> {
     /** The reversals and adjustments of the charges, in no particular order (a recalculation's booked chains). */
     @Query("select c from ChargeRecord c where c.reversesChargeId in :ids or c.adjustsChargeId in :ids")
     List<ChargeRecord> findReversalsAndAdjustmentsOf(@Param("ids") Collection<UUID> chargeIds);
+
+    /** The tariffs among {@code tariffIds} that a charge row of any kind names (reversed charges and reversals too). */
+    @Query("select distinct c.tariffId from ChargeRecord c where c.tariffId in :tariffIds")
+    List<UUID> tariffIdsWithCharges(@Param("tariffIds") Collection<UUID> tariffIds);
+
+    /** The last service day of the regular charges that name the tariff and that no reversal cancels; null if none. */
+    @Query("select max(c.serviceTo) from ChargeRecord c where c.tariffId = :tariffId and c.kind = :kind "
+            + "and not exists (select r.id from ChargeRecord r where r.reversesChargeId = c.id)")
+    @Nullable LocalDate lastUnreversedServiceDayOfTariff(@Param("tariffId") UUID tariffId,
+            @Param("kind") ChargeKind kind);
 
     /** The plots among {@code plotIds} that have at least one charge of any kind. */
     @Query("select distinct c.plotId from ChargeRecord c where c.plotId in :plotIds")

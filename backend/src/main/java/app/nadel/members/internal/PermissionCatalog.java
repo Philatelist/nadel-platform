@@ -20,6 +20,8 @@ final class PermissionCatalog {
             case MEMBERS_VIEW -> new String[] {"View members",
                     "See all members and their contact details and notes"};
             case MEMBERS_EDIT -> new String[] {"Edit members", "Add, edit, archive and restore members"};
+            case MEMBERS_INVITE -> new String[] {"Invite to the system",
+                    "Invite members to sign in, send the invitation again and turn their access off"};
             case ROLES_MANAGE -> new String[] {"Manage roles",
                     "Create, edit and delete custom roles; change permissions of base roles; assign roles to members"};
             case AUDIT_VIEW -> new String[] {"View audit log", "Read the audit log"};
