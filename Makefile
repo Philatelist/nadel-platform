@@ -8,7 +8,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 # process, never exported by Make and never referenced by docker compose.
 LOAD_ENV := set -a; . infra/.env; set +a
 
-.PHONY: help install up down infra backend web dev gen test check lint format format-check clean e2e-install e2e help-shots guide-shots guide
+.PHONY: help install up down infra backend web dev gen test check lint format format-check clean e2e-install e2e stand-test help-shots guide-shots guide
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -102,11 +102,14 @@ e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, ru
 	wait_for web http://localhost:5173/; \
 	pnpm --filter web test:e2e
 
-check: gen format-check lint test ## Everything CI runs: contract, format, lint, tests
+check: gen format-check lint test stand-test ## Everything CI runs: contract, format, lint, tests
 
 clean: ## Remove build outputs
 	cd backend && ./mvnw -q clean
 	rm -rf web/dist
+
+stand-test: ## Test infra/stand/stand-init.sh with a stub docker (no Docker needed)
+	bash infra/stand/tests/stand-init.test.sh
 
 help-shots: ## Screenshots of one help page from the running demo app: make help-shots ID=payments-enter
 	@test -n "$(ID)" || { echo "Usage: make help-shots ID=<help page id>   (the file name in docs/help/uk without .md; start the demo with \`make up\`)"; exit 1; }
