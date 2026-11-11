@@ -67,7 +67,7 @@ Keycloak and retries the admin login (`KC_LOGIN_TIMEOUT`, default 120 seconds) b
 finishing its start. `make stand-test` checks the script with a stub `docker`.
 
 Installing the app on a phone and push notifications need HTTPS with a valid certificate; Caddy provides it on the
-stand's domain. Caddy serves `/sw.js`, `/manifest.webmanifest` and `/index.html` with `Cache-Control: no-cache`, so a
+stand's domain. Caddy serves `/sw.js`, `/manifest.webmanifest` and every app page (`/`, `/index.html`, client-side routes, `/help/...`) with `Cache-Control: no-cache`, so a
 new deploy reaches phones on their next visit.
 
 Open `https://nadel.example.com`, sign in as `chairman@demo.local` with `STAND_USER_PASSWORD`.

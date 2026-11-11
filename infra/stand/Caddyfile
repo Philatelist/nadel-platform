@@ -41,6 +41,7 @@
 
 	# The web build; unknown paths go to index.html (client-side routing); pre-rendered help shells are /help/index.html and /help/<id>/index.html
 	handle {
+		header Cache-Control "no-cache"
 		root * /srv
 		try_files {path} {path}/index.html /index.html
 		file_server
