@@ -33,6 +33,7 @@ const settings: CooperativeSettings = {
   redAmount: '1000.00',
   redDays: 90,
   autoAllocatePrepayment: true,
+  readingPhotoRequired: false,
 };
 
 vi.mock('../../me', () => ({

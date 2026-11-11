@@ -31,6 +31,7 @@ import type {
 import type {
   BadRequestResponse,
   ConflictResponse,
+  EnterReadingWithPhotoBody,
   ForbiddenResponse,
   GetReadingRoundParams,
   ListReadingsParams,
@@ -96,7 +97,10 @@ export const getSubmitPlotReadingUrl = (id: string,) => {
  * annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
  * cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND`
  * (`errors[{field: meterId, code: NOT_FOUND}]`); the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
- * `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
+ * `METER_VALUE_INVALID` for a malformed value. While the cooperative's setting `readingPhotoRequired` is on,
+ * every submission here is refused with 400 `READING_PHOTO_REQUIRED` (`errors[{field: photo, code:
+ * READING_PHOTO_REQUIRED}]`) and nothing is saved: this operation takes no photo. Written to the audit log
+ * (`READING_SUBMITTED`).
  * @deprecated
  * @summary Submit a reading of an own meter (without a photo)
  */
@@ -208,6 +212,12 @@ export const useSubmitPlotReading = <TError = BadRequestResponse | UnauthorizedR
  * - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]`: a photo that is not a
  *   JPEG or PNG by content (a PDF and an untranslated HEIC included: the app converts HEIC to JPEG before it
  *   sends it), or a JPEG or PNG that cannot be read.
+ *
+ * The photo rule: while the cooperative's setting `readingPhotoRequired` is on, a submission without a photo is
+ * 400 `READING_PHOTO_REQUIRED` with `errors[{field: photo, code: READING_PHOTO_REQUIRED}]`, checked after the
+ * owner rule and before the reading, and nothing is saved (the same value already waiting on that day
+ * included). The board's and the electrician's entries (`enterReadings`, `enterReadingWithPhoto`) never need a
+ * photo.
  *
  * Written to the audit log (`READING_SUBMITTED` with `takenOn`, `value` and `photo` `true` or `false`; never the
  * file).
@@ -636,7 +646,8 @@ export const getEnterReadingsUrl = () => {
  * the 180 days before it (none without such an interval). 400 `VALIDATION_FAILED` for the whole request when a
  * row is malformed (`rows[i].value` `METER_VALUE_INVALID`, `rows` `REQUIRED` or `TOO_LONG`). Requires
  * `READINGS_ENTER`; each saved row is written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
- * replaced a reading of the same date).
+ * replaced a reading of the same date, with `photo` `false`). No row needs a photo, whatever the setting
+ * `readingPhotoRequired`; one reading with a photo is entered through `enterReadingWithPhoto`.
  * @summary Enter readings, one or a whole round
  */
 export const enterReadings = async (readingBatch: ReadingBatch, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingBatchResult> => {
@@ -714,6 +725,105 @@ export const useEnterReadings = <TError = BadRequestResponse | UnauthorizedRespo
         TContext
       > => {
       return useMutation(getEnterReadingsMutationOptions(options), queryClient);
+    }
+    export const getEnterReadingWithPhotoUrl = () => {
+
+
+
+
+  return `/api/v1/reading-entries`
+}
+
+/**
+ * Enters one reading as a row of `enterReadings` does, with a photo of the meter (feature 021 §2.3). The request
+ * is `multipart/form-data` with the part `reading` (JSON, `ReadingEntry`) and the part `photo` (a JPEG or PNG,
+ * at most 5 MB), both required; a request without the photo part is 400 `MALFORMED_REQUEST`. The reading counts
+ * at once (status `APPROVED`, source `ENTERED`); `takenOn` absent means today in Europe/Kyiv. A counted reading
+ * of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+ * `supersededReadingIds`. A photo makes the entry a change even with the same value on the same date (a new
+ * reading with the photo replaces the counted one). The warning `UNUSUAL_CONSUMPTION` follows the rule of
+ * `enterReadings`. A reading entered without a photo goes through `enterReadings`; the board never needs one,
+ * whatever the setting `readingPhotoRequired`.
+ *
+ * The reading and its photo are saved together: when either is refused, nothing is saved. The photo is checked
+ * and stored as in `submitPlotReadingWithPhoto` (type by content, location and camera data removed without
+ * re-encoding, never changed or deleted): 413 `FILE_TOO_LARGE` with `errors[{field: photo, code:
+ * FILE_TOO_LARGE}]` over 5 MB (a request over the server's upload limit is 413 `FILE_TOO_LARGE` without
+ * `errors`); 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]` for anything
+ * that is not a readable JPEG or PNG.
+ *
+ * Refusals of the reading, as for a single correction: 404 `NOT_FOUND` with `errors[{field: meterId, code:
+ * NOT_FOUND}]` (no such meter in the cooperative); 409 `READING_DATE_IN_FUTURE` or `READING_DATE_OUTSIDE_METER`
+ * (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`) or `READING_IN_USE` (a charge
+ * uses the readings around the date); 400 `VALIDATION_FAILED` with `value` `METER_VALUE_INVALID` for a malformed
+ * value. Requires `READINGS_ENTER`; written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
+ * replaced a reading of the same date, with `photo` `true`; never the file).
+ * @summary Enter one reading with a photo of the meter
+ */
+export const enterReadingWithPhoto = async (enterReadingWithPhotoBody: EnterReadingWithPhotoBody, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingSaved> => {
+    const formData = new FormData();
+formData.append(`reading`, JSON.stringify(enterReadingWithPhotoBody.reading));
+formData.append(`photo`, enterReadingWithPhotoBody.photo);
+
+  return nadelFetch<ReadingSaved>(getEnterReadingWithPhotoUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getEnterReadingWithPhotoMutationKey = () => ['enterReadingWithPhoto'] as const;
+
+export const getEnterReadingWithPhotoMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterReadingWithPhoto>>, TError,EnterReadingWithPhotoMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof enterReadingWithPhoto>>, TError,EnterReadingWithPhotoMutationVariables, TContext> => {
+
+const mutationKey = getEnterReadingWithPhotoMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof enterReadingWithPhoto>>, EnterReadingWithPhotoMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  enterReadingWithPhoto(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EnterReadingWithPhotoMutationResult = NonNullable<Awaited<ReturnType<typeof enterReadingWithPhoto>>>
+    export type EnterReadingWithPhotoMutationBody = EnterReadingWithPhotoBody
+    export type EnterReadingWithPhotoMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse
+    export type EnterReadingWithPhotoMutationVariables = {data: EnterReadingWithPhotoBody}
+
+    /**
+ * @summary Enter one reading with a photo of the meter
+ */
+export const useEnterReadingWithPhoto = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof enterReadingWithPhoto>>, TError,EnterReadingWithPhotoMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof enterReadingWithPhoto>>,
+        TError,
+        EnterReadingWithPhotoMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEnterReadingWithPhotoMutationOptions(options), queryClient);
     }
     export const getCorrectReadingUrl = (id: string,) => {
 

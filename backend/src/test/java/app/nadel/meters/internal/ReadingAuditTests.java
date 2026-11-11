@@ -16,8 +16,9 @@ import org.junit.jupiter.api.Test;
 /**
  * Entering, replacing, correcting and deleting a reading, a member's submission and its approval or rejection are
  * written to the audit log as codes and parameters: entity type {@code METER_READING} about the meter (its id, its
- * serial number or name as the label), {@code takenOn} as an ISO date, {@code value} with three decimals and the
- * reason of a rejection as typed. A refused change writes nothing.
+ * serial number or name as the label), {@code takenOn} as an ISO date, {@code value} with three decimals, whether an
+ * entered reading came with a photo ({@code photo}) and the reason of a rejection as typed. A refused change writes
+ * nothing.
  */
 class ReadingAuditTests extends MeterTestSupport {
 
@@ -42,7 +43,7 @@ class ReadingAuditTests extends MeterTestSupport {
         assertThat(entry.get("tenant_id")).isEqualTo(DEMO_TENANT);
         assertThat(entry.get("actor_member_id")).isNotNull();
         assertThat(changes(entry)).containsExactly(new Change("takenOn", null, "2026-09-03"),
-                new Change("value", null, "8140.500"));
+                new Change("value", null, "8140.500"), new Change("photo", null, "false"));
     }
 
     @Test
@@ -55,7 +56,7 @@ class ReadingAuditTests extends MeterTestSupport {
         Map<String, Object> entry = awaitEntries(meter, "READING_REPLACED", 1).getFirst();
         assertThat(entry.get("entity_label")).isEqualTo("MT Свердловина №1");
         assertThat(changes(entry)).containsExactly(new Change("takenOn", "2026-10-05", "2026-10-05"),
-                new Change("value", "8205.000", "8250.000"));
+                new Change("value", "8205.000", "8250.000"), new Change("photo", "false", "false"));
         assertThat(entries(meter, "READING_ENTERED")).hasSize(1);
     }
 
@@ -177,7 +178,7 @@ class ReadingAuditTests extends MeterTestSupport {
 
         List<Map<String, Object>> entered = awaitEntries(meter, "READING_ENTERED", 2);
         assertThat(changes(entered.get(1))).containsExactly(new Change("takenOn", null, "2026-10-05"),
-                new Change("value", null, "150.000"));
+                new Change("value", null, "150.000"), new Change("photo", null, "false"));
         assertThat(entries(meter, "READING_REPLACED")).isEmpty();
         assertThat(entries(meter, "READING_CORRECTED")).isEmpty();
     }

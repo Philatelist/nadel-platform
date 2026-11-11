@@ -60,9 +60,12 @@ class BotCommands {
 
     /** Digits with an optional decimal comma or point; nothing else is a reading. */
     private static final Pattern NUMBER = Pattern.compile("\\d+([.,]\\d+)?");
-    /** Refusals that typing another value cannot cure: the dialogue ends. */
+    /**
+     * Refusals that typing another value cannot cure: the dialogue ends. {@code READING_PHOTO_REQUIRED}: the cooperative
+     * asks for a photo with every reading and the bot takes none, so the member is sent to the app.
+     */
     private static final Set<String> FINAL = Set.of("PLOT_NOT_FOUND", "NOT_FOUND", "METER_REMOVED",
-            "PERMISSION_DENIED");
+            "PERMISSION_DENIED", "READING_PHOTO_REQUIRED");
 
     private final OwnedPlotsSource plots;
     private final LedgerReadModel ledger;

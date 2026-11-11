@@ -19,10 +19,10 @@ interface SettingsRepository extends JpaRepository<SettingsRow, UUID> {
     @Query(value = """
             insert into cooperative_settings (tenant_id, member_plot_status_visibility, losses_mode, losses_percent,
                 common_consumer_default_split, red_amount, red_days, official_name, legal_address, bank_name, iban,
-                auto_allocate_prepayment, updated_at)
+                auto_allocate_prepayment, reading_photo_required, updated_at)
             values (:tenantId, :visibility, :lossesMode, :lossesPercent, :split, :redAmount, :redDays,
                 cast(:officialName as text), cast(:legalAddress as text), cast(:bankName as text), cast(:iban as text),
-                :autoAllocatePrepayment, now())
+                :autoAllocatePrepayment, :readingPhotoRequired, now())
             on conflict (tenant_id) do update
             set member_plot_status_visibility = excluded.member_plot_status_visibility,
                 losses_mode = excluded.losses_mode,
@@ -35,6 +35,7 @@ interface SettingsRepository extends JpaRepository<SettingsRow, UUID> {
                 bank_name = excluded.bank_name,
                 iban = excluded.iban,
                 auto_allocate_prepayment = excluded.auto_allocate_prepayment,
+                reading_photo_required = excluded.reading_photo_required,
                 updated_at = now()
             """, nativeQuery = true)
     void upsert(@Param("tenantId") UUID tenantId, @Param("visibility") String visibility,
@@ -42,5 +43,6 @@ interface SettingsRepository extends JpaRepository<SettingsRow, UUID> {
             @Param("split") String split, @Param("redAmount") BigDecimal redAmount, @Param("redDays") int redDays,
             @Param("officialName") @Nullable String officialName, @Param("legalAddress") @Nullable String legalAddress,
             @Param("bankName") @Nullable String bankName, @Param("iban") @Nullable String iban,
-            @Param("autoAllocatePrepayment") boolean autoAllocatePrepayment);
+            @Param("autoAllocatePrepayment") boolean autoAllocatePrepayment,
+            @Param("readingPhotoRequired") boolean readingPhotoRequired);
 }

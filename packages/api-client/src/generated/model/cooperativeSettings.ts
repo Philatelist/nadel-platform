@@ -31,6 +31,8 @@ export interface CooperativeSettings {
   redDays: number;
   /** Allocate prepayment automatically (feature 015 §2.7): when on (the default), a plot's prepayment is placed on its open charges, oldest first, whenever charges are booked for the plot or money is taken back from its charges; when off, the prepayment waits until the treasurer allocates it by hand */
   autoAllocatePrepayment: boolean;
+  /** A photo of the meter is required with every reading a member submits (feature 021 §2.3): when on, a member's submission without a photo is refused with 400 `READING_PHOTO_REQUIRED` (from the account and from the Telegram bot); the board's and the electrician's entries never need one. Off by default */
+  readingPhotoRequired: boolean;
   /**
      * The full official name of the cooperative; absent when not set
      * @maxLength 300

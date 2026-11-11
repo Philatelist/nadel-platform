@@ -29,7 +29,9 @@ public interface MemberReadings {
      * Why a submission was refused: the problem code the account gets ({@code READING_OUT_OF_ORDER},
      * {@code READING_DATE_IN_FUTURE}, {@code READING_DATE_OUTSIDE_METER}, {@code METER_VALUE_INVALID},
      * {@code METER_REMOVED}, {@code NOT_FOUND} for a meter that is not the plot's, {@code PLOT_NOT_FOUND} for a plot
-     * the member does not own now, {@code PERMISSION_DENIED} without a cooperative) and the parameters of its message
+     * the member does not own now, {@code PERMISSION_DENIED} without a cooperative, {@code READING_PHOTO_REQUIRED} while
+     * the cooperative requires a photo with a member's reading, which this port never carries) and the parameters of
+     * its message
      * (ISO dates and meter values with three decimals, as the account's batch rows carry them).
      */
     record Problem(String code, Map<String, String> params) {

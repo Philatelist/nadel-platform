@@ -262,6 +262,11 @@ public final class ProblemCodes {
      */
     public static final String FILE_TYPE_NOT_ALLOWED = "FILE_TYPE_NOT_ALLOWED";
     /**
+     * 400: a member's meter reading comes without a photo while the cooperative's setting {@code readingPhotoRequired}
+     * is on (feature 021 §2.3); also the code of the field {@code photo} in {@code errors[]}.
+     */
+    public static final String READING_PHOTO_REQUIRED = "READING_PHOTO_REQUIRED";
+    /**
      * 400: more files come with an expense than it takes (five, reused ones included; feature 018 §2.3); also the code
      * of the field {@code files} in {@code errors[]}.
      */

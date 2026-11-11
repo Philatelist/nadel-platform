@@ -735,6 +735,13 @@ export const uk: Messages = {
       save: 'Зберегти поріг',
       daysInvalid: 'Введіть ціле число днів',
     },
+    readings: {
+      title: 'Покази лічильників',
+      photoRequired: "Фото показу обов'язкове для членів",
+      photoRequiredHint:
+        'Член не зможе передати показ без фото лічильника. Електрик і правління додають фото за бажанням.',
+      save: 'Зберегти налаштування показів',
+    },
     payments: {
       title: 'Платежі',
       autoAllocatePrepayment: 'Автоматично зараховувати аванс',
@@ -1514,6 +1521,7 @@ export const uk: Messages = {
     },
     photo: {
       add: 'Додати фото лічильника',
+      addRow: 'Додати фото',
       replace: 'Замінити',
       remove: 'Прибрати',
       processing: 'Обробка…',
@@ -3765,6 +3773,7 @@ export const uk: Messages = {
     SMTP_HOST_NOT_ALLOWED:
       'Цей сервер пошти використовувати не можна. Вкажіть сервер поштової служби (наприклад, smtp.gmail.com) і порт 25, 465 або 587.',
     OPENING_BALANCE_ALREADY_SET: 'Вхідний залишок цього рахунку вже внесено',
+    READING_PHOTO_REQUIRED: 'Додайте фото лічильника: правління просить фото до кожного показу.',
     FILE_TOO_LARGE: 'Файл завеликий. Максимум 5 МБ.',
     FILE_TYPE_NOT_ALLOWED: 'Дозволені лише фото (JPEG, PNG) і PDF.',
     TOO_MANY: 'Не більше 5 файлів.',

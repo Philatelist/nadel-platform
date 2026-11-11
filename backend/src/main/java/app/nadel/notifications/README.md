@@ -216,7 +216,10 @@ transaction.
     12 345 по лічильнику ЕЛ-9/2 передано на перевірку». A refusal is told in plain words per problem code with the
     account's details (the previous or next reading, the meter's working period) from `bot.readings.problem.*`, a
     generic sentence for any other code, and the member types again; a meter or plot that is no longer theirs, or a
-    removed meter, ends the dialogue. The update was taken (its offset saved) before it is answered, so a reading is
+    removed meter, ends the dialogue. While the cooperative requires a photo with a member's reading (setting
+    `readingPhotoRequired`, feature 021) the bot, which takes no photo, gets `READING_PHOTO_REQUIRED`: it answers
+    `bot.readings.problem.READING_PHOTO_REQUIRED` («Правління просить фото лічильника до кожного показу. Передайте,
+    будь ласка, показання з фото в застосунку…») and ends the dialogue; nothing is saved. The update was taken (its offset saved) before it is answered, so a reading is
     submitted at most once.
 - **Untrusted input.** At most 20 messages a minute per chat (`BotInputLimiter`: message 21 of a chat's minute gets
   «Забагато повідомлень, спробуйте за хвилину», the rest of the minute is ignored); a text over 64 characters gets

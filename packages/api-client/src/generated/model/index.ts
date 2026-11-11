@@ -121,6 +121,7 @@ export * from './downloadReportLang';
 export * from './downloadReportParams';
 export * from './enterCashCountParams';
 export * from './enterPaymentParams';
+export * from './enterReadingWithPhotoBody';
 export * from './entryReversal';
 export * from './expectedChargeStatus';
 export * from './expense';

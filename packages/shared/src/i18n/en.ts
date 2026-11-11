@@ -720,6 +720,13 @@ export const en = {
       save: 'Save the threshold',
       daysInvalid: 'Enter a whole number of days',
     },
+    readings: {
+      title: 'Meter readings',
+      photoRequired: 'Meter photo required for members',
+      photoRequiredHint:
+        'A member cannot submit a reading without a photo of the meter. The electrician and the board add a photo optionally.',
+      save: 'Save reading settings',
+    },
     payments: {
       title: 'Payments',
       autoAllocatePrepayment: 'Allocate prepayment automatically',
@@ -1500,6 +1507,7 @@ export const en = {
     },
     photo: {
       add: 'Add a photo of the meter',
+      addRow: 'Add a photo',
       replace: 'Replace',
       remove: 'Remove',
       processing: 'Processing…',
@@ -3742,6 +3750,7 @@ export const en = {
     SMTP_HOST_NOT_ALLOWED:
       'This mail server cannot be used. Enter the server of a mail service (for example smtp.gmail.com) and the port 25, 465 or 587.',
     OPENING_BALANCE_ALREADY_SET: 'The opening balance of this account is already entered',
+    READING_PHOTO_REQUIRED: 'Add a photo of the meter: the board asks for a photo with every reading.',
     FILE_TOO_LARGE: 'The file is too large. Maximum 5 MB.',
     FILE_TYPE_NOT_ALLOWED: 'Only photos (JPEG, PNG) and PDF are allowed.',
     TOO_MANY: 'No more than 5 files.',

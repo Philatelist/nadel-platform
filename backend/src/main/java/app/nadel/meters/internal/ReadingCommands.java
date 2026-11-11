@@ -20,6 +20,7 @@ import app.nadel.meters.internal.ReadingValidator.Warning;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
+import app.nadel.settings.CooperativeSettings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -88,6 +89,7 @@ class ReadingCommands {
     private final MeterPointEvents pointEvents;
     private final ApplicationEventPublisher events;
     private final ReadingPhotos photos;
+    private final CooperativeSettings settings;
     private final Clock clock;
     private final TransactionTemplate rowTransaction;
 
@@ -96,7 +98,7 @@ class ReadingCommands {
 
     ReadingCommands(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
             List<ReadingUsage> usages, MeterAuditPublisher audit, MeterPointEvents pointEvents,
-            ApplicationEventPublisher events, ReadingPhotos photos, Clock clock,
+            ApplicationEventPublisher events, ReadingPhotos photos, CooperativeSettings settings, Clock clock,
             PlatformTransactionManager transactions) {
         this.meters = meters;
         this.readings = readings;
@@ -106,6 +108,7 @@ class ReadingCommands {
         this.pointEvents = pointEvents;
         this.events = events;
         this.photos = photos;
+        this.settings = settings;
         this.clock = clock;
         this.rowTransaction = new TransactionTemplate(transactions);
     }
@@ -161,6 +164,19 @@ class ReadingCommands {
             results.add(result);
         }
         return new ReadingBatchResult(results);
+    }
+
+    /**
+     * Enters one reading with a photo of the meter (feature 021 §2.3) as a row of {@link #enter} is entered, in one
+     * transaction with its photo: a refused photo or reading saves nothing. The photo is checked before the meter is
+     * locked ({@link ReadingPhotoUploads}); with a photo the same value on the same date is a change (a new reading
+     * replaces the counted one). The audit entry says {@code photo} {@code true}, never the file.
+     */
+    @Transactional
+    ReadingSaved enterWithPhoto(ReadingEntry entry, MultipartFile photo, AccessProfile actor) {
+        ReadingPhotoUploads.Prepared prepared = ReadingPhotoUploads.prepare(photo);
+        return saved(Objects.requireNonNull(enterOne(entry.getMeterId(), entry.getTakenOn(), entry.getValue(), actor,
+                false, prepared).saved()));
     }
 
     /**
@@ -287,6 +303,10 @@ class ReadingCommands {
      * checked after the owner rule and before the meter is locked ({@link ReadingPhotoUploads}) and stored in this
      * transaction with the reading, so a refused photo saves nothing. The audit entry says whether a photo came with
      * the reading ({@code photo} {@code true}/{@code false}), never the file.
+     * <p>
+     * While the cooperative's setting {@link CooperativeSettings#readingPhotoRequired()} is on, a submission without a
+     * photo is 400 {@code READING_PHOTO_REQUIRED} on {@code photo}, checked after the owner rule and before anything
+     * else, so nothing is saved (feature 021 §2.3). The board's entries never need a photo.
      *
      * @param photo the uploaded photo; null without one (the deprecated JSON operation and the Telegram bot)
      */
@@ -295,6 +315,11 @@ class ReadingCommands {
         access.requireCooperativeData(actor);
         if (!access.ownsNow(actor, plotId)) {
             throw MeterAccess.plotNotFound();
+        }
+        if (photo == null && settings.readingPhotoRequired()) {
+            throw new ApiProblemException(HttpStatus.BAD_REQUEST, ProblemCodes.READING_PHOTO_REQUIRED,
+                    "The cooperative asks for a photo of the meter with every reading.",
+                    List.of(new FieldProblem(ReadingPhotoUploads.FIELD, ProblemCodes.READING_PHOTO_REQUIRED)));
         }
         ReadingPhotoUploads.Prepared prepared = photo == null ? null : ReadingPhotoUploads.prepare(photo);
         MeterValue value = parse(input.getValue());
@@ -414,11 +439,21 @@ class ReadingCommands {
     // ---- one row
 
     /**
-     * Enters one reading in the caller's transaction (a row of a batch: the row's); for a recalculation without the use
-     * check, the point event and the publication of the audit entry.
+     * Enters one reading without a photo in the caller's transaction (a row of a batch: the row's); for a
+     * recalculation without the use check, the point event and the publication of the audit entry.
      */
     Applied enterOne(UUID meterId, @Nullable LocalDate takenOn, String text, AccessProfile actor,
             boolean recalculation) {
+        return enterOne(meterId, takenOn, text, actor, recalculation, null);
+    }
+
+    /**
+     * {@link #enterOne(UUID, LocalDate, String, AccessProfile, boolean)} with an optional checked photo, stored with
+     * the new reading; with a photo the same value on the same date is a change, not a repeat. The audit entry says
+     * whether a photo came ({@code photo}; for a replaced reading also whether that one had one), never the file.
+     */
+    private Applied enterOne(UUID meterId, @Nullable LocalDate takenOn, String text, AccessProfile actor,
+            boolean recalculation, ReadingPhotoUploads.@Nullable Prepared photo) {
         MeterValue value = parse(text);
         MeterRecord meter = meters.findByIdForUpdate(meterId).orElseThrow(() -> new ApiProblemException(
                 HttpStatus.NOT_FOUND, ProblemCodes.NOT_FOUND, "The meter was not found.",
@@ -429,7 +464,7 @@ class ReadingCommands {
         MeterReadingRecord sameDate = onDate(approved, date);
         List<Reading> counted = readingsOf(approved.stream().filter(other -> other != sameDate).toList());
         Neighbours neighbours = ReadingValidator.neighbours(span, counted, date);
-        if (sameDate != null && sameDate.getValue().equals(value)) {
+        if (photo == null && sameDate != null && sameDate.getValue().equals(value)) {
             // the same reading again (a second tap on "save"): nothing changes and nothing is audited
             Reading same = sameDate.toReading();
             return new Applied(new Saved(sameDate,
@@ -448,13 +483,19 @@ class ReadingCommands {
         MeterReadingRecord created = MeterReadingRecord.entered(meter.getTenantId(), meter.getId(), date, value,
                 actor.memberId(), clock.instant());
         replace(replaced, created);
+        if (photo != null) {
+            photos.save(meter, created, photo, actor);
+        }
+        String hasPhoto = Boolean.toString(photo != null);
         AuditEvent event = sameDate == null
                 ? audit.readingEvent(actor, "READING_ENTERED", meter, List.of(
                         new FieldChange("takenOn", null, date.toString()),
-                        new FieldChange("value", null, value.toString())))
+                        new FieldChange("value", null, value.toString()),
+                        new FieldChange("photo", null, hasPhoto)))
                 : audit.readingEvent(actor, "READING_REPLACED", meter, List.of(
                         new FieldChange("takenOn", date.toString(), date.toString()),
-                        new FieldChange("value", sameDate.getValue().toString(), value.toString())));
+                        new FieldChange("value", sameDate.getValue().toString(), value.toString()),
+                        new FieldChange("photo", Boolean.toString(photos.has(sameDate.getId())), hasPhoto)));
         if (!recalculation) {
             audit.publish(event);
             pointEvents.changed(meter, date, Cause.READING_ENTERED);

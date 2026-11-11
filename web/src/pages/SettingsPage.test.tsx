@@ -48,6 +48,7 @@ const settings: CooperativeSettings = {
   redAmount: '1000.00',
   redDays: 90,
   autoAllocatePrepayment: true,
+  readingPhotoRequired: false,
 };
 
 describe('SettingsPage', () => {
@@ -290,5 +291,15 @@ describe('SettingsPage', () => {
     permissions = ['METERS_VIEW'];
     renderPage();
     expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('shows the photo switch with the server value and saves the flag', async () => {
+    renderPage();
+    const sw = screen.getByRole('switch', { name: 'Meter photo required for members' });
+    expect(sw).not.toBeChecked();
+    const user = userEvent.setup();
+    await user.click(sw);
+    await user.click(screen.getByRole('button', { name: 'Save reading settings' }));
+    expect(mutate).toHaveBeenCalledWith({ data: { readingPhotoRequired: true } });
   });
 });

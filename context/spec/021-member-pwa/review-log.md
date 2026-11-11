@@ -21,3 +21,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `51e4a15..81269a4` | PASS | — | minor: an empty `role="status"` region per copy button; help `member-bill.md` update is Slice 10 |
+
+## Slice 4 — A member submits a reading with a photo; the board sees it in approvals
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `81269a4..323e274` | PASS | — | minor: V38 also adds `reading_photo_required` (used by Slice 5, as the tasks plan); one `photos.has` query per round row (N+1); PNG > 2000 px becomes JPEG (transparency flattened); `photoError` not cleared by «Прибрати»; thumbnail contentType hard-coded |

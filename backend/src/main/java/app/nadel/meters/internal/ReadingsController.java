@@ -13,6 +13,7 @@ import nadel.contract.model.PendingReading;
 import nadel.contract.model.ReadingBatch;
 import nadel.contract.model.ReadingBatchResult;
 import nadel.contract.model.ReadingCorrection;
+import nadel.contract.model.ReadingEntry;
 import nadel.contract.model.ReadingRejection;
 import nadel.contract.model.ReadingSaved;
 import nadel.contract.model.ReadingStatus;
@@ -31,9 +32,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * The endpoints of tag {@code readings}. The round, entry, correction and deletion need {@code READINGS_ENTER}; the
- * approvals list, approval and rejection need {@code READINGS_APPROVE}; the platform operator has no permissions and
- * gets 403. {@code GET /meters/{id}/readings}, {@code POST /plots/{id}/readings} (deprecated) and
+ * The endpoints of tag {@code readings}. The round, entry (also one reading with a photo), correction and deletion
+ * need {@code READINGS_ENTER}; the approvals list, approval and rejection need {@code READINGS_APPROVE}; the platform
+ * operator has no permissions and gets 403. {@code GET /meters/{id}/readings}, {@code POST /plots/{id}/readings} (deprecated) and
  * {@code POST /plots/{id}/reading-submissions} are open to every member for the meters of the plots they own, so their
  * checks are in {@link ReadingQueries} and {@link ReadingCommands}; {@code GET /readings/{id}/photo} is open to the
  * owners of the plot and to the holders of {@code READINGS_ENTER} or {@code READINGS_APPROVE} ({@link ReadingPhotos}).
@@ -71,6 +72,14 @@ class ReadingsController implements ReadingsApi {
     @PreAuthorize("hasAuthority('PERM_READINGS_ENTER')")
     public ResponseEntity<ReadingBatchResult> enterReadings(ReadingBatch readingBatch) {
         return ResponseEntity.ok(commands.enter(readingBatch, currentUser.profile()));
+    }
+
+    /** One reading with a photo of the meter, saved together (see {@link ReadingCommands#enterWithPhoto}). */
+    @Override
+    @PreAuthorize("hasAuthority('PERM_READINGS_ENTER')")
+    public ResponseEntity<ReadingSaved> enterReadingWithPhoto(ReadingEntry reading, MultipartFile photo) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(commands.enterWithPhoto(reading, photo, currentUser.profile()));
     }
 
     @Override

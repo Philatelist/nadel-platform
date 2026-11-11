@@ -21,11 +21,11 @@ import org.jspecify.annotations.Nullable;
  */
 record SettingsValues(PlotStatusVisibility memberPlotStatusVisibility, LossesMode lossesMode, BigDecimal lossesPercent,
         CommonConsumerSplit commonConsumerDefaultSplit, BigDecimal redAmount, int redDays, Requisites requisites,
-        boolean autoAllocatePrepayment) {
+        boolean autoAllocatePrepayment, boolean readingPhotoRequired) {
 
     static final SettingsValues DEFAULTS = new SettingsValues(PlotStatusVisibility.OWN_ONLY, LossesMode.FIXED_PERCENT,
             new BigDecimal("0.00"), CommonConsumerSplit.CONNECTED_PLOTS, new BigDecimal("1000.00"), 90,
-            Requisites.NONE, true);
+            Requisites.NONE, true, false);
 
     SettingsValues {
         Objects.requireNonNull(memberPlotStatusVisibility, "memberPlotStatusVisibility");
@@ -57,6 +57,8 @@ record SettingsValues(PlotStatusVisibility memberPlotStatusVisibility, LossesMod
         add(changes, "iban", before.requisites.iban(), requisites.iban());
         add(changes, "autoAllocatePrepayment", Boolean.toString(before.autoAllocatePrepayment),
                 Boolean.toString(autoAllocatePrepayment));
+        add(changes, "readingPhotoRequired", Boolean.toString(before.readingPhotoRequired),
+                Boolean.toString(readingPhotoRequired));
         return changes;
     }
 

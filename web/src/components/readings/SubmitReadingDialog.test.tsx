@@ -114,4 +114,19 @@ describe('SubmitReadingDialog photo', () => {
     );
     expect(await screen.findByText('Файл завеликий. Максимум 5 МБ.')).toBeInTheDocument();
   });
+
+  it('shows the message of a required photo under the photo field', async () => {
+    renderDialog();
+    act(() =>
+      mutationOptions.mutation.onError(
+        new ApiError(400, {
+          code: 'VALIDATION',
+          errors: [{ field: 'photo', code: 'READING_PHOTO_REQUIRED' }],
+        }),
+      ),
+    );
+    expect(
+      await screen.findByText('Додайте фото лічильника: правління просить фото до кожного показу.'),
+    ).toBeInTheDocument();
+  });
 });

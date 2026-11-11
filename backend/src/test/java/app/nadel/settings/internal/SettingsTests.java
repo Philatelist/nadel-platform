@@ -379,6 +379,67 @@ class SettingsTests extends IntegrationTest {
         assertThat(TenantContext.runAs(OTHER_TENANT, cooperativeSettings::autoAllocatePrepayment)).isTrue();
     }
 
+    // ---- the photo rule of members' readings (feature 021 §2.3)
+
+    @Test
+    void noPhotoIsRequiredWithoutARow() throws Exception {
+        read(demo("member@demo.local")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.readingPhotoRequired").value(false));
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::readingPhotoRequired)).isFalse();
+        // no cooperative bound: the defaults
+        assertThat(cooperativeSettings.readingPhotoRequired()).isFalse();
+    }
+
+    @Test
+    void theChairmanRequiresAPhotoAndItIsAuditedWithTheOtherSettingsKept() throws Exception {
+        String chairman = demo("chairman@demo.local");
+        long before = auditCount();
+        save(chairman, Map.of("redDays", 45)).andExpect(status().isOk());
+
+        save(chairman, Map.of("readingPhotoRequired", true)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.readingPhotoRequired").value(true))
+                .andExpect(jsonPath("$.redDays").value(45))
+                .andExpect(jsonPath("$.autoAllocatePrepayment").value(true));
+
+        read(demo("member@demo.local")).andExpect(jsonPath("$.readingPhotoRequired").value(true));
+        assertThat(ownerJdbc().queryForObject("select reading_photo_required from cooperative_settings "
+                + "where tenant_id = ?", Boolean.class, DEMO_TENANT)).isTrue();
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::readingPhotoRequired)).isTrue();
+        // the other cooperative keeps its own default
+        assertThat(TenantContext.runAs(OTHER_TENANT, cooperativeSettings::readingPhotoRequired)).isFalse();
+        // another change leaves it on
+        save(chairman, Map.of("redDays", 30)).andExpect(jsonPath("$.readingPhotoRequired").value(true));
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 3));
+        JsonNode changes = json.readTree((String) auditEntries().get((int) before + 1).get("changes"));
+        assertThat(changes).hasSize(1);
+        assertThat(changes.get(0).get("field").asString()).isEqualTo("readingPhotoRequired");
+        assertThat(changes.get(0).get("old").asString()).isEqualTo("false");
+        assertThat(changes.get(0).get("new").asString()).isEqualTo("true");
+
+        // switched off again; saving the current value writes no audit entry
+        save(chairman, Map.of("readingPhotoRequired", false)).andExpect(jsonPath("$.readingPhotoRequired")
+                .value(false));
+        save(chairman, Map.of("readingPhotoRequired", false)).andExpect(status().isOk());
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(auditCount()).isEqualTo(before + 4));
+        assertThat(TenantContext.runAs(DEMO_TENANT, cooperativeSettings::readingPhotoRequired)).isFalse();
+    }
+
+    @Test
+    void onlySettingsManageRequiresAPhoto() throws Exception {
+        for (String email : List.of("treasurer@demo.local", "member@demo.local", "electrician@demo.local")) {
+            save(demo(email), Map.of("readingPhotoRequired", true)).andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+        save(demo("chairman@demo.local"), Map.of("readingPhotoRequired", "always"))
+                .andExpect(status().isBadRequest());
+        assertThat(rowCount(DEMO_TENANT)).isZero();
+        save(customRoleToken("SETTINGS_MANAGE"), Map.of("readingPhotoRequired", true))
+                .andExpect(status().isOk());
+        assertThat(ownerJdbc().queryForObject("select reading_photo_required from cooperative_settings "
+                + "where tenant_id = ?", Boolean.class, DEMO_TENANT)).isTrue();
+    }
+
     @Test
     void theCooperativeComesFromTheTokenNotFromTheBody() throws Exception {
         save(demo("chairman@demo.local"), Map.of("memberPlotStatusVisibility", "ALL_PLOTS",
