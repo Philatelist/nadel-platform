@@ -4,15 +4,17 @@
  * the e-mail rate and the payment-message switch, the secrets sealed with the cooperative's data key, ADR 0018), the
  * Telegram links and their one-time codes, the bot (long polling, one instance per bot by a lease), the delivery
  * register with its sending worker (JobRunr, one lane per cooperative and channel by a lease), the payment messages,
- * the bot's menu («Борг», «Рахунок», «Показання») with the messages about the board's decision on a reading and, in a
- * later slice, announcements.
+ * the bot's menu («Борг», «Рахунок», «Показання») with the messages about the board's decision on a reading,
+ * announcements and, since feature 021, Web Push on the members' own devices ({@code internal.push}: the VAPID keys,
+ * JDK-only RFC 8291/8292 crypto, the device table {@code push_subscription}, the JobRunr job {@code SendPush}).
  * <p>
  * It has no public API: other modules never call it. It reads other modules only through their public APIs
  * ({@code members.MemberDirectory}, {@code members.MemberChannels}, {@code identity.OwnedPlotsSource},
  * {@code tenancy.TenantDirectory}, {@code documents.DocumentsFacade}, {@code plots.PlotOwners},
  * {@code ledger.LedgerReadModel}, {@code tariffs.ChargeTypeCatalog}, {@code meters.MemberReadings}), implements their
  * SPIs ({@code members.TelegramLinkStatus}, {@code documents.PaperRecipients}) and listens to their events (the
- * ledger's {@code PaymentRecorded} and {@code PaymentReversed}, the meters' {@code ReadingDecided}). Everything is internal: the endpoints of tag
+ * ledger's {@code PaymentRecorded} and {@code PaymentReversed}, the meters' {@code ReadingDecided}, the documents'
+ * {@code InvoicesIssued}). Everything is internal: the endpoints of tag
  * {@code notifications} ({@code NotificationsController}),
  * {@code DeliverySettingsService}, {@code DeliveryChecks}, {@code MemberNotifications}, {@code LinkCodes},
  * {@code TelegramLinks}, the bot ({@code BotSupervisor}, {@code BotWorker}, {@code BotConversation},
@@ -22,7 +24,7 @@
  * {@code DeliveryDispatcher} with its job {@code DispatchDeliveries}, {@code DeliveryLanes}, {@code DeliveryQueue},
  * {@code RateLimiters}, {@code InvoiceMessages}, {@code PaymentMessages}, {@code MailChannel}, {@code TelegramChannel},
  * {@code PaperCopiesProvider}), the texts ({@code NotificationTexts}), the mail layer ({@code internal.mail}) and the
- * Telegram Bot API client ({@code internal.telegram}). See the module README.
+ * Telegram Bot API client ({@code internal.telegram}) and push ({@code internal.push}). See the module README.
  */
 @org.springframework.modulith.ApplicationModule(
         displayName = "Notifications",

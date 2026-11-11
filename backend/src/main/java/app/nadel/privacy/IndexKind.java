@@ -20,5 +20,11 @@ public enum IndexKind {
      * A Telegram chat id (feature 017: the chat a member linked to the cooperative's bot), as the decimal text Telegram
      * sends, so the bot finds the link of an incoming chat without opening every sealed chat id.
      */
-    TELEGRAM_CHAT
+    TELEGRAM_CHAT,
+    /**
+     * The endpoint of a browser's push subscription (feature 021: the push service address of a member's device, a
+     * capability), as the browser sent it with surrounding spaces removed, so one endpoint is stored once per
+     * cooperative without opening every sealed endpoint.
+     */
+    PUSH_ENDPOINT
 }

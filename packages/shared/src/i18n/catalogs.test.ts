@@ -67,3 +67,10 @@ describe('import problem codes', () => {
     for (const code of codes) expect(messages[code], code).toBeTruthy();
   });
 });
+
+describe('push texts', () => {
+  it('uk and en have the same keys', async () => {
+    const { pushTexts } = await import('./pushTexts');
+    expect(Object.keys(pushTexts.uk).sort()).toEqual(Object.keys(pushTexts.en).sort());
+  });
+});

@@ -36,4 +36,9 @@ describe('sw.ts contract', () => {
     expect(source).not.toMatch(/addEventListener\(\s*'install'/);
     expect(source).not.toMatch(/clientsClaim/);
   });
+
+  it('adds only the push and notificationclick listeners, still without caching', () => {
+    const events = [...source.matchAll(/addEventListener\(\s*'([a-z]+)'/g)].map((m) => m[1]);
+    expect(events.sort()).toEqual(['message', 'notificationclick', 'push']);
+  });
 });

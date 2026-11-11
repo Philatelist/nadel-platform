@@ -1,5 +1,6 @@
 package app.nadel.documents.internal;
 
+import app.nadel.documents.InvoicesIssued;
 import app.nadel.documents.internal.nbu.NbuQrPayload;
 import app.nadel.identity.AccessProfile;
 import app.nadel.ledger.InvoiceLedger;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -41,6 +43,7 @@ import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -66,7 +69,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <b>On request</b>: the invoice as of now is compared with the latest version of the plot and month by its content
  * hash ({@link InvoiceSnapshots#contentHash}, which leaves out the version, the dates and the QR code), as the month
  * build compares it: the same hash returns the latest version as it is (nothing written, no audit entry); otherwise
- * the next version is stored (version 1 when the month has none) with the audit entry {@code INVOICE_REISSUED}. 400
+ * the next version is stored (version 1 when the month has none) with the audit entry {@code INVOICE_REISSUED} and
+ * the event {@link InvoicesIssued} of its plot (feature 021). 400
  * {@code VALIDATION_FAILED} on {@code month} for a month after the current one (Kyiv); 404 {@code PLOT_NOT_FOUND} for
  * an unknown plot or one of another cooperative; 409 {@code REQUISITES_MISSING} with the missing {@code IBAN} /
  * {@code EDRPOU}; 409 {@code PLOT_NOT_INVOICEABLE} for common land, an archived plot or a plot without a current
@@ -82,7 +86,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code asOf}: the ledgers of the chunk, each plot's invoice, its content hash compared with the latest version of the
  * month; a plot without an invoice of the month and with nothing due is skipped unless {@code includeNothingDue}; a plot
  * whose latest version has the same hash is unchanged; every other plot gets a new version; the persistence context is
- * flushed and cleared after each chunk. One {@code INVOICES_ISSUED} audit entry with the counts. The build takes the
+ * flushed and cleared after each chunk. One {@code INVOICES_ISSUED} audit entry with the counts and, when it stored
+ * something, one {@link InvoicesIssued} event with the plots of the new versions (feature 021). The build takes the
  * month's lock without waiting ({@code pg_try_advisory_xact_lock}): while another build of the month, or an on-request
  * invoice of it, holds the lock it is 409 {@code INVOICE_BUILD_RUNNING} and nothing is built; the on-request invoice
  * (short) waits for the lock instead. The preview takes no lock and writes nothing: it walks the plots exactly as the
@@ -185,6 +190,7 @@ class InvoiceBuilder {
     private final InvoiceRepository invoices;
     private final InvoiceAuditPublisher audit;
     private final ListedMonths months;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     /** Test hook: called with the index of each chunk of a month build after it was written; nothing in production. */
@@ -195,7 +201,7 @@ class InvoiceBuilder {
             PlotCatalog plots, PlotOwners plotOwners, MemberDirectory members, RoleHolders roleHolders,
             ChargeTypeCatalog chargeTypes, CooperativeSettings settings, TenantDirectory tenants,
             InvoiceSnapshots snapshots, InvoiceRepository invoices, InvoiceAuditPublisher audit, ListedMonths months,
-            Clock clock) {
+            ApplicationEventPublisher events, Clock clock) {
         this.entityManager = entityManager;
         this.repeatableRead = new TransactionTemplate(transactionManager);
         this.repeatableRead.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -212,6 +218,7 @@ class InvoiceBuilder {
         this.invoices = invoices;
         this.audit = audit;
         this.months = months;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -263,6 +270,7 @@ class InvoiceBuilder {
         Invoiceable invoiceable = invoiceable();
         Instant asOf = asOf();
         Tally tally = new Tally();
+        List<UUID> stored = new ArrayList<>();
         decide(tenantId, month, includeNothingDue, context, invoiceable, asOf, decision -> {
             tally.count(decision);
             if (decision.outcome() == Outcome.BUILT || decision.outcome() == Outcome.NEW_VERSION) {
@@ -270,6 +278,7 @@ class InvoiceBuilder {
                 InvoiceSnapshots.Sealed sealed = snapshots.seal(tenantId, document);
                 entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed,
                         issuer.memberId()));
+                stored.add(document.plot().id());
             }
         }, index -> {
             entityManager.flush();
@@ -277,6 +286,9 @@ class InvoiceBuilder {
             afterChunk.accept(index);
         });
         audit.issued(issuer, month, tally.built, tally.newVersions, tally.unchanged, tally.skipped, asOf);
+        if (!stored.isEmpty()) {
+            events.publishEvent(new InvoicesIssued(tenantId, month, UUID.randomUUID(), stored));
+        }
         return new MonthBuild(false, invoiceable.order().size(), 0, 0, 0, tally.built, tally.newVersions,
                 tally.unchanged, tally.skipped);
     }
@@ -417,6 +429,7 @@ class InvoiceBuilder {
         entityManager.persist(InvoiceRecord.issue(document.id(), tenantId, document, sealed, issuer.memberId()));
         entityManager.flush();
         audit.reissued(issuer, document, asOf);
+        events.publishEvent(new InvoicesIssued(tenantId, month, document.id(), List.of(plotId)));
         return new Issued(document.id(), plotId, plot.number(), month, document.number(), version,
                 document.totals().due(), document.issuedAt(), true);
     }

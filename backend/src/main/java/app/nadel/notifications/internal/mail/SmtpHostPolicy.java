@@ -99,8 +99,11 @@ public class SmtpHostPolicy {
         return addresses[0];
     }
 
-    /** Whether the address is a public unicast address of the Internet. */
-    static boolean isPublic(InetAddress address) {
+    /**
+     * Whether the address is a public unicast address of the Internet. Also the address rule of the push endpoints
+     * ({@code internal.push.PushEndpointPolicy}, feature 021).
+     */
+    public static boolean isPublic(InetAddress address) {
         if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
                 || address.isSiteLocalAddress() || address.isMulticastAddress()) {
             return false;

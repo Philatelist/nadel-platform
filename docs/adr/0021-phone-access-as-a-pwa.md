@@ -36,8 +36,12 @@ a phone layout.
   A 404 or 410 from the push service deletes the subscription. Before every send the endpoint host is checked against an
   allowlist of known push services (https only, no redirects, private addresses refused); development origins are added
   only by configuration. VAPID keys are generated once per stand and come from the environment.
-- Sending runs through the delivery register and JobRunr workers of ADR 0018 as another channel, on domain events and the
-  outbox (ADR 0007), with a time-to-live so a late push is dropped.
+- Sending runs on domain events and the outbox (ADR 0007) and JobRunr jobs, one job per device and message with a
+  deterministic id (a redelivered event queues nothing new), retried with back-off while a time-to-live lasts, so a late
+  push is dropped. It is not a channel of the delivery register of ADR 0018: push is an extra signal next to the
+  member's delivery channel, not a delivery of a document, so it has no delivery row, lane or paper fallback.
+  (Implementation note, slice 7: this replaces the first wording "through the delivery register … as another
+  channel", which the technical specification had already narrowed.)
 
 ### The fake push service rule
 - Dev and end-to-end tests never reach a real push service. `infra/fake-push` (Node, standard library only, like

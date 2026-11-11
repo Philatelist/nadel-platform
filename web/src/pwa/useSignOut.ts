@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
+import { deleteMyPushDevice } from '@nadel/api-client';
 import { useAuth } from 'react-oidc-context';
+import { signOutCleanup } from './pushDevice';
 
 const CLEANUP_CAP_MS = 3000;
 
@@ -18,7 +20,7 @@ export async function deleteUserCaches(
 }
 
 export interface SignOutSteps {
-  /** Device clean-up steps that run together (caches now; the push slice adds the device and the subscription). */
+  /** Device clean-up steps that run together (caches, this push device and its subscription). */
   cleanups: Array<() => Promise<unknown>>;
   clearSession: () => void;
   signoutRedirect: () => Promise<unknown>;
@@ -54,8 +56,11 @@ export function useSignOut(): () => Promise<void> {
     // sessionStorage holds the sign-in; keep the id token for the redirect so Keycloak ends the session without a prompt
     const idToken = user?.id_token;
     await signOutCleanly({
-      // extension point: the push slice adds «delete this device on the server» and «unsubscribe» here
-      cleanups: [() => deleteUserCaches(typeof caches === 'undefined' ? undefined : caches)],
+      cleanups: [
+        () => deleteUserCaches(typeof caches === 'undefined' ? undefined : caches),
+        // the token is still valid here, so the server call can authorize
+        () => signOutCleanup((id) => deleteMyPushDevice(id)),
+      ],
       clearSession: () => window.sessionStorage.clear(),
       signoutRedirect: () => signoutRedirect(idToken ? { id_token_hint: idToken } : undefined),
     });

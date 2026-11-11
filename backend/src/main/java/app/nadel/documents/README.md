@@ -9,8 +9,8 @@ specs: `context/spec/016-invoices-and-documents/`.
 The module adds no money rule (the invoice's figures are the booking-month rule of the ledger, money rules 13). It
 owns the tables `invoice`, `certificate` and `document_counter` (V28, all under RLS `tenant_isolation`; `invoice`
 append-only, see below). It reads only through the public APIs of the modules that own the data (ledger, plots,
-members, audit, tariffs, settings, tenancy, identity, privacy) and never their tables (ADR 0001). Nothing depends on
-it.
+members, audit, tariffs, settings, tenancy, identity, privacy) and never their tables (ADR 0001). The notifications
+module uses its public API (`DocumentsFacade`, `DocumentFormats`) and listens to its event `InvoicesIssued`.
 
 ## Endpoints
 
@@ -271,7 +271,8 @@ with `number` and `reason`. No names. Downloads are not audited.
    chunk; a package-private test hook (`afterChunk`, a no-op in production) runs between chunks.
 5. One `INVOICES_ISSUED` audit entry (entity type `BILLING_MONTH`, label `YYYY-MM`, the same entity id for every build of
    the month; fields `month`, `built`, `newVersions`, `unchanged`, `skipped`), through the outbox in the build's
-   transaction. Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
+   transaction, and, when the build stored anything, one event `InvoicesIssued` with the plots of the stored versions
+   (below). Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
 
 The **preview** (`preview=true`) runs steps 1, 3 and 4 with the same decision per plot (`InvoiceBuilder.decide`, the
 content hash included), takes no lock and writes nothing: `InvoiceBuild{preview: true, invoiceable, built,
@@ -358,6 +359,21 @@ implementation write its link codes.
 **SPI `PaperRecipients`** (implemented by the notifications module): `copiesFor(month, plotIds)` answers the paper
 copies of each plot (`PaperCopy`: member, label "Last First", optional link QR payload). Called in the print's
 transaction; optional (`ObjectProvider`): without it the print keeps the feature 016 filter.
+
+## Event `InvoicesIssued` (feature 021)
+
+`documents.InvoicesIssued(tenantId, month, buildId, plotIds)` is published inside the transaction that stores new
+invoice versions, so the Spring Modulith outbox keeps it with them (ADR 0007):
+
+- by a month build (`InvoiceBuilder.forMonth`), once, with exactly the plots whose invoice got version 1 or a new
+  version (**built** and **newVersions**); never the **unchanged** or **skipped** plots; a build that stores nothing (a
+  rebuild without a change) and a preview publish nothing; `buildId` is a new random id per build;
+- by an invoice issued on request (`POST /plots/{id}/invoices`, and through it the facade's `invoiceForToday` and the
+  bot's `invoiceForDay`) when it stores a new version, with its one plot; `buildId` is the stored version's id. An
+  unchanged on-request invoice publishes nothing.
+
+Ids and the month only (never an amount, a number or a name). The notifications module listens to it for the push
+«Новий рахунок за {місяць}» to the plots' current owners (feature 021 §2.2), once per build and device.
 
 ## Amounts in words
 
@@ -470,6 +486,10 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   build started while the first runs is 409 `INVOICE_BUILD_RUNNING` (a preview meanwhile is 200) and nothing is built
   twice, the next build finds everything unchanged; one `INVOICES_ISSUED`
   entry per build with its counts and no names; the month list in the natural order of the plot numbers.
+- `InvoicesIssuedEventTests` (Testcontainers, feature 021): a month build publishes one `InvoicesIssued` with exactly
+  the plots of the new versions (a plot with nothing due skipped), a rebuild without a change and a preview publish
+  nothing, a payment's rebuild publishes only that plot; an on-request invoice publishes its plot with the version's id
+  as `buildId`, an unchanged one nothing.
 - `InvoiceBuildConsistencyTests` (Testcontainers): a payment and a charge committed (with a `created_at` before the
   build) between the first and the second chunk of a 60-plot build, on plots of both chunks, are in none of its
   invoices; the next build gives exactly those four plots a new version.

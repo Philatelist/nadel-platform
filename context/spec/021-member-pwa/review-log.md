@@ -33,3 +33,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `323e274..a4d349f` | PASS | — | minor: a javadoc line over 120 chars in ReadingsController; RoundRow photo buttons inside the form rely on Button's default type |
+
+## Slice 6 — The installable app
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a4d349f..3d5c872` | PASS | — | minor: hourly update-check interval never cleared (single registration); `promptInstall` drops the event before `prompt()`; the SW contract test is source-text based; import order of `useDirtyGuard` |

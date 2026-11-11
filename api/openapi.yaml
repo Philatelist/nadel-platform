@@ -1654,6 +1654,112 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /me/push:
+    get:
+      tags: [notifications]
+      operationId: getMyPushConfig
+      summary: Whether push notifications work on this platform, and the key to subscribe with
+      description: |
+        «Сповіщення на цьому пристрої» (feature 021 §2.2): `enabled` is true only when the server has a valid VAPID key
+        pair; then `publicKey` is the VAPID public key (the browser's `applicationServerKey`, base64url without
+        padding), which the app compares with the key of an existing browser subscription. When `enabled` is false the
+        app shows no push switch. No permission is needed. The platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/push/devices:
+    get:
+      tags: [notifications]
+      operationId: listMyPushDevices
+      summary: The signed-in member's devices with push on
+      description: |
+        The devices of the signed-in member that receive push notifications, newest first. A device never carries its
+        push address or keys. No permission is needed; only the member's own devices. The platform operator: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PushDevice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [notifications]
+      operationId: registerMyPushDevice
+      summary: Turn push on for this device (save the browser's push subscription)
+      description: |
+        Saves the browser's push subscription (`PushSubscription.toJSON()`: the endpoint and the keys `p256dh` and
+        `auth`) for the signed-in member, with the device's language. The same endpoint is stored once per
+        cooperative: sending it again updates the device (and moves it to the signed-in member when another member had
+        it). A member keeps at most 10 devices; the oldest is dropped. The endpoint and the keys are stored encrypted
+        and never returned. Not written to the audit log.
+
+        400 `VALIDATION_FAILED` when the endpoint is not an `https` address of a known push service (with
+        `errors[{field: endpoint, code: INVALID}]`), or the keys are not a P-256 public key of 65 bytes on the curve and
+        an auth secret of 16 bytes (`errors[{field: keys.p256dh | keys.auth, code: INVALID}]`). 409 `PUSH_DISABLED`
+        when the server has no push keys (see `getMyPushConfig`). The platform operator: 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionInput'
+      responses:
+        '201':
+          description: The device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /me/push/devices/{id}:
+    delete:
+      tags: [notifications]
+      operationId: deleteMyPushDevice
+      summary: Turn push off for one of the signed-in member's devices
+      description: |
+        Deletes the device; it receives no further push notification. Works also while push is off on the server.
+        Another member's device, another cooperative's or an unknown id: 404 `NOT_FOUND`. Not written to the audit
+        log. The platform operator: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /billing-months/{month}/invoices/send:
     post:
       tags: [notifications]
@@ -8213,7 +8319,8 @@ components:
         marked reconciled without its statement or with a closing difference (code `BANK_MONTH_NOT_BALANCED`), the
         statement of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a
         bank difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
-        entered (code `BANK_STATEMENT_MISSING`)
+        entered (code `BANK_STATEMENT_MISSING`), or a device is registered for push notifications while the server has
+        no push keys (code `PUSH_DISABLED`)
       content:
         application/problem+json:
           schema:
@@ -16365,6 +16472,81 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    PushConfig:
+      type: object
+      description: Whether push notifications work on this platform (`getMyPushConfig`)
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the server sends push notifications; false when it has no valid VAPID key pair
+        publicKey:
+          type: string
+          description: >-
+            The VAPID public key, an uncompressed P-256 point in base64url without padding (87 characters), when
+            `enabled`
+          pattern: '^[A-Za-z0-9_-]{87}$'
+
+    PushSubscriptionInput:
+      type: object
+      description: A browser's push subscription (`PushSubscription.toJSON()`) and the device's details
+      required: [endpoint, keys, language]
+      properties:
+        endpoint:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: >-
+            The push service address of the subscription: an `https` URL of a known push service (Google, Mozilla,
+            Microsoft, Apple)
+        keys:
+          $ref: '#/components/schemas/PushSubscriptionKeys'
+        label:
+          type: string
+          maxLength: 80
+          description: A name for the device the member recognises (for example the browser and the system)
+        language:
+          type: string
+          enum: [uk, en]
+          description: The language the device shows the notification texts in
+
+    PushSubscriptionKeys:
+      type: object
+      required: [p256dh, auth]
+      properties:
+        p256dh:
+          type: string
+          minLength: 86
+          maxLength: 88
+          pattern: '^[A-Za-z0-9_-]+={0,2}$'
+          description: The browser's P-256 public key, 65 bytes (uncompressed point), base64url
+        auth:
+          type: string
+          minLength: 22
+          maxLength: 24
+          pattern: '^[A-Za-z0-9_-]+={0,2}$'
+          description: The browser's auth secret, 16 bytes, base64url
+
+    PushDevice:
+      type: object
+      description: >-
+        A device of the signed-in member that receives push notifications; never its push address or keys
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          description: The name the device was saved with, when given
+        createdAt:
+          type: string
+          format: date-time
+        lastSentAt:
+          type: string
+          format: date-time
+          description: When a push notification last reached the push service for the device
 
     InvoiceSendRequest:
       type: object

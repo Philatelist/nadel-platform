@@ -75,6 +75,15 @@ export const en = {
     save: 'Save',
     saved: 'Saved.',
     viberUnsupported: 'Viber is not supported yet — invoices are printed on paper',
+    push: {
+      title: 'Notifications on this device',
+      hint: 'Short messages about invoices, payments and readings will arrive on this phone or computer.',
+      blocked:
+        'Notifications are blocked in the browser settings. Allow them for this site and turn them on again.',
+      iosNeedsInstall: 'On iPhone notifications work only in the installed app (iOS 16.4 or newer).',
+      unsupported: 'This browser does not support notifications.',
+      error: 'Could not change the notification setting. Please try again.',
+    },
   },
   memberAccess: {
     title: 'System access',
@@ -3780,6 +3789,7 @@ export const en = {
     BANK_MONTH_RECONCILED: 'The month is already reconciled and cannot be changed.',
     BANK_STATEMENT_MISSING: 'Enter the statement of this month first.',
     CATEGORY_NAME_TAKEN: 'This category already exists.',
+    PUSH_DISABLED: 'Device notifications are not available right now.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

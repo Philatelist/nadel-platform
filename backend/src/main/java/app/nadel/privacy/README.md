@@ -12,7 +12,7 @@ Table `tenant_data_key` (V21). No endpoints. Depends on `tenancy` (`TenantContex
 |---|---|
 | `PersonalDataCipher` | Runtime use inside a cooperative's transaction: `encrypt(tenantId, FieldRef, plaintext)`, `decrypt(tenantId, FieldRef, sealed)`, `blindIndex(tenantId, IndexKind, normalised)`. Refuses (`IllegalStateException`) a `tenantId` that is not `TenantContext.currentTenantId()` |
 | `FieldRef(table, column, rowId)` | The place of a value, the associated data of its encryption. Names match `[a-z_.]+` (never `|`); a JSON path such as `changes.email.old` is a column name |
-| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`, `DOCUMENT_CONTENT` (feature 016: the content hash of an invoice snapshot's canonical form, names in plaintext, so a change is detected without a hash of plaintext names), `TELEGRAM_CHAT` (feature 017: a Telegram chat id as the decimal text Telegram sends, so the bot finds the link of an incoming chat); part of the HMAC input, so kinds never collide |
+| `IndexKind` | `EMAIL`, `PHONE`, `PHONE_LAST4`, `DOCUMENT_CONTENT` (feature 016: the content hash of an invoice snapshot's canonical form, names in plaintext, so a change is detected without a hash of plaintext names), `TELEGRAM_CHAT` (feature 017: a Telegram chat id as the decimal text Telegram sends, so the bot finds the link of an incoming chat), `PUSH_ENDPOINT` (feature 021: the endpoint of a browser's push subscription as sent, stripped, so one endpoint is one device per cooperative); part of the HMAC input, so kinds never collide |
 | `OwnerKeyring` | Owner-side work on Flyway's connection (Java migrations, callbacks): `open(connection).forTenant(tenantId)` gives `encrypt`/`decrypt`/`blindIndex` with the same formats; creates a missing key on that connection, inside the caller's transaction. Depends only on the master keys, never on JPA |
 | `PersonalDataUnreadableException` | A value or key that does not open: 500 `PERSONAL_DATA_UNREADABLE`, message without values. Callers never turn it into an empty field, which a later save would write back |
 
@@ -33,7 +33,11 @@ personal data but are kept with the same key (ADR 0018): the mailbox password at
 `FieldRef("delivery_settings", "smtp_password_enc", tenantId)` and the bot token at
 `FieldRef("delivery_settings", "bot_token_enc", tenantId)` (the row id of `delivery_settings` is the cooperative), and
 the chat id of a member's Telegram link at `FieldRef("telegram_link", "chat_id_enc", linkId)` with the blind index
-`TELEGRAM_CHAT` in `telegram_link.chat_id_bidx` (see the notifications README).
+`TELEGRAM_CHAT` in `telegram_link.chat_id_bidx` (see the notifications README). For push (feature 021) it seals a
+member device's push subscription: the endpoint at `FieldRef("push_subscription", "endpoint_enc", id)` with the blind
+index `PUSH_ENDPOINT` in `push_subscription.endpoint_index`, the browser key `p256dh` (column `p256dh_enc`) at the place
+name `ua_public_enc` (place names have no digits) and the auth secret at `auth_enc`, both as base64url text; the row id
+is made by the application before sealing.
 The `treasury` module (feature 018) seals the counterparty and the description of an expense at
 `FieldRef("expense", "counterparty_enc" | "description_enc", expenseId)`, the description of an other income at
 `FieldRef("other_income", "description_enc", incomeId)`, and their audit values at the audit entry's
