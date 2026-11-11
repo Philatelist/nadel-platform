@@ -31,6 +31,7 @@ const pending = (overrides: Partial<PendingReading> = {}): PendingReading => ({
     status: 'PENDING',
     source: 'MEMBER',
     changeable: false,
+    hasPhoto: false,
   },
   meter: plotMeter,
   interval: { from: '2026-10-05', to: '2026-10-20', days: 15, consumption: '45.000' },

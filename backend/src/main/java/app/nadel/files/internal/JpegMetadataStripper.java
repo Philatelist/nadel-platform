@@ -1,11 +1,12 @@
-package app.nadel.treasury.internal;
+package app.nadel.files.internal;
 
+import app.nadel.files.MalformedImageException;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Removes location, camera and other metadata from a JPEG attachment without re-encoding it (feature 018 §2.3,
+ * Removes location, camera and other metadata from an uploaded JPEG without re-encoding it (feature 018 §2.3,
  * technical considerations 2.6), JDK only. The file is read segment by segment:
  * <ul>
  *   <li>kept: APP0 (JFIF), APP14 (Adobe colour transform), APP2 {@code ICC_PROFILE}, the tables and frame segments
@@ -19,9 +20,9 @@ import org.jspecify.annotations.Nullable;
  * </ul>
  * A file that does not start with SOI, has a segment running past the end, ends before EOI or has no frame or scan is
  * refused with {@link MalformedImageException}. A malformed Exif segment only loses its orientation. Pure and
- * stateless.
+ * stateless. Public only for {@link app.nadel.files.ImageMetadata}, which other modules call.
  */
-final class JpegMetadataStripper {
+public final class JpegMetadataStripper {
 
     private static final int SOI = 0xD8;
     private static final int EOI = 0xD9;
@@ -45,7 +46,7 @@ final class JpegMetadataStripper {
      *
      * @throws MalformedImageException when the structure cannot be read
      */
-    static byte[] strip(byte[] in) {
+    public static byte[] strip(byte[] in) {
         if (in.length < 4 || u8(in, 0) != 0xFF || u8(in, 1) != SOI) {
             throw new MalformedImageException("A JPEG starts with SOI");
         }

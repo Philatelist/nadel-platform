@@ -52,6 +52,7 @@ function saved(extra: Partial<ReadingRowResult> = {}): ReadingRowResult {
       status: 'APPROVED',
       source: 'ENTERED',
       changeable: true,
+      hasPhoto: false,
       interval: { from: '2026-09-03', to: '2026-10-21', days: 48, consumption: '110.000' },
     },
     ...extra,

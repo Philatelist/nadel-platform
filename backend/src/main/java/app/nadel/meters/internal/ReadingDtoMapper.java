@@ -22,11 +22,13 @@ final class ReadingDtoMapper {
     /**
      * @param interval   the interval the reading closes; only for an approved reading that has a point before it
      * @param changeable whether the viewer may correct or delete it now
+     * @param hasPhoto   whether a photo of the meter came with the reading ({@link ReadingPhotos})
      */
-    static MeterReading toDto(MeterReadingRecord reading, @Nullable Interval interval, boolean changeable) {
+    static MeterReading toDto(MeterReadingRecord reading, @Nullable Interval interval, boolean changeable,
+            boolean hasPhoto) {
         MeterReading dto = new MeterReading(reading.getId(), reading.getMeterId(), reading.getTakenOn(),
                 reading.getValue().toString(), ReadingStatus.fromValue(reading.getStatus().name()),
-                ReadingSource.fromValue(reading.getSource().name()), changeable);
+                ReadingSource.fromValue(reading.getSource().name()), changeable, hasPhoto);
         dto.setSupersededById(reading.getSupersededById());
         dto.setRejectReason(reading.getRejectReason());
         if (interval != null) {

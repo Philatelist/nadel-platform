@@ -21,6 +21,7 @@ const reading = (overrides: Partial<MeterReading>): MeterReading => ({
   status: 'APPROVED',
   source: 'ENTERED',
   changeable: true,
+  hasPhoto: false,
   ...overrides,
 });
 

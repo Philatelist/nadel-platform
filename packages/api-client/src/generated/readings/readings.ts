@@ -38,6 +38,7 @@ import type {
   MeterReading,
   MeterReadingHistory,
   NotFoundResponse,
+  PayloadTooLargeResponse,
   PendingReading,
   ReadingBatch,
   ReadingBatchResult,
@@ -45,6 +46,7 @@ import type {
   ReadingRejection,
   ReadingSaved,
   ReadingSubmission,
+  SubmitPlotReadingWithPhotoBody,
   UnauthorizedResponse
 } from '../model';
 
@@ -79,6 +81,10 @@ export const getSubmitPlotReadingUrl = (id: string,) => {
 }
 
 /**
+ * Deprecated: use `submitPlotReadingWithPhoto`, which takes the same reading and an optional photo. This
+ * operation stays served for installed apps that have not updated yet and answers as before; a reading saved by
+ * it has no photo (`hasPhoto` false, audit field `photo` `false`).
+ *
  * A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
  * `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
  * it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
@@ -91,7 +97,8 @@ export const getSubmitPlotReadingUrl = (id: string,) => {
  * cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND`
  * (`errors[{field: meterId, code: NOT_FOUND}]`); the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
  * `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
- * @summary Submit a reading of an own meter
+ * @deprecated
+ * @summary Submit a reading of an own meter (without a photo)
  */
 export const submitPlotReading = async (id: string,
     readingSubmission: ReadingSubmission, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingSaved> => {
@@ -158,7 +165,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SubmitPlotReadingMutationVariables = {id: string;data: ReadingSubmission}
 
     /**
- * @summary Submit a reading of an own meter
+ * @deprecated
+ * @summary Submit a reading of an own meter (without a photo)
  */
 export const useSubmitPlotReading = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPlotReading>>, TError,SubmitPlotReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
@@ -169,6 +177,109 @@ export const useSubmitPlotReading = <TError = BadRequestResponse | UnauthorizedR
         TContext
       > => {
       return useMutation(getSubmitPlotReadingMutationOptions(options), queryClient);
+    }
+    export const getSubmitPlotReadingWithPhotoUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/reading-submissions`
+}
+
+/**
+ * The submission of `submitPlotReading` with an optional photo of the meter (feature 021 §2.3). The request is
+ * `multipart/form-data` with the part `reading` (JSON, `ReadingSubmission`) and at most one part `photo` (a JPEG
+ * or PNG, at most 5 MB). Access, rules and answers are those of `submitPlotReading`: only a current owner of the
+ * plot may submit (any other plot, an unknown id and a plot of another cooperative are the same 404
+ * `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND` on `meterId`; the platform
+ * operator gets 403); the reading waits for approval (`PENDING`, source `MEMBER`) and replaces a pending reading
+ * of the same meter and date; the same checks and the same warning apply.
+ *
+ * The reading and its photo are saved together: when the photo is refused, nothing is saved. The type of the
+ * photo is decided by its content, never by its name or the declared type. Location and camera data are removed
+ * before it is stored, without re-encoding, as for expense receipts (`createExpense`). A photo cannot be changed
+ * or deleted; a wrong photo is replaced by submitting the reading again. The same value on the same date as the
+ * pending reading changes nothing when no photo comes with it; with a photo it is a new submission that replaces
+ * the pending one. A replaced, rejected or approved reading keeps its photo (`getReadingPhoto`).
+ *
+ * Refusals of the photo (nothing is stored):
+ * - 413 `FILE_TOO_LARGE` with `errors[{field: photo, code: FILE_TOO_LARGE}]`: a photo over 5 MB (a request over
+ *   the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+ * - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]`: a photo that is not a
+ *   JPEG or PNG by content (a PDF and an untranslated HEIC included: the app converts HEIC to JPEG before it
+ *   sends it), or a JPEG or PNG that cannot be read.
+ *
+ * Written to the audit log (`READING_SUBMITTED` with `takenOn`, `value` and `photo` `true` or `false`; never the
+ * file).
+ * @summary Submit a reading of an own meter with an optional photo of the meter
+ */
+export const submitPlotReadingWithPhoto = async (id: string,
+    submitPlotReadingWithPhotoBody: SubmitPlotReadingWithPhotoBody, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingSaved> => {
+    const formData = new FormData();
+formData.append(`reading`, JSON.stringify(submitPlotReadingWithPhotoBody.reading));
+if(submitPlotReadingWithPhotoBody.photo !== undefined) {
+ formData.append(`photo`, submitPlotReadingWithPhotoBody.photo);
+ }
+
+  return nadelFetch<ReadingSaved>(getSubmitPlotReadingWithPhotoUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getSubmitPlotReadingWithPhotoMutationKey = () => ['submitPlotReadingWithPhoto'] as const;
+
+export const getSubmitPlotReadingWithPhotoMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>, TError,SubmitPlotReadingWithPhotoMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>, TError,SubmitPlotReadingWithPhotoMutationVariables, TContext> => {
+
+const mutationKey = getSubmitPlotReadingWithPhotoMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>, SubmitPlotReadingWithPhotoMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitPlotReadingWithPhoto(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPlotReadingWithPhotoMutationResult = NonNullable<Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>>
+    export type SubmitPlotReadingWithPhotoMutationBody = SubmitPlotReadingWithPhotoBody
+    export type SubmitPlotReadingWithPhotoMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse
+    export type SubmitPlotReadingWithPhotoMutationVariables = {id: string;data: SubmitPlotReadingWithPhotoBody}
+
+    /**
+ * @summary Submit a reading of an own meter with an optional photo of the meter
+ */
+export const useSubmitPlotReadingWithPhoto = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | PayloadTooLargeResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>, TError,SubmitPlotReadingWithPhotoMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitPlotReadingWithPhoto>>,
+        TError,
+        SubmitPlotReadingWithPhotoMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitPlotReadingWithPhotoMutationOptions(options), queryClient);
     }
     export const getListMeterReadingsUrl = (id: string,) => {
 
@@ -950,3 +1061,109 @@ export const useRejectReading = <TError = BadRequestResponse | UnauthorizedRespo
       > => {
       return useMutation(getRejectReadingMutationOptions(options), queryClient);
     }
+    export const getGetReadingPhotoUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/readings/${id}/photo`
+}
+
+/**
+ * The stored photo of the reading (feature 021 §2.3) with its stored type (`image/jpeg` or `image/png`),
+ * `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. It carries no
+ * location or camera data. A reading keeps its photo whatever its status (pending, approved, rejected or
+ * superseded). Open to a current owner of the plot of the reading's meter and to callers with `READINGS_ENTER`
+ * or `READINGS_APPROVE`; anyone else, an unknown reading, a reading without a photo and a reading of another
+ * cooperative are the same 404 `NOT_FOUND`. The platform operator has no cooperative data: 403. Not audited.
+ * @summary The photo of a meter reading
+ */
+export const getReadingPhoto = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<Blob> => {
+
+  return nadelFetch<Blob>(getGetReadingPhotoUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReadingPhotoQueryKey = (id: string,) => {
+    return [
+    `/api/v1/readings/${id}/photo`
+    ] as const;
+    }
+
+
+export const getGetReadingPhotoQueryOptions = <TData = Awaited<ReturnType<typeof getReadingPhoto>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReadingPhotoQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReadingPhoto>>> = ({ signal }) => getReadingPhoto(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetReadingPhotoQueryResult = NonNullable<Awaited<ReturnType<typeof getReadingPhoto>>>
+export type GetReadingPhotoQueryError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+
+
+export function useGetReadingPhoto<TData = Awaited<ReturnType<typeof getReadingPhoto>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReadingPhoto>>,
+          TError,
+          Awaited<ReturnType<typeof getReadingPhoto>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReadingPhoto<TData = Awaited<ReturnType<typeof getReadingPhoto>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReadingPhoto>>,
+          TError,
+          Awaited<ReturnType<typeof getReadingPhoto>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReadingPhoto<TData = Awaited<ReturnType<typeof getReadingPhoto>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The photo of a meter reading
+ */
+
+export function useGetReadingPhoto<TData = Awaited<ReturnType<typeof getReadingPhoto>>, TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReadingPhoto>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetReadingPhotoQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

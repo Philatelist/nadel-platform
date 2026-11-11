@@ -1,20 +1,22 @@
-package app.nadel.treasury.internal;
+package app.nadel.files.internal;
 
+import app.nadel.files.MalformedImageException;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.zip.CRC32;
 
 /**
- * Removes metadata from a PNG attachment without re-encoding it (feature 018 §2.3, technical considerations 2.6), JDK
+ * Removes metadata from an uploaded PNG without re-encoding it (feature 018 §2.3, technical considerations 2.6), JDK
  * only. The chunks of the image and its colour and animation are kept byte for byte (IHDR, PLTE, IDAT, IEND, tRNS,
  * gAMA, cHRM, sRGB, iCCP, sBIT, bKGD, pHYs, acTL, fcTL, fdAT); every other ancillary chunk is dropped, among them
  * {@code eXIf} (Exif with GPS), {@code tEXt}, {@code iTXt}, {@code zTXt} (XMP and other text) and {@code tIME}.
  * Everything after IEND is cut. A file without the signature, with a chunk running past the end or a wrong CRC, not
  * starting with IHDR, without IDAT or IEND, or with an unknown critical chunk (which no decoder could skip) is refused
- * with {@link MalformedImageException}. Pure and stateless.
+ * with {@link MalformedImageException}. Pure and stateless. Public only for {@link app.nadel.files.ImageMetadata},
+ * which other modules call.
  */
-final class PngMetadataStripper {
+public final class PngMetadataStripper {
 
     private static final byte[] SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
 
@@ -29,7 +31,7 @@ final class PngMetadataStripper {
      *
      * @throws MalformedImageException when the structure cannot be read
      */
-    static byte[] strip(byte[] in) {
+    public static byte[] strip(byte[] in) {
         if (in.length < SIGNATURE.length) {
             throw new MalformedImageException("A PNG starts with its signature");
         }

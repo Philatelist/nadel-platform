@@ -4,7 +4,8 @@ import { useT } from '../../i18n';
 import { usePdfAction } from '../../hooks/usePdfAction';
 import { problemMessage } from '../../problem';
 import { Button, Notice } from '../ui';
-import { AttachmentPreviews, type PreviewFile } from './AttachmentPreview';
+import { expenseFileKey } from './expenseFileKey';
+import { FilePreviews, type PreviewFile } from '../files/FilePreview';
 
 /**
  * The receipt files of an expense: image thumbnails (click opens a viewer), PDF tiles (click opens a new tab)
@@ -22,18 +23,18 @@ export function AttachmentList({
   const download = usePdfAction();
   if (attachments.length === 0) return <p className="text-ink-muted">{a.none}</p>;
   const files: PreviewFile[] = attachments.map((file) => ({
-    key: String(file.n),
+    key: expenseFileKey(expenseId, file.n),
     fileName: file.fileName,
     contentType: file.contentType,
-    stored: { expenseId, n: file.n },
+    load: () => downloadExpenseAttachment(expenseId, file.n),
   }));
   return (
     <div className="flex flex-col gap-2">
       {download.error !== undefined && <Notice tone="danger">{problemMessage(t, download.error)}</Notice>}
-      <AttachmentPreviews
+      <FilePreviews
         files={files}
         actions={(file) => {
-          const size = attachments.find((x) => String(x.n) === file.key)?.sizeBytes ?? 0;
+          const size = attachments.find((x) => expenseFileKey(expenseId, x.n) === file.key)?.sizeBytes ?? 0;
           return (
             <>
               <span className="w-full text-sm text-ink-muted">
@@ -42,12 +43,7 @@ export function AttachmentList({
               <Button
                 variant="secondary"
                 disabled={download.pending}
-                onClick={() =>
-                  void download.run(
-                    () => downloadExpenseAttachment(expenseId, Number(file.key)),
-                    file.fileName,
-                  )
-                }
+                onClick={() => file.load && void download.run(file.load, file.fileName)}
               >
                 {a.download}
               </Button>

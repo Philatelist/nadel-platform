@@ -16,6 +16,7 @@ import { problemCode, problemMessage } from '../../problem';
 import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent, formatUser } from '../UserContent';
 import { Badge, Button, Notice } from '../ui';
+import { ReadingPhotoThumb } from './ReadingPhotoThumb';
 import { RejectReadingDialog } from './RejectReadingDialog';
 import { ResourceIcon } from '../meters/ResourceIcon';
 
@@ -87,6 +88,7 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
             })
           : a.noInterval}
       </p>
+      {reading.hasPhoto && <ReadingPhotoThumb readingId={reading.id} takenOn={reading.takenOn} />}
       {warnings.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {warnings.map((w) => (

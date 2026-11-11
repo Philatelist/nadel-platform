@@ -1,4 +1,3 @@
-import { downloadExpenseAttachment } from '@nadel/api-client';
 import { format } from '@nadel/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -7,13 +6,16 @@ import { useT } from '../../i18n';
 import { UserContent } from '../UserContent';
 import { Button } from '../ui';
 
-/** A receipt file to preview: a stored one (fetched with the session) or a local one not yet saved. */
+/**
+ * A file to preview: a stored one (`load` fetches it with the session) or a local one not yet saved. `key`
+ * identifies the stored file across the app: it names the cached bytes, so it is stable and unique per file.
+ */
 export interface PreviewFile {
   key: string;
   fileName: string;
   contentType: string;
   local?: File;
-  stored?: { expenseId: string; n: number };
+  load?: () => Promise<Blob>;
 }
 
 export function isImage(file: PreviewFile): boolean {
@@ -21,7 +23,7 @@ export function isImage(file: PreviewFile): boolean {
 }
 
 /** True once the element has come near the viewport; where IntersectionObserver is missing, at once. */
-function useNearViewport(ref: React.RefObject<Element | null>): boolean {
+export function useNearViewport(ref: React.RefObject<Element | null>): boolean {
   const [near, setNear] = useState(typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     const el = ref.current;
@@ -38,12 +40,12 @@ function useNearViewport(ref: React.RefObject<Element | null>): boolean {
   return near;
 }
 
-function blobQuery(stored: { expenseId: string; n: number } | undefined) {
+function blobQuery(file: PreviewFile) {
   return {
-    queryKey: ['expense-attachment-blob', stored?.expenseId, stored?.n] as const,
-    queryFn: () => downloadExpenseAttachment(stored?.expenseId ?? '', stored?.n ?? 0),
+    queryKey: ['file-blob', file.key] as const,
+    queryFn: () => (file.load ? file.load() : Promise.reject(new Error('no loader'))),
     staleTime: Infinity,
-    gcTime: 5 * 60_000,
+    gcTime: 60_000,
     retry: false,
     refetchOnWindowFocus: false,
   };
@@ -53,17 +55,19 @@ function blobQuery(stored: { expenseId: string; n: number } | undefined) {
  * The bytes of a file: the local File itself or the stored file, fetched once and cached under one key, so a
  * thumbnail and the viewer share it. `enabled` only says whether the caller wants it now.
  */
-function usePreviewBlob(file: PreviewFile, enabled: boolean): { blob: Blob | undefined; failed: boolean } {
-  const stored = file.stored;
+export function usePreviewBlob(
+  file: PreviewFile,
+  enabled: boolean,
+): { blob: Blob | undefined; failed: boolean } {
   const query = useQuery({
-    ...blobQuery(stored),
-    enabled: enabled && stored !== undefined && file.local === undefined,
+    ...blobQuery(file),
+    enabled: enabled && file.load !== undefined && file.local === undefined,
   });
   return { blob: file.local ?? query.data, failed: query.isError };
 }
 
 /** An object URL for a blob, revoked when the blob changes or the component unmounts. */
-function useObjectUrl(blob: Blob | undefined, type?: string): string | undefined {
+export function useObjectUrl(blob: Blob | undefined, type?: string): string | undefined {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
     if (!blob) return;
@@ -104,7 +108,7 @@ export function ImageViewer({
   const download = usePdfAction();
   useEffect(() => {
     for (const neighbour of [images[index - 1], images[index + 1]]) {
-      if (neighbour?.stored && !neighbour.local) void queryClient.prefetchQuery(blobQuery(neighbour.stored));
+      if (neighbour?.load && !neighbour.local) void queryClient.prefetchQuery(blobQuery(neighbour));
     }
   }, [images, index, queryClient]);
   const dialog = useRef<HTMLDialogElement | null>(null);
@@ -171,12 +175,7 @@ export function ImageViewer({
             <Button
               variant="secondary"
               disabled={download.pending}
-              onClick={() =>
-                void download.run(
-                  () => downloadExpenseAttachment(current.stored?.expenseId ?? '', current.stored?.n ?? 0),
-                  current.fileName,
-                )
-              }
+              onClick={() => current.load && void download.run(current.load, current.fileName)}
             >
               {t.expenses.attachments.download}
             </Button>
@@ -227,8 +226,8 @@ function Thumbnail({ file, onOpen }: { file: PreviewFile; onOpen: () => void }) 
 }
 
 /** Opens a PDF in a new tab from a blob URL of type application/pdf; the URL is revoked a little later. */
-export async function openPdf(file: PreviewFile, fetchStored: () => Promise<Blob>): Promise<void> {
-  const blob = file.local ?? (await fetchStored());
+export async function openPdf(file: PreviewFile): Promise<void> {
+  const blob = file.local ?? (await file.load?.()) ?? new Blob();
   const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -238,7 +237,7 @@ export async function openPdf(file: PreviewFile, fetchStored: () => Promise<Blob
  * A grid of previews: an image is a thumbnail that opens the viewer, a PDF a file tile that opens in a new tab.
  * `actions` renders buttons under each file (download, remove).
  */
-export function AttachmentPreviews({
+export function FilePreviews({
   files,
   actions,
   onError,
@@ -287,7 +286,6 @@ function FileTile({
   onOpenImage: () => void;
   onError?: (error: unknown) => void;
 }) {
-  const stored = file.stored;
   return (
     <Thumbnail
       file={file}
@@ -295,9 +293,7 @@ function FileTile({
         if (isImage(file)) {
           onOpenImage();
         } else {
-          openPdf(file, () => downloadExpenseAttachment(stored?.expenseId ?? '', stored?.n ?? 0)).catch(
-            (error: unknown) => onError?.(error),
-          );
+          openPdf(file).catch((error: unknown) => onError?.(error));
         }
       }}
     />

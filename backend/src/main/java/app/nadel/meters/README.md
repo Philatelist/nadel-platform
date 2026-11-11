@@ -10,11 +10,12 @@ superseding, correction, deletion, the unusual-consumption warning, the history 
 consumption over a chain of meters, the member flow (submission, approval, rejection), the electricity tree (moves
 with an effective date, the tree over a date range with the consumption per node), meter presence for the tariffs
 (`MeterCatalog`) and the Meters sheet of the Excel import (`MeterImport`). Feature 011 (slice 5) adds the water
-connections of plots (see Water connections).
+connections of plots (see Water connections). Feature 021 (slice 4) adds the photo of a meter with a member's reading
+(see Photos of readings).
 
 Depends on `plots` (`PlotCatalog`, the import records `PlotImportRow` and `PlotImportPlan`, and it implements
-`plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events)
-and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`), `imports` (`MeterImport`) and `ledger`
+`plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events),
+`files` (the checks and metadata stripping of an uploaded photo) and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`), `imports` (`MeterImport`) and `ledger`
 (`MeterNetwork`) depend on it, never the other way round.
 
 ## Tables (V12)
@@ -263,7 +264,9 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `POST /plots/{id}/readings` | `submitPlotReading` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
+| `POST /plots/{id}/reading-submissions` (multipart: part `reading` JSON, optional part `photo`) | `submitPlotReadingWithPhoto` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
+| `POST /plots/{id}/readings` (JSON) | `submitPlotReading`, deprecated (feature 021), still served for installed apps that have not updated: the same submission without a photo | as above |
+| `GET /readings/{id}/photo` | `getReadingPhoto`: see Photos of readings | a current owner of the plot of the reading's meter, `READINGS_ENTER` or `READINGS_APPROVE`; anyone else 404, the platform operator 403 |
 | `GET /readings?status=PENDING` | `listReadings` | `READINGS_APPROVE`; the meter's `note` only with `METERS_VIEW` |
 | `POST /readings/{id}/approve` | `approveReading` | `READINGS_APPROVE` |
 | `POST /readings/{id}/reject` | `rejectReading` | `READINGS_APPROVE` |
@@ -272,7 +275,8 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   `errors[{field: meterId}]`, a removed one 409 `METER_REMOVED`), checked by `ReadingValidator` against the counted
   readings like an entry (a counted reading of the same date is not a neighbour). The row is `PENDING`, source `MEMBER`,
   `entered_by_member_id` the member. A pending reading of the same meter and date is superseded by it (the same value
-  again changes nothing and is not audited). A pending reading never supersedes a counted one and never reaches the
+  again without a photo changes nothing and is not audited; with a photo it is a new submission that supersedes the
+  pending one, so a wrong photo is replaced by submitting again). A pending reading never supersedes a counted one and never reaches the
   calculation: intervals, the register's `lastReading`, the round and range consumption read approved readings only.
   201 with `ReadingSaved` (no interval, the warnings it would carry).
 - **Approval** locks the meter, takes only a `PENDING` reading (else 409 `READING_STATUS_INVALID`), checks it again
@@ -298,9 +302,43 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
 ### Audit of the member flow
 
 Entity type `METER_READING` about the meter, as for the board's readings: `READING_SUBMITTED` (`takenOn` new, `value`
-new and, when it replaced a pending reading, old), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
+new and, when it replaced a pending reading, old; `photo` `true` or `false` new and, when it replaced a pending reading,
+whether that one had a photo, old; never the file), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
 counted reading of that date, old), `READING_REJECTED` (`takenOn`, `value` and `reason` new). The actor of a submission
 is the member.
+
+### Photos of readings (feature 021, slice 4)
+
+Table `reading_photo` (V38): one photo per reading (`UNIQUE (tenant_id, reading_id)`, composite foreign key to
+`meter_reading` `ON DELETE CASCADE`), `content_type` `image/jpeg` or `image/png`, `size_bytes` 1 to 5 MiB and equal to
+the length, `sha256`, `content` (`STORAGE EXTERNAL`, stored like the receipts of ADR 0019), `created_by`, `created_at`.
+RLS `tenant_isolation`, index on `tenant_id`; `nadel_app` has `SELECT` and `INSERT` only, and a guard trigger refuses
+an `UPDATE` to everyone and a `DELETE` while the reading exists, so a photo is never changed or deleted: only the
+cascade of a deleted reading (a counted reading deleted by the board) removes it. Schema, RLS and guard are tested by
+`ReadingPhotoTests`; the endpoints by `ReadingPhotoUploadTests` and `ReadingPhotoAccessTests`.
+`cooperative_settings.reading_photo_required` (V38) is read by the photo rule of slice 5, not yet.
+
+Internal: `ReadingPhotoRecord` (insert-only entity), `ReadingPhotoRepository` (ids of readings with a photo, the
+download; never a list of contents), `ReadingPhotoUploads` (the checks), `ReadingPhotos` (save, `hasPhoto`, download
+with its access rule) and `ReadingSubmissionPartConverter` (the `reading` part sent without a JSON content type, as the
+generated web client sends it).
+
+- **Upload** (`photo` of `submitPlotReadingWithPhoto`), checked after the owner rule and before the meter is locked,
+  through `app.nadel.files`, with the codes of the expense receipts: over 5 MiB by the declared size, before it is
+  read, 413 `FILE_TOO_LARGE`; not a JPEG or PNG by its first bytes (a PDF too, and a HEIC the app did not convert), or a
+  JPEG or PNG that cannot be read, 400 `FILE_TYPE_NOT_ALLOWED`; both with `errors[{field: photo}]`. Metadata is
+  stripped without re-encoding (`ImageMetadata`: a JPEG keeps its Orientation); the server does not check pixels. The
+  reading and its photo are saved in one transaction: a refused photo saves no reading.
+- **`hasPhoto`** on every `MeterReading` the module answers (the history, the approvals list, every `ReadingSaved` and
+  batch row), from one id-only query per answer (`ReadingPhotos.withPhoto`). A superseded, rejected or approved reading
+  keeps its photo and its `hasPhoto`.
+- **Download** (`GET /readings/{id}/photo`): the access is decided before the bytes are read: `READINGS_ENTER` or
+  `READINGS_APPROVE`, or a current owner of the plot of the reading's meter; anyone else, an unknown reading, a reading
+  without a photo and one of another cooperative (RLS) are the same 404 `NOT_FOUND`, the platform operator 403. The
+  answer has the stored type, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` and
+  `Cache-Control: no-store`. Not audited.
+- The board's entries take no photo yet (`POST /reading-entries` and the photo rule are slice 5); the Telegram bot
+  submits without one.
 
 ## The tree (slice 5)
 

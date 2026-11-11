@@ -3389,8 +3389,13 @@ paths:
     post:
       tags: [readings]
       operationId: submitPlotReading
-      summary: Submit a reading of an own meter
+      deprecated: true
+      summary: Submit a reading of an own meter (without a photo)
       description: |
+        Deprecated: use `submitPlotReadingWithPhoto`, which takes the same reading and an optional photo. This
+        operation stays served for installed apps that have not updated yet and answers as before; a reading saved by
+        it has no photo (`hasPhoto` false, audit field `photo` `false`).
+
         A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
         `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
         it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
@@ -3433,6 +3438,80 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/reading-submissions:
+    post:
+      tags: [readings]
+      operationId: submitPlotReadingWithPhoto
+      summary: Submit a reading of an own meter with an optional photo of the meter
+      description: |
+        The submission of `submitPlotReading` with an optional photo of the meter (feature 021 §2.3). The request is
+        `multipart/form-data` with the part `reading` (JSON, `ReadingSubmission`) and at most one part `photo` (a JPEG
+        or PNG, at most 5 MB). Access, rules and answers are those of `submitPlotReading`: only a current owner of the
+        plot may submit (any other plot, an unknown id and a plot of another cooperative are the same 404
+        `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND` on `meterId`; the platform
+        operator gets 403); the reading waits for approval (`PENDING`, source `MEMBER`) and replaces a pending reading
+        of the same meter and date; the same checks and the same warning apply.
+
+        The reading and its photo are saved together: when the photo is refused, nothing is saved. The type of the
+        photo is decided by its content, never by its name or the declared type. Location and camera data are removed
+        before it is stored, without re-encoding, as for expense receipts (`createExpense`). A photo cannot be changed
+        or deleted; a wrong photo is replaced by submitting the reading again. The same value on the same date as the
+        pending reading changes nothing when no photo comes with it; with a photo it is a new submission that replaces
+        the pending one. A replaced, rejected or approved reading keeps its photo (`getReadingPhoto`).
+
+        Refusals of the photo (nothing is stored):
+        - 413 `FILE_TOO_LARGE` with `errors[{field: photo, code: FILE_TOO_LARGE}]`: a photo over 5 MB (a request over
+          the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+        - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]`: a photo that is not a
+          JPEG or PNG by content (a PDF and an untranslated HEIC included: the app converts HEIC to JPEG before it
+          sends it), or a JPEG or PNG that cannot be read.
+
+        Written to the audit log (`READING_SUBMITTED` with `takenOn`, `value` and `photo` `true` or `false`; never the
+        file).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [reading]
+              properties:
+                reading:
+                  $ref: '#/components/schemas/ReadingSubmission'
+                photo:
+                  type: string
+                  format: binary
+                  description: The photo of the meter (JPEG or PNG, at most 5 MB)
+            encoding:
+              reading:
+                contentType: application/json
+      responses:
+        '201':
+          description: The submitted reading, waiting for approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
 
   /plots/{id}/meters:
     get:
@@ -3771,6 +3850,44 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /readings/{id}/photo:
+    get:
+      tags: [readings]
+      operationId: getReadingPhoto
+      summary: The photo of a meter reading
+      description: |
+        The stored photo of the reading (feature 021 §2.3) with its stored type (`image/jpeg` or `image/png`),
+        `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. It carries no
+        location or camera data. A reading keeps its photo whatever its status (pending, approved, rejected or
+        superseded). Open to a current owner of the plot of the reading's meter and to callers with `READINGS_ENTER`
+        or `READINGS_APPROVE`; anyone else, an unknown reading, a reading without a photo and a reading of another
+        cooperative are the same 404 `NOT_FOUND`. The platform operator has no cooperative data: 403. Not audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /plots/{id}/account:
     get:
@@ -7865,7 +7982,9 @@ components:
         `errors[{field: month}]` for a bank month that ends before it); the four figures of a bank statement do not
         agree (code `STATEMENT_INCONSISTENT`, with `errors[{field: closing}]`); more
         than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
-        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`); a tariff is archived
+        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`), or the photo of a
+        meter reading is not a JPEG or PNG by its content (code `FILE_TYPE_NOT_ALLOWED`, with
+        `errors[{field: photo}]`); a tariff is archived
         from a date that is not after the start of its last version (code `VALIDATION_FAILED`, with
         `errors[{field: endsOn, code: TARIFF_END_BEFORE_LAST_VERSION}]`)
       content:
@@ -7898,7 +8017,8 @@ components:
     NotFound:
       description: >-
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
-        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
+        plot-scoped meter operations `listPlotMeters`, `submitPlotReading` and `submitPlotReadingWithPhoto` and the
+        ledger operations
         `getPlotAccount` and `enterOpeningBalance` and the payment operations `enterPayment` and `allocatePrepayment`
         and the document operation `issuePlotInvoice` when the plot is unknown, of another cooperative or not the
         caller's)
@@ -7911,8 +8031,9 @@ components:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
       description: >-
-        The uploaded file is over the size limit of 10 MB, or an expense attachment over 5 MB (code
-        `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`)
+        The uploaded file is over the size limit of 10 MB, or an expense attachment or the photo of a meter reading
+        over 5 MB (code `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`, for a photo with
+        `errors[{field: photo}]`)
       content:
         application/problem+json:
           schema:
@@ -11074,7 +11195,7 @@ components:
     MeterReading:
       type: object
       description: A reading of a meter
-      required: [id, meterId, takenOn, value, status, source, changeable]
+      required: [id, meterId, takenOn, value, status, source, changeable, hasPhoto]
       properties:
         id:
           type: string
@@ -11106,6 +11227,12 @@ components:
           description: >-
             True when the caller may correct or delete the reading now: it is approved, the caller has
             `READINGS_ENTER` and no charge uses it
+        hasPhoto:
+          type: boolean
+          description: >-
+            True when a photo of the meter came with the reading; it stays whatever the status becomes. The photo is
+            downloaded with `getReadingPhoto`. The approvals list (`PendingReading.reading`), the history of a meter
+            and every saved reading (`ReadingSaved.reading`) carry it
 
     MeterReadingHistory:
       type: object

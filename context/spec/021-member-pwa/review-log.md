@@ -15,3 +15,9 @@
 |---|---|---|---|---|
 | 1 | `8ffadbe..9652767` | MAJOR_ISSUES | M1 navigations served by the Caddy catch-all lack `Cache-Control: no-cache` | minor: wrong admin password retried for 2 min; DER rebuild hardcodes 0x31 (correct for P-256) |
 | 2 | + `51e4a15` | PASS | M1 resolved | — |
+
+## Slice 3 — Paying from the phone
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `51e4a15..81269a4` | PASS | — | minor: an empty `role="status"` region per copy button; help `member-bill.md` update is Slice 10 |

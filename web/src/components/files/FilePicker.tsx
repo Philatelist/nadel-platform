@@ -1,37 +1,47 @@
 import { useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { fileFingerprint } from '../../lib/fileFingerprint';
-import { heicToJpeg, isHeicFile } from '../../lib/heicToJpeg';
+import { isHeicFile, normalizeImage } from '../../lib/normalizeImage';
 import { Button, Notice } from '../ui';
-import { AttachmentPreviews, type PreviewFile } from './AttachmentPreview';
+import { FilePreviews, type PreviewFile } from './FilePreview';
 
 export const MAX_FILES = 5;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ['image/jpeg', 'image/png', 'application/pdf'];
+const DEFAULT_ACCEPT = 'image/jpeg,image/png,application/pdf,image/heic,image/heif,.heic,.heif';
 
-/** A file of an earlier (reversed) expense that the server copies over. */
-export interface ReusedFile {
-  expenseId: string;
-  n: number;
+/** A file already stored on the server that the form carries over; `load` fetches its bytes for the preview. */
+export interface StoredFile {
+  key: string;
   fileName: string;
   contentType?: string;
+  load: () => Promise<Blob>;
 }
 
 /**
- * Chooses up to five receipt files: a file picker and, for a phone, a camera button. The size, count and type
+ * Chooses up to `maxFiles` files (receipts): a file picker and, for a phone, a camera button. The size, count and type
  * checks here are only hints; the server decides. A HEIC photo is converted to JPEG first.
  */
-export function AttachmentPicker({
+export function FilePicker({
   files,
   reused,
   serverError,
+  maxFiles = MAX_FILES,
+  accept = DEFAULT_ACCEPT,
+  capture,
   onAdd,
   onRemoveFile,
   onRemoveReused,
 }: {
   files: readonly File[];
-  reused: readonly ReusedFile[];
+  reused: readonly StoredFile[];
   serverError?: string;
+  /** At most this many files in all, stored ones included. */
+  maxFiles?: number;
+  /** The `accept` of the file chooser. */
+  accept?: string;
+  /** When set, a camera button opens the camera of that side (phones). */
+  capture?: 'environment' | 'user';
   onAdd: (added: File[]) => void;
   onRemoveFile: (index: number) => void;
   onRemoveReused: (index: number) => void;
@@ -64,19 +74,18 @@ export function AttachmentPicker({
           message = a.duplicate;
           continue;
         }
-        let file: File | undefined = original;
-        if (isHeicFile(original)) {
-          file = await heicToJpeg(original);
-          if (file === undefined) {
-            message = a.heicFailed;
-            continue;
-          }
+        const heic = isHeicFile(original);
+        // HEIC is always converted; a large photo is scaled down; a PDF or a small photo stays as it is
+        const file = original.type === 'application/pdf' ? original : await normalizeImage(original);
+        if (file === undefined) {
+          message = heic ? a.heicFailed : a.typeNotAllowed;
+          continue;
         }
         if (!ALLOWED.includes(file.type)) {
           message = a.typeNotAllowed;
         } else if (file.size > MAX_FILE_BYTES) {
           message = a.tooLarge;
-        } else if (files.length + reused.length + accepted.length >= MAX_FILES) {
+        } else if (files.length + reused.length + accepted.length >= maxFiles) {
           message = a.tooMany;
         } else {
           accepted.push(file);
@@ -98,10 +107,10 @@ export function AttachmentPicker({
   const shown = error ?? serverError;
   const previews: PreviewFile[] = [
     ...reused.map((file) => ({
-      key: `r${file.expenseId}-${file.n}`,
+      key: file.key,
       fileName: file.fileName,
       contentType: file.contentType ?? '',
-      stored: { expenseId: file.expenseId, n: file.n },
+      load: file.load,
     })),
     ...files.map((file, index) => ({
       key: `f${index}-${file.name}-${file.size}`,
@@ -119,31 +128,35 @@ export function AttachmentPicker({
         <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={converting}>
           {a.pick}
         </Button>
-        <Button variant="secondary" onClick={() => cameraInput.current?.click()} disabled={converting}>
-          {a.camera}
-        </Button>
+        {capture !== undefined && (
+          <Button variant="secondary" onClick={() => cameraInput.current?.click()} disabled={converting}>
+            {a.camera}
+          </Button>
+        )}
         <input
           ref={fileInput}
           type="file"
           multiple
           hidden
           data-testid="file-input"
-          accept="image/jpeg,image/png,application/pdf,image/heic,image/heif,.heic,.heif"
+          accept={accept}
           onChange={(e) => void choose(e.target.files)}
         />
-        <input
-          ref={cameraInput}
-          type="file"
-          hidden
-          data-testid="camera-input"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => void choose(e.target.files)}
-        />
+        {capture !== undefined && (
+          <input
+            ref={cameraInput}
+            type="file"
+            hidden
+            data-testid="camera-input"
+            accept="image/*"
+            capture={capture}
+            onChange={(e) => void choose(e.target.files)}
+          />
+        )}
       </div>
       {converting && <p className="text-sm text-ink-muted">{a.converting}</p>}
       {shown && <Notice tone="danger">{shown}</Notice>}
-      <AttachmentPreviews
+      <FilePreviews
         files={previews}
         actions={(file, index) => (
           <Button

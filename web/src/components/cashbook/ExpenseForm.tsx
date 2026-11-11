@@ -1,5 +1,6 @@
 import {
   createExpense,
+  downloadExpenseAttachment,
   type CreateExpenseBody,
   useListExpenseCategories,
   type Expense,
@@ -13,10 +14,17 @@ import { kyivToday } from '../../kyivToday';
 import { problemFieldErrors, type FieldErrors } from '../../problem';
 import { QueryBoundary } from '../QueryBoundary';
 import { Button, Notice, Select, TextArea, TextField } from '../ui';
-import { AttachmentPicker, type ReusedFile } from './AttachmentPicker';
+import { FilePicker, type StoredFile } from '../files/FilePicker';
+import { expenseFileKey } from './expenseFileKey';
 import { categoryLabel } from './CategoryName';
 import { invalidateCashbook } from './cashbookInvalidation';
 import { attachmentProblemMessage, cashbookProblemMessage } from './expenseErrors';
+
+/** A file of an earlier (reversed) expense that the server copies over. */
+interface ReusedExpenseFile extends StoredFile {
+  expenseId: string;
+  n: number;
+}
 
 const ACCOUNTS = ['CASH', 'BANK'] as const satisfies readonly MoneyAccountKind[];
 
@@ -47,13 +55,15 @@ export function ExpenseForm({
   const [documentNumber, setDocumentNumber] = useState(prefill?.documentNumber ?? '');
   const [documentDate, setDocumentDate] = useState(prefill?.documentDate ?? '');
   const [files, setFiles] = useState<File[]>([]);
-  const [reused, setReused] = useState<ReusedFile[]>(
+  const [reused, setReused] = useState<ReusedExpenseFile[]>(
     () =>
       prefill?.attachments.map((a) => ({
         expenseId: prefill.id,
         n: a.n,
+        key: expenseFileKey(prefill.id, a.n),
         fileName: a.fileName,
         contentType: a.contentType,
+        load: () => downloadExpenseAttachment(prefill.id, a.n),
       })) ?? [],
   );
   const [submitted, setSubmitted] = useState(false);
@@ -197,9 +207,10 @@ export function ExpenseForm({
           onChange={(e) => changing(setDocumentDate)(e.target.value)}
         />
       </div>
-      <AttachmentPicker
+      <FilePicker
         files={files}
         reused={reused}
+        capture="environment"
         serverError={fileError}
         onAdd={(added) => {
           clearErrors();

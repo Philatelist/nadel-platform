@@ -48,6 +48,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Enters, corrects and deletes readings, takes a member's submission and approves or rejects it (spec 010, section
@@ -86,6 +87,7 @@ class ReadingCommands {
     private final MeterAuditPublisher audit;
     private final MeterPointEvents pointEvents;
     private final ApplicationEventPublisher events;
+    private final ReadingPhotos photos;
     private final Clock clock;
     private final TransactionTemplate rowTransaction;
 
@@ -94,7 +96,8 @@ class ReadingCommands {
 
     ReadingCommands(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
             List<ReadingUsage> usages, MeterAuditPublisher audit, MeterPointEvents pointEvents,
-            ApplicationEventPublisher events, Clock clock, PlatformTransactionManager transactions) {
+            ApplicationEventPublisher events, ReadingPhotos photos, Clock clock,
+            PlatformTransactionManager transactions) {
         this.meters = meters;
         this.readings = readings;
         this.access = access;
@@ -102,6 +105,7 @@ class ReadingCommands {
         this.audit = audit;
         this.pointEvents = pointEvents;
         this.events = events;
+        this.photos = photos;
         this.clock = clock;
         this.rowTransaction = new TransactionTemplate(transactions);
     }
@@ -147,7 +151,8 @@ class ReadingCommands {
                         .saved());
                 result = new ReadingRowResult(index, row.getMeterId(), ReadingRowOutcome.SAVED, saved.superseded(),
                         ReadingDtoMapper.toDto(saved.warnings()));
-                result.setReading(ReadingDtoMapper.toDto(saved.reading(), saved.interval(), true));
+                result.setReading(ReadingDtoMapper.toDto(saved.reading(), saved.interval(), true,
+                        photos.has(saved.reading().getId())));
             } catch (ApiProblemException refused) {
                 result = new ReadingRowResult(index, row.getMeterId(), ReadingRowOutcome.REJECTED, List.of(),
                         List.of());
@@ -272,19 +277,26 @@ class ReadingCommands {
     // ---- the member flow
 
     /**
-     * A member submits the reading of an active meter of a plot they own now (spec 010, section 2.4). It waits for
-     * approval ({@code PENDING}, source {@code MEMBER}) and never counts or supersedes a counted reading until then; a
-     * pending reading of the same meter and date is superseded by it, and the same value again changes nothing. It is
+     * A member submits the reading of an active meter of a plot they own now (spec 010, section 2.4), with an optional
+     * photo of the meter (feature 021 §2.3). It waits for approval ({@code PENDING}, source {@code MEMBER}) and never
+     * counts or supersedes a counted reading until then; a pending reading of the same meter and date is superseded by
+     * it, and the same value again without a photo changes nothing (with a photo it is a new submission). It is
      * checked against the counted readings as the board's entry is. Any plot the caller does not own now (an unknown
      * plot and a plot of another cooperative included) is the same 404 {@code PLOT_NOT_FOUND}; a meter that is not a
-     * meter of that plot is 404 {@code NOT_FOUND} on {@code meterId}; the platform operator gets 403.
+     * meter of that plot is 404 {@code NOT_FOUND} on {@code meterId}; the platform operator gets 403. The photo is
+     * checked after the owner rule and before the meter is locked ({@link ReadingPhotoUploads}) and stored in this
+     * transaction with the reading, so a refused photo saves nothing. The audit entry says whether a photo came with
+     * the reading ({@code photo} {@code true}/{@code false}), never the file.
+     *
+     * @param photo the uploaded photo; null without one (the deprecated JSON operation and the Telegram bot)
      */
     @Transactional
-    ReadingSaved submit(UUID plotId, ReadingSubmission input, AccessProfile actor) {
+    ReadingSaved submit(UUID plotId, ReadingSubmission input, @Nullable MultipartFile photo, AccessProfile actor) {
         access.requireCooperativeData(actor);
         if (!access.ownsNow(actor, plotId)) {
             throw MeterAccess.plotNotFound();
         }
+        ReadingPhotoUploads.Prepared prepared = photo == null ? null : ReadingPhotoUploads.prepare(photo);
         MeterValue value = parse(input.getValue());
         MeterRecord meter = meters.findByIdForUpdate(input.getMeterId())
                 .filter(found -> plotId.equals(found.getPlotId()))
@@ -303,21 +315,26 @@ class ReadingCommands {
         List<Warning> warnings = ReadingValidator.warnings(span, counted, date, value);
         List<MeterReadingRecord> pending = readings.findByMeterIdAndStatusOrderByTakenOn(meter.getId(), Status.PENDING)
                 .stream().filter(other -> other.getTakenOn().equals(date)).toList();
-        MeterReadingRecord same = pending.stream().filter(other -> other.getValue().equals(value)).findFirst()
-                .orElse(null);
+        MeterReadingRecord same = prepared != null ? null
+                : pending.stream().filter(other -> other.getValue().equals(value)).findFirst().orElse(null);
         if (same != null) {
-            // the same reading again (a second tap on "send"): nothing changes and nothing is audited
-            return new ReadingSaved(ReadingDtoMapper.toDto(same, null, false), List.of(),
+            // the same reading again without a photo (a second tap on "send"): nothing changes and nothing is audited
+            return new ReadingSaved(ReadingDtoMapper.toDto(same, null, false, photos.has(same.getId())), List.of(),
                     ReadingDtoMapper.toDto(warnings));
         }
         MeterReadingRecord created = MeterReadingRecord.submitted(meter.getTenantId(), meter.getId(), date, value,
                 actor.memberId(), clock.instant());
         replace(pending, created);
+        if (prepared != null) {
+            photos.save(meter, created, prepared, actor);
+        }
+        MeterReadingRecord replaced = pending.isEmpty() ? null : pending.getFirst();
         audit.publishReading(actor, "READING_SUBMITTED", meter, List.of(
                 new FieldChange("takenOn", null, date.toString()),
-                new FieldChange("value", pending.isEmpty() ? null : pending.getFirst().getValue().toString(),
-                        value.toString())));
-        return new ReadingSaved(ReadingDtoMapper.toDto(created, null, false),
+                new FieldChange("value", replaced == null ? null : replaced.getValue().toString(), value.toString()),
+                new FieldChange("photo", replaced == null ? null : Boolean.toString(photos.has(replaced.getId())),
+                        Boolean.toString(prepared != null))));
+        return new ReadingSaved(ReadingDtoMapper.toDto(created, null, false, prepared != null),
                 pending.stream().map(MeterReadingRecord::getId).toList(), ReadingDtoMapper.toDto(warnings));
     }
 
@@ -362,7 +379,8 @@ class ReadingCommands {
         pointEvents.changed(meter, date, Cause.READING_APPROVED);
         decided(meter, reading, ReadingStatus.APPROVED);
         Interval interval = ReadingValidator.intervalEndingAt(span, counted, date, value).orElse(null);
-        return new ReadingSaved(ReadingDtoMapper.toDto(reading, interval, actor.can(Permission.READINGS_ENTER)),
+        return new ReadingSaved(ReadingDtoMapper.toDto(reading, interval, actor.can(Permission.READINGS_ENTER),
+                photos.has(reading.getId())),
                 sameDate == null ? List.of() : List.of(sameDate.getId()),
                 ReadingDtoMapper.toDto(ReadingValidator.warnings(span, counted, date, value)));
     }
@@ -390,7 +408,7 @@ class ReadingCommands {
                 new FieldChange("value", null, reading.getValue().toString()),
                 new FieldChange("reason", null, reason)));
         decided(meter, reading, ReadingStatus.REJECTED);
-        return ReadingDtoMapper.toDto(reading, null, false);
+        return ReadingDtoMapper.toDto(reading, null, false, photos.has(reading.getId()));
     }
 
     // ---- one row
@@ -534,9 +552,9 @@ class ReadingCommands {
         }
     }
 
-    private static ReadingSaved saved(Saved saved) {
-        return new ReadingSaved(ReadingDtoMapper.toDto(saved.reading(), saved.interval(), true), saved.superseded(),
-                ReadingDtoMapper.toDto(saved.warnings()));
+    private ReadingSaved saved(Saved saved) {
+        return new ReadingSaved(ReadingDtoMapper.toDto(saved.reading(), saved.interval(), true,
+                photos.has(saved.reading().getId())), saved.superseded(), ReadingDtoMapper.toDto(saved.warnings()));
     }
 
     /** A refused row: the problem code, its field and, for a broken reading rule, the parameters of the message. */

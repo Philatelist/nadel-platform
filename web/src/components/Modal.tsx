@@ -25,7 +25,7 @@ export function Modal({
         onClose();
       }}
       aria-labelledby={titleId}
-      className={`m-auto max-h-[90vh] w-full ${widths[size]} overflow-y-auto rounded-panel border border-line bg-surface p-5 text-ink backdrop:bg-ink/40`}
+      className={`m-auto max-h-[100dvh] w-full ${widths[size]} overflow-y-auto rounded-panel border border-line bg-surface p-5 text-ink backdrop:bg-ink/40`}
     >
       <h2 id={titleId} className="font-serif text-xl font-semibold">
         {title}

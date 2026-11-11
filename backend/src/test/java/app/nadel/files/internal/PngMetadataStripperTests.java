@@ -1,9 +1,10 @@
-package app.nadel.treasury.internal;
+package app.nadel.files.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import app.nadel.treasury.TestImages;
+import app.nadel.files.MalformedImageException;
+import app.nadel.files.TestImages;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

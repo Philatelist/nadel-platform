@@ -98,7 +98,7 @@ class ReadingAuditTests extends MeterTestSupport {
     }
 
     @Test
-    void aMemberSubmissionWritesItsDateAndValueAndThePendingValueItReplaced() throws Exception {
+    void aMemberSubmissionWritesItsDateValueAndPhotoAndThePendingValuesItReplaced() throws Exception {
         UUID plot = newPlot("MT вул. Садова");
         meter = register(plotMeter(plot, "ELECTRICITY", "MT-ЕМ-1", "2026-06-01", "8000"));
         RoleMember owner = customRoleMember();
@@ -114,9 +114,9 @@ class ReadingAuditTests extends MeterTestSupport {
         assertThat(entries.getFirst().get("entity_label")).isEqualTo("MT-ЕМ-1");
         assertThat(entries.getFirst().get("actor_member_id")).isEqualTo(owner.id());
         assertThat(changes(entries.get(0))).containsExactly(new Change("takenOn", null, "2026-10-15"),
-                new Change("value", null, "8210.000"));
+                new Change("value", null, "8210.000"), new Change("photo", null, "false"));
         assertThat(changes(entries.get(1))).containsExactly(new Change("takenOn", null, "2026-10-15"),
-                new Change("value", "8210.000", "8212.000"));
+                new Change("value", "8210.000", "8212.000"), new Change("photo", "false", "false"));
     }
 
     @Test

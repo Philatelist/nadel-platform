@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -28,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The readings members submitted that wait for approval (the "На підтвердження" screen), each with its meter and what
  * approving it would give: the interval it would close and its warnings, worked out against the counted readings as
- * they are now. The number of queries does not grow with the number of readings.
+ * they are now, and whether a photo came with it. The number of queries does not grow with the number of readings.
  */
 @Service
 class ApprovalQueries {
@@ -39,16 +40,18 @@ class ApprovalQueries {
     private final ReadingFacts facts;
     private final MeterAccess access;
     private final MeterChains chains;
+    private final ReadingPhotos photos;
     private final Clock clock;
 
     ApprovalQueries(MeterReadingRepository readings, MeterRepository meters, PlotCatalog plots, ReadingFacts facts,
-            MeterAccess access, MeterChains chains, Clock clock) {
+            MeterAccess access, MeterChains chains, ReadingPhotos photos, Clock clock) {
         this.readings = readings;
         this.meters = meters;
         this.plots = plots;
         this.facts = facts;
         this.access = access;
         this.chains = chains;
+        this.photos = photos;
         this.clock = clock;
     }
 
@@ -74,6 +77,7 @@ class ApprovalQueries {
         Map<UUID, Reading> latest = facts.latestApproved(meterIds);
         Map<UUID, List<Reading>> counted = facts.approvedByMeter(meterIds);
         Map<UUID, Neighbours> neighbours = chains.neighboursOf(byId.values());
+        Set<UUID> withPhoto = photos.withPhoto(pending.stream().map(MeterReadingRecord::getId).toList());
         boolean withNote = access.seesEveryMeter(viewer);
         LocalDate today = LocalDate.now(clock);
 
@@ -82,7 +86,8 @@ class ApprovalQueries {
             MeterRecord meter = byId.get(reading.getMeterId());
             PlotFacts plot = meter.getPlotId() == null ? null : plotFacts.get(meter.getPlotId());
             // a pending reading is a reading: the meter is no longer deletable
-            PendingReading item = new PendingReading(ReadingDtoMapper.toDto(reading, null, false),
+            PendingReading item = new PendingReading(
+                    ReadingDtoMapper.toDto(reading, null, false, withPhoto.contains(reading.getId())),
                     MeterDtoMapper.toDto(meter, plot, latest.get(meter.getId()), true, withNote,
                             neighbours.getOrDefault(meter.getId(), Neighbours.NONE)), List.of());
             MeterSpan span = MeterSpan.of(meter);

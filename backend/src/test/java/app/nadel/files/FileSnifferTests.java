@@ -1,9 +1,7 @@
-package app.nadel.treasury.internal;
+package app.nadel.files;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import app.nadel.treasury.TestImages;
-import app.nadel.treasury.internal.FileSniffer.Kind;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -12,12 +10,12 @@ class FileSnifferTests {
 
     @Test
     void jpegPngAndPdfAreRecognisedByTheirSignatures() {
-        assertThat(FileSniffer.sniff(TestImages.jpeg(false))).contains(Kind.JPEG);
-        assertThat(FileSniffer.sniff(TestImages.png())).contains(Kind.PNG);
-        assertThat(FileSniffer.sniff(TestImages.pdf())).contains(Kind.PDF);
-        assertThat(Kind.JPEG.mediaType()).isEqualTo("image/jpeg");
-        assertThat(Kind.PNG.mediaType()).isEqualTo("image/png");
-        assertThat(Kind.PDF.mediaType()).isEqualTo("application/pdf");
+        assertThat(FileSniffer.sniff(TestImages.jpeg(false))).contains(FileKind.JPEG);
+        assertThat(FileSniffer.sniff(TestImages.png())).contains(FileKind.PNG);
+        assertThat(FileSniffer.sniff(TestImages.pdf())).contains(FileKind.PDF);
+        assertThat(FileKind.JPEG.mediaType()).isEqualTo("image/jpeg");
+        assertThat(FileKind.PNG.mediaType()).isEqualTo("image/png");
+        assertThat(FileKind.PDF.mediaType()).isEqualTo("application/pdf");
     }
 
     @Test

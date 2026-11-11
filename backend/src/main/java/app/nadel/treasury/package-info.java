@@ -18,19 +18,19 @@
  * the listener of {@link app.nadel.ledger.PaymentMoneyMoved} ({@code PaymentMovementListener}: a plain synchronous
  * {@code @EventListener} that writes the member payment movements in the payment's own transaction, ADR 0019), the
  * expenses ({@code Expenses}, {@code ExpenseQueries}, the no-negative-cash rule {@code CashGuard}, the attachment checks
- * {@code AttachmentUploads}, {@code FileSniffer}, {@code JpegMetadataStripper}, {@code PngMetadataStripper}), the
- * categories ({@code Categories}), the cash counts ({@code CashCounts}, {@code CashCountQueries}, the pure
- * {@code CashCountFigures}), the bank reconciliation ({@code BankReconciliations}), the reports' facade
- * ({@code TreasuryReports}), the contract form of journal lines ({@code JournalLines}), the sealing of personal texts
- * ({@code TreasuryCipher}), the audit publisher ({@code TreasuryAuditPublisher}) and the demo cash book runner
- * ({@code DemoTreasury}, dev profile only).
+ * {@code AttachmentUploads}, which calls {@code files}), the categories ({@code Categories}), the cash counts
+ * ({@code CashCounts}, {@code CashCountQueries}, the pure {@code CashCountFigures}), the bank reconciliation
+ * ({@code BankReconciliations}), the reports' facade ({@code TreasuryReports}), the contract form of journal lines
+ * ({@code JournalLines}), the sealing of personal texts ({@code TreasuryCipher}), the audit publisher
+ * ({@code TreasuryAuditPublisher}) and the demo cash book runner ({@code DemoTreasury}, dev profile only).
  * <p>
  * Depends on {@code ledger} ({@code PaymentMoneyMoved}, {@code PaymentSource}, {@code LedgerReadModel#paymentRefs},
  * {@code BookingMonths}), {@code settings} ({@code CooperativeSettings}: the IBAN), {@code audit} ({@code AuditEvent},
  * {@code ActorNames}: who entered a line), {@code privacy} ({@code PersonalDataCipher}), {@code identity}
  * ({@code CurrentUser}, {@code AccessProfile}), {@code members} ({@code RoleHolders}, the demo runner), {@code tenancy}
- * ({@code TenantContext}), {@code problem} and {@code money}; it never reads another module's tables. No module depends
- * on it except {@code documents} (the cash count act) and {@code reports} (the cash book reports); it never depends on
+ * ({@code TenantContext}), {@code files} ({@code FileSniffer}, {@code ImageMetadata}, {@code UploadLimits}: the
+ * receipt checks), {@code problem} and {@code money}; it never reads another module's tables. No module depends on it
+ * except {@code documents} (the cash count act) and {@code reports} (the cash book reports); it never depends on
  * either.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Treasury (cash and bank)")

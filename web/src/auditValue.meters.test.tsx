@@ -54,3 +54,16 @@ describe('auditValue for the meter tree', () => {
     expect(uk.audit.fields.parent).toBeTruthy();
   });
 });
+
+describe('auditValue for the reading photo', () => {
+  const uk = messages('uk');
+  const en = messages('en');
+
+  it('says whether a photo came with the reading', () => {
+    expect(text(auditValue('METER_READING', 'photo', 'true', uk, 'uk'), 'uk')).toBe('Так');
+    expect(text(auditValue('METER_READING', 'photo', 'false', uk, 'uk'), 'uk')).toBe('Ні');
+    expect(text(auditValue('METER_READING', 'photo', 'true', en, 'en'), 'en')).toBe('Yes');
+    expect(uk.audit.fields.photo).toBe('Фото');
+    expect(en.audit.fields.photo).toBe('Photo');
+  });
+});

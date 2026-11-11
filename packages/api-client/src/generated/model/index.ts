@@ -437,6 +437,7 @@ export * from './sendMonthInvoicesParams';
 export * from './signInServiceUnavailableResponse';
 export * from './smtpSecurity';
 export * from './staleMeter';
+export * from './submitPlotReadingWithPhotoBody';
 export * from './tariff';
 export * from './tariffArchive';
 export * from './tariffConflict';

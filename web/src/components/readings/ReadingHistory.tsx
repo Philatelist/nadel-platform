@@ -22,6 +22,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { formatUser } from '../UserContent';
 import { Badge, Button, DataTable, Notice, type BadgeTone, type Column } from '../ui';
 import { CorrectReadingDialog } from './CorrectReadingDialog';
+import { ReadingPhotoThumb } from './ReadingPhotoThumb';
 import { ReadingRecalculationDialog } from './ReadingRecalculationDialog';
 
 const STATUS_TONE: Readonly<Record<ReadingStatus, BadgeTone>> = {
@@ -97,6 +98,11 @@ export function ReadingHistory({ meter }: { meter: Meter }) {
       ),
     },
     { key: 'source', header: h.columns.source, cell: (r) => h.source[r.source] },
+    {
+      key: 'photo',
+      header: h.columns.photo,
+      cell: (r) => (r.hasPhoto ? <ReadingPhotoThumb readingId={r.id} takenOn={r.takenOn} /> : null),
+    },
     {
       key: 'interval',
       header: h.columns.interval,

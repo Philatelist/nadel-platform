@@ -32,4 +32,6 @@ export interface MeterReading {
   interval?: ReadingInterval;
   /** True when the caller may correct or delete the reading now: it is approved, the caller has `READINGS_ENTER` and no charge uses it */
   changeable: boolean;
+  /** True when a photo of the meter came with the reading; it stays whatever the status becomes. The photo is downloaded with `getReadingPhoto`. The approvals list (`PendingReading.reading`), the history of a meter and every saved reading (`ReadingSaved.reading`) carry it */
+  hasPhoto: boolean;
 }

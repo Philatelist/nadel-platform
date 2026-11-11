@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -25,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Reads the readings of a meter with the intervals between its counted points. Only approved readings count; pending,
- * rejected and superseded rows are part of the history but never of the consumption.
+ * rejected and superseded rows are part of the history but never of the consumption. Every row says whether a photo
+ * came with it; a rejected or superseded reading keeps its photo.
  */
 @Service
 class ReadingQueries {
@@ -41,13 +43,15 @@ class ReadingQueries {
     private final MeterReadingRepository readings;
     private final MeterAccess access;
     private final List<ReadingUsage> usages;
+    private final ReadingPhotos photos;
 
     ReadingQueries(MeterRepository meters, MeterReadingRepository readings, MeterAccess access,
-            List<ReadingUsage> usages) {
+            List<ReadingUsage> usages, ReadingPhotos photos) {
         this.meters = meters;
         this.readings = readings;
         this.access = access;
         this.usages = usages;
+        this.photos = photos;
     }
 
     /**
@@ -72,11 +76,13 @@ class ReadingQueries {
         Map<LocalDate, Interval> byEnd = intervals.stream()
                 .collect(Collectors.toMap(Interval::to, Function.identity()));
         boolean mayChange = viewer.can(Permission.READINGS_ENTER);
+        Set<UUID> withPhoto = photos.withPhoto(all.stream().map(MeterReadingRecord::getId).toList());
 
         List<MeterReading> history = all.stream().sorted(HISTORY_ORDER)
                 .map(reading -> ReadingDtoMapper.toDto(reading,
                         reading.isApproved() ? byEnd.get(reading.getTakenOn()) : null,
-                        mayChange && reading.isApproved() && !used(meter, span, counted, reading.getTakenOn())))
+                        mayChange && reading.isApproved() && !used(meter, span, counted, reading.getTakenOn()),
+                        withPhoto.contains(reading.getId())))
                 .toList();
         List<ReadingInterval> newestFirst = intervals.reversed().stream().map(ReadingDtoMapper::toDto).toList();
         return new MeterReadingHistory(meterId, history, newestFirst);

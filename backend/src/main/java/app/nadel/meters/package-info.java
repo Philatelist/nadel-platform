@@ -1,8 +1,8 @@
 /**
  * The cooperative's meters (electricity in kWh, water in m3), the dated tree of electricity meters, the readings taken on
  * any date and the consumption calculated from them, and the water connections of plots (feature 011). Tables:
- * {@code meter}, {@code meter_parent} and {@code meter_reading} (V12) and {@code plot_water_connection} (V16), all under
- * RLS {@code tenant_isolation}.
+ * {@code meter}, {@code meter_parent} and {@code meter_reading} (V12), {@code plot_water_connection} (V16) and
+ * {@code reading_photo} (V38, the photo of a member's reading, feature 021), all under RLS {@code tenant_isolation}.
  * <p>
  * Public API: {@link app.nadel.meters.MeterResource}, {@link app.nadel.meters.MeterKind}, the quantities
  * {@link app.nadel.meters.MeterValue} (a reading, three decimals, never rounded) and {@link app.nadel.meters.Quantity}
@@ -28,9 +28,11 @@
  * the Plots sheet). The meter register (entity, commands, queries, the endpoints of tag
  * {@code meters} and the plot guards {@code MeterPlotGuard} and {@code WaterConnectionPlotGuard}, implementations of
  * {@link app.nadel.plots.PlotChangeGuard}),
- * the readings (entity, rules, commands, the round, the member's submission, approvals and the endpoints of tag
- * {@code readings}), replacement with the tree periods it moves, range consumption over a chain of meters and the water
- * connections (entity, commands, queries and the endpoints of tag {@code water}) are internal. It depends on {@code identity}, {@code audit}, {@code problem} and {@code plots} (the public
+ * the readings (entity, rules, commands, the round, the member's submission with its photo, approvals, the photo
+ * download and the endpoints of tag {@code readings}), replacement with the tree periods it moves, range consumption
+ * over a chain of meters and the water connections (entity, commands, queries and the endpoints of tag
+ * {@code water}) are internal. It depends on {@code identity}, {@code audit}, {@code problem}, {@code files} (the
+ * checks of an uploaded photo) and {@code plots} (the public
  * {@code PlotCatalog} and the import records {@code PlotImportRow}, {@code PlotImportPlan}). {@code tariffs},
  * {@code imports}, {@code ledger} and {@code reports} depend on it, never the other way round.
  */

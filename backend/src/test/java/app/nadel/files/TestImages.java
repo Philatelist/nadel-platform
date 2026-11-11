@@ -1,4 +1,4 @@
-package app.nadel.treasury;
+package app.nadel.files;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -16,9 +16,9 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 
 /**
- * Small synthetic receipt photos for the attachment tests, built in memory (no binary fixtures): a JPEG or PNG written
- * by ImageIO, then given the metadata a phone camera writes. Every metadata value carries a marker text the tests look
- * for in the stored file ({@link #MARKERS}): the camera make, the GPS latitude, XMP, an MPF index with a second image
+ * Small synthetic photos for the uploaded file tests, built in memory (no binary fixtures): a JPEG or PNG written by
+ * ImageIO, then given the metadata a phone camera writes. Every metadata value carries a marker text the tests look for
+ * in the stored file ({@link #MARKERS}): the camera make, the GPS latitude, XMP, an MPF index with a second image
  * after the first EOI, Photoshop IPTC, a comment and trailing bytes.
  */
 public final class TestImages {
