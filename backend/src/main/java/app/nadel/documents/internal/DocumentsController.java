@@ -28,6 +28,7 @@ import nadel.contract.model.InvoiceLineKind;
 import nadel.contract.model.InvoiceLineSource;
 import nadel.contract.model.InvoiceOwner;
 import nadel.contract.model.InvoicePage;
+import nadel.contract.model.InvoicePayment;
 import nadel.contract.model.InvoicePlot;
 import nadel.contract.model.InvoicePrintScope;
 import nadel.contract.model.InvoiceQr;
@@ -165,6 +166,16 @@ class DocumentsController implements DocumentsApi {
     public ResponseEntity<List<InvoiceRow>> listMyInvoices() {
         return ResponseEntity.ok(invoices.mine(currentUser.profile()).stream().map(DocumentsController::row)
                 .toList());
+    }
+
+    /** A row of the member's own list with the payment details of its version, when it has them. */
+    private static InvoiceRow row(Invoices.Mine mine) {
+        InvoiceRow row = row(mine.row());
+        Invoices.Payment payment = mine.payment();
+        if (payment != null) {
+            row.setPayment(new InvoicePayment(payment.link(), payment.iban(), payment.purpose()));
+        }
+        return row;
     }
 
     private static InvoiceRow row(Invoices.Row row) {

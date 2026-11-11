@@ -2163,6 +2163,13 @@ export const en = {
     myEmpty: 'There are no invoices yet.',
     myOlder: 'Earlier months',
     earlierVersions: 'Earlier versions ({count})',
+    pay: {
+      payInBank: 'Pay in the bank app',
+      copyIban: 'Copy IBAN',
+      copyPurpose: 'Copy payment purpose',
+      copied: 'Copied',
+      copyFailed: 'Could not copy. Select the value below and copy it manually.',
+    },
     monthPanel: {
       title: 'Invoices of the month',
       includeNothingDue: 'Include invoices with nothing due',

@@ -9,6 +9,7 @@
  *
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoicePayment } from './invoicePayment';
 import type { Money } from './money';
 
 /**
@@ -29,4 +30,5 @@ export interface InvoiceRow {
   issuedAt: string;
   /** Whether this is the latest version of its plot and month */
   latest: boolean;
+  payment?: InvoicePayment;
 }

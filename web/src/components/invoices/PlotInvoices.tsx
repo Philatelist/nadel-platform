@@ -20,6 +20,7 @@ import { QueryBoundary } from '../QueryBoundary';
 import { Pagination } from '../Pagination';
 import { Button, Money, Notice, Panel } from '../ui';
 import { BusyLabel } from './BusyLabel';
+import { InvoicePaymentActions } from './InvoicePaymentActions';
 import { InvoiceSendButton } from './InvoiceSendButton';
 import { RequisitesWarning } from './RequisitesWarning';
 
@@ -140,6 +141,7 @@ export function InvoiceItem({
       >
         {pending ? i.downloading : i.download}
       </Button>
+      <InvoicePaymentActions payment={row.payment} />
       {canSend && row.latest && <InvoiceSendButton row={row} />}
       {withEarlier && row.version > 1 && <EarlierVersions row={row} />}
     </li>

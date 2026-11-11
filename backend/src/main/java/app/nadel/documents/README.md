@@ -23,7 +23,7 @@ it.
 | `GET /invoices?month&plotId&latestOnly&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `getInvoice`, `getInvoicePdf`, `getInvoiceQrPng` | `CHARGES_VIEW`, or a current owner of the plot and only the latest version (else 404) |
-| `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot); the operator 403 |
+| `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot), each with its stored `payment` details; the operator 403 |
 | `POST /billing-months/{month}/invoices?preview` (body `{includeNothingDue?}`) | `buildMonthInvoices` | `INVOICES_ISSUE` |
 | `GET /billing-months/{month}/invoices/print.pdf?scope=PAPER\|ALL` | `getMonthInvoicesPrintPdf` | `INVOICES_ISSUE` |
 
@@ -171,7 +171,13 @@ owns now (`identity.OwnedPlotsSource`), for each the latest version of each mont
 version equal to the plot and month's highest), newest month first, then the plots in the natural order of their
 numbers; every row `latest: true`. No permission: a caller with no plot, or linked to no member, gets an empty list (a
 sold plot is no longer listed); the platform operator 403. Each row's PDF is `GET /invoices/{id}/pdf`, which lets a
-member have only that latest version. A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
+member have only that latest version. Each row also carries `payment {link, iban, purpose}` (feature 021 §2.4, paying
+from the phone: «Сплатити в банку», «Скопіювати IBAN», «Скопіювати призначення»), read by the same query from the
+stored snapshot (`qr.link`, `qr.purpose`, `cooperative.iban`: plaintext keys, nothing to decrypt), so the values are
+those of the PDF and `GET /invoices/{id}`, and a later change of the cooperative's IBAN never changes an issued
+version's details; absent when the version has no QR code (nothing due) or no IBAN. Only `listMyInvoices` fills it:
+the board's `GET /invoices` and the `InvoiceRow` of `POST /plots/{id}/invoices` stay without it
+(`MyInvoicesPaymentTests`). A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
 `payments[].id`, `source`, `receiptNumber`) and `GET /payments/{id}/receipt.pdf`.
 
 **The page** (`InvoiceLayout`, A4, one page per invoice): the requisites with, beside them, «Рахунок № {number}» and
@@ -516,6 +522,10 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   older version and another plot's invoice are 404; the certificates are 403; the member's own cash receipt downloads,
   another plot's is 404; a caller without a plot (also the treasurer) and another cooperative's member get an empty
   list; the operator 403; no token 401.
+- `MyInvoicesPaymentTests` (Testcontainers, feature 021): a row of `GET /me/invoices` carries `payment` equal to
+  `GET /invoices/{id}`'s `qr.link`, `qr.purpose` and `cooperative.iban`; a later change of the IBAN setting leaves an
+  issued version's IBAN as stored; a version with nothing due has no `payment` (and no `qr`); another member's invoice
+  is not listed; the board's `GET /invoices` rows have no `payment`.
 - `DemoDocumentsTests` (Testcontainers, the demo ledger loaded): the runner is not registered in the tests; a run builds
   the closed month's invoices (version 1, no member; also the demo member's nothing-due plots 7 and 15, due 0) and
   plot 9's certificate as of the month's last day by the demo

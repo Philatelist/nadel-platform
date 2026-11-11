@@ -176,6 +176,7 @@ export * from './invoiceLineKind';
 export * from './invoiceLineSource';
 export * from './invoiceOwner';
 export * from './invoicePage';
+export * from './invoicePayment';
 export * from './invoicePlot';
 export * from './invoicePrintScope';
 export * from './invoiceQr';

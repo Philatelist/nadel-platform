@@ -4442,8 +4442,10 @@ paths:
         invoice of each billing month (older versions are never listed for a member), newest month first, then the
         plots in the natural order of their numbers. Every row has `latest: true`. The PDF of a row is
         `GET /invoices/{id}/pdf`. No permission is needed: a caller who owns no plot (or is not linked to a member)
-        gets an empty list; a plot the caller sold is no longer listed. The platform operator has no cooperative
-        data: 403.
+        gets an empty list; a plot the caller sold is no longer listed. Each row carries `payment` (the NBU payment
+        link, the IBAN and the purpose of payment stored in that invoice version, the same as its PDF and
+        `GET /invoices/{id}`) when the version has a QR code and an IBAN (feature 021 §2.4); only this operation fills
+        it. The platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -10027,6 +10029,26 @@ components:
         latest:
           type: boolean
           description: Whether this is the latest version of its plot and month
+        payment:
+          $ref: '#/components/schemas/InvoicePayment'
+
+    InvoicePayment:
+      type: object
+      description: >-
+        How to pay an invoice version from a phone, as stored in the version when it was issued (the same as its PDF
+        and `GET /invoices/{id}`: `qr.link`, `qr.purpose` and `cooperative.iban`, not the current settings). Filled
+        only by `GET /me/invoices`; absent when the version has no QR code (nothing due) or no IBAN.
+      required: [link, iban, purpose]
+      properties:
+        link:
+          type: string
+          description: The NBU payment link, `https://qr.bank.gov.ua/` and the Base64URL payload (format 003)
+        iban:
+          type: string
+          description: The cooperative's IBAN printed on the invoice
+        purpose:
+          type: string
+          description: The purpose of payment the QR code carries
 
     InvoicePage:
       type: object

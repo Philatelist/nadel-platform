@@ -79,10 +79,15 @@ class Invoices {
                                                    where j.plot_id = i.plot_id and j.month = i.month))
             """;
 
-    /** The latest version of every month's invoice of the given plots ({@code GET /me/invoices}). */
+    /**
+     * The latest version of every month's invoice of the given plots ({@code GET /me/invoices}), with the payment
+     * details stored in its snapshot: the QR link and purpose and the cooperative's IBAN (plaintext keys).
+     */
     private static final String MINE = """
             select i.id, i.plot_id, i.snapshot -> 'plot' ->> 'number' as plot_number, i.month, i.number,
-                   i.version, i.due, i.issued_at, true as latest
+                   i.version, i.due, i.issued_at, true as latest,
+                   i.snapshot -> 'qr' ->> 'link' as qr_link, i.snapshot -> 'qr' ->> 'purpose' as qr_purpose,
+                   i.snapshot -> 'cooperative' ->> 'iban' as iban
             from invoice i
             where i.plot_id in (:plotIds)
               and i.version = (select max(j.version) from invoice j
@@ -101,6 +106,14 @@ class Invoices {
     /** One row of the list. */
     record Row(UUID id, UUID plotId, String plotNumber, YearMonth month, String number, int version, Money due,
             Instant issuedAt, boolean latest) {
+    }
+
+    /** One row of the member's own list ({@link #mine}) and how to pay it; no payment without a QR code or IBAN. */
+    record Mine(Row row, @Nullable Payment payment) {
+    }
+
+    /** The payment details stored in a version: the NBU link, the cooperative's IBAN, the purpose of payment. */
+    record Payment(String link, String iban, String purpose) {
     }
 
     /** A page of the list. */
@@ -205,10 +218,11 @@ class Invoices {
      * The member account's invoices ({@code GET /me/invoices}, feature 016 §2.9): the latest version of each month's
      * invoice of every plot the viewer owns now, newest month first, then the plots in the natural order of their
      * numbers. No permission: a viewer who owns nothing (or is linked to no member) gets an empty list; the platform
-     * operator is 403.
+     * operator is 403. Each row carries the payment details stored in its version (feature 021 §2.4), the same as its
+     * PDF and {@link #document}: the snapshot's QR link and purpose and its IBAN, not the current settings.
      */
     @Transactional(readOnly = true)
-    List<Row> mine(AccessProfile viewer) {
+    List<Mine> mine(AccessProfile viewer) {
         requireCooperative(viewer);
         if (viewer.memberId() == null) {
             return List.of();
@@ -223,13 +237,23 @@ class Invoices {
         for (int i = 0; i < owned.size(); i++) {
             rank.put(owned.get(i), i);
         }
-        List<Row> rows = new ArrayList<>(entityManager.createNativeQuery(MINE)
+        List<Mine> rows = new ArrayList<>(entityManager.createNativeQuery(MINE)
                 .setParameter("plotIds", owned)
-                .getResultList().stream().map(Invoices::row).toList());
-        rows.sort(Comparator.comparing(Row::month, Comparator.reverseOrder())
-                .thenComparing(row -> rank.getOrDefault(row.plotId(), Integer.MAX_VALUE))
-                .thenComparing(Row::id));
+                .getResultList().stream().map(Invoices::mine).toList());
+        rows.sort(Comparator.comparing((Mine mine) -> mine.row().month(), Comparator.reverseOrder())
+                .thenComparing(mine -> rank.getOrDefault(mine.row().plotId(), Integer.MAX_VALUE))
+                .thenComparing(mine -> mine.row().id()));
         return List.copyOf(rows);
+    }
+
+    private static Mine mine(Object row) {
+        Object[] v = (Object[]) row;
+        String link = (String) v[9];
+        String purpose = (String) v[10];
+        String iban = (String) v[11];
+        Payment payment = link == null || purpose == null || iban == null || iban.isBlank() ? null
+                : new Payment(link, iban, purpose);
+        return new Mine(row(row), payment);
     }
 
     /** One version as the viewer may see it, the names opened. */

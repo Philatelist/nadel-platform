@@ -14,3 +14,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `8ffadbe..9652767` | MAJOR_ISSUES | M1 navigations served by the Caddy catch-all lack `Cache-Control: no-cache` | minor: wrong admin password retried for 2 min; DER rebuild hardcodes 0x31 (correct for P-256) |
+| 2 | + `51e4a15` | PASS | M1 resolved | — |

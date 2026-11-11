@@ -2184,6 +2184,13 @@ export const uk: Messages = {
     myEmpty: 'Рахунків ще немає.',
     myOlder: 'Попередні місяці',
     earlierVersions: 'Попередні версії ({count})',
+    pay: {
+      payInBank: 'Сплатити в банку',
+      copyIban: 'Скопіювати IBAN',
+      copyPurpose: 'Скопіювати призначення',
+      copied: 'Скопійовано',
+      copyFailed: 'Не вдалося скопіювати. Виділіть значення нижче й скопіюйте вручну.',
+    },
     monthPanel: {
       title: 'Рахунки за місяць',
       includeNothingDue: 'Включити рахунки без боргу',
