@@ -7,9 +7,6 @@ context/
 node_modules/
 dist/
 coverage/
-mobile/.expo/
-mobile/ios/
-mobile/android/
 
 # Java side is formatted by its own tooling
 backend/

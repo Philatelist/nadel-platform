@@ -8,7 +8,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 # process, never exported by Make and never referenced by docker compose.
 LOAD_ENV := set -a; . infra/.env; set +a
 
-.PHONY: help install up down infra backend web mobile dev gen test check lint format format-check clean e2e-install e2e help-shots guide-shots guide
+.PHONY: help install up down infra backend web dev gen test check lint format format-check clean e2e-install e2e help-shots guide-shots guide
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -32,9 +32,6 @@ backend: infra/.env ## Run the backend API on :8080 (needs `make infra`); create
 
 web: ## Run the web app on :5173 (proxies /api to :8080)
 	pnpm --filter web dev
-
-mobile: ## Start the Expo dev server
-	pnpm --filter mobile start
 
 up: infra infra/.env ## Start infrastructure, backend and web together (creates infra/.env with a local master key; Ctrl+C stops)
 	@trap 'kill 0' INT TERM; \

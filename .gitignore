@@ -17,12 +17,6 @@ dist/
 .turbo/
 coverage/
 
-# Expo
-mobile/.expo/
-mobile/ios/
-mobile/android/
-mobile/web-build/
-
 # Env
 .env
 .env.*

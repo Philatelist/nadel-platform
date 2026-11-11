@@ -1,26 +1,6 @@
-# Vulnerabilities accepted after review (same list as auditConfig in pnpm-workspace.yaml).
-# Revisit on every Expo SDK upgrade and remove entries once a patched version is in the lockfile.
-
-[[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-reason = "braces via metro-file-map: build-time only, input is our own source tree; no patched version yet"
-
-[[IgnoredVulns]]
-id = "GHSA-w5hq-g745-h8pq"
-reason = "uuid via @expo/config-plugins (xcode project tooling): build-time only, buffer argument never used"
-
-[[IgnoredVulns]]
-id = "GHSA-mrhx-c7xc-m3w5"
-reason = "zod 3.x via @expo/cli: Expo CLI dev/build tooling only, never shipped in the app or the server; no patched 3.x yet; revisit when Expo moves @expo/cli to zod 4 or a patched 3.x appears"
-
-[[IgnoredVulns]]
-id = "GHSA-3g3m-2fjr-6pw4"
-reason = "glob 13.0.6 via @expo/cli: Expo CLI dev/build tooling only, globs our own source tree, never shipped in the app or the server; the fix (14.0.2) is a major version @expo/cli does not accept; revisit on the next Expo SDK upgrade"
+# Vulnerabilities accepted after review (same list as auditConfig in pnpm-workspace.yaml, when it is not empty).
+# Each entry needs a reason; revisit and remove it once a patched version is in the lockfile.
 
 [[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
-reason = "minimatch 10.2.6 via glob in @expo/cli: Expo CLI dev/build tooling only, patterns are our own, never user input; the fix (11.0.1) is a major version @expo/cli does not accept; revisit on the next Expo SDK upgrade"
-
-[[IgnoredVulns]]
-id = "GHSA-gcqx-w48m-w2h4"
-reason = "deepmerge 4.3.1 via @expo/config: mobile build tooling only, merges our own app config, never user input; not in the backend or the web bundle; no fixed release yet; revisit in phase 5 or when a fixed deepmerge or an @expo/config without it is released"
+reason = "minimatch 10.2.6 via eslint (web dev dependency): lint tooling only, patterns come from our own ESLint config, never user input, nothing ships in the web bundle or the server; the fix (11.0.1) is a major version eslint 10 does not accept yet; moderate, so not in pnpm-workspace.yaml; revisit on the next ESLint upgrade"

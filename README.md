@@ -20,7 +20,7 @@ Payment accounting platform for dacha (garden) cooperatives.
 | Database | PostgreSQL 17 + PostGIS, Flyway, Row Level Security |
 | Identity | Keycloak 26 |
 | Web | React, Vite, TypeScript, Tailwind CSS, TanStack Query, MapLibre GL, oidc-client-ts |
-| Mobile | Expo (React Native) |
+| Phones | The web app as an installable PWA (service worker, Web Push) |
 | Contract | OpenAPI 3.1 → Spring interfaces (openapi-generator) and TS client (orval) |
 
 ## Quick start
