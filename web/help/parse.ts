@@ -74,7 +74,8 @@ function parseShot(value: unknown): HelpShot | null {
   if (!isRecord(value)) return null;
   const { name, user, path, viewport, open, steps, element } = value;
   if (typeof name !== 'string' || typeof user !== 'string' || typeof path !== 'string') return null;
-  if (viewport !== undefined && viewport !== 'desktop' && viewport !== 'phone') return null;
+  if (viewport !== undefined && viewport !== 'desktop' && viewport !== 'phone' && viewport !== 'phone-ios')
+    return null;
   if (open !== undefined && !isRecord(open)) return null;
   if (element !== undefined && !isRecord(element)) return null;
   if (steps !== undefined && !(Array.isArray(steps) && steps.every(isRecord))) return null;

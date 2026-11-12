@@ -51,3 +51,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `963bebc..d6c79f1` | PASS | — | minor: `useScrollToHash` `decodeURIComponent` throws on a malformed hash (`#%`) inside an effect; throttle claimed before enqueue (an enqueue failure spends the hour); no bot-path test for ReadingSubmitted (shared code); a redundant `memberId != null` guard |
+
+## Slice 9 — Phone layouts at 360 px
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `d6c79f1..0e2154d` | PASS | — | minor: unused `cleanupPhoneFixtures`; the invoices phone test issues invoices for demo plots 7 and 15 (append-only); `[&>a:only-child]` in HelpContent also matches prose list items; a no-op `+ 0`; the header link's padded hit area overlaps the line below |

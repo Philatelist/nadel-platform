@@ -39,4 +39,17 @@ describe('useScrollToHash', () => {
     });
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it('does not throw on a malformed hash', () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    expect(() =>
+      render(
+        <MemoryRouter initialEntries={['/account#%']}>
+          <Probe />
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+  });
 });

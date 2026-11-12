@@ -26,6 +26,7 @@ After signing in you land on "{{ui:nav.account}}". It is your home screen and th
 - Submit a meter reading: in the {{ui:readings.mine.title}} block press {{ui:readings.mine.submit}}. The board checks the reading. Step by step: [How to submit a meter reading](help:member-readings).
 - Get an invoice: in the {{ui:invoices.myTitle}} block press {{ui:invoices.download}}. How to read an invoice: [How to read my invoice](help:member-bill). The reconciliation act and other documents: [Documents for a member](help:member-documents).
 - Connect Telegram so that invoices arrive in the messenger: the {{ui:telegramLink.connect}} button in the account. Step by step: [How to connect Telegram](help:member-telegram).
+- Install Nadel on your phone and get notifications on the device: [Install on your phone](help:member-install) and [Notifications on your phone](help:member-push).
 
 You see only your own data. The system does not show other people's plots, amounts or owners.
 
@@ -40,4 +41,6 @@ The "?" button in the header opens the help for the screen you are on. It appear
 - [How to read my invoice](help:member-bill)
 - [Documents for a member](help:member-documents)
 - [How to connect Telegram](help:member-telegram)
+- [Install on your phone](help:member-install)
+- [Notifications on your phone](help:member-push)
 - [Set a password](help:set-password)

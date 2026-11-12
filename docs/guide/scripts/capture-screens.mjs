@@ -15,7 +15,10 @@ const { chromium } = require('@playwright/test');
 const BASE = process.env.GUIDE_BASE_URL ?? 'http://localhost:5173';
 const PASSWORD = process.env.GUIDE_DEMO_PASSWORD ?? 'nadel';
 const DESKTOP = { width: 1280, height: 860 };
-const PHONE = { width: 390, height: 844 };
+const PHONE = { width: 360, height: 740 };
+/** Safari on iPhone: the account page then shows the «Add to Home Screen» steps (the install card of Safari). */
+const IOS_SAFARI_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 /** The id of the demo cooperative "СТ «Надія»" in R__demo_data.sql. */
 const DEMO_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -40,8 +43,9 @@ async function signIn(page, user) {
   await page.getByRole('banner').waitFor({ timeout: 20000 });
 }
 
-function newContext(browser, lang, phone) {
+function newContext(browser, lang, phone, userAgent) {
   return browser.newContext({
+    ...(userAgent ? { userAgent } : {}),
     viewport: phone ? PHONE : DESKTOP,
     deviceScaleFactor: 2,
     colorScheme: 'light',
@@ -176,10 +180,18 @@ try {
       .filter((p) => !onlyPage || p.id === onlyPage)
       .flatMap((p) => p.shots.map((shot) => ({ pageId: p.id, shot })));
     for (const user of [...new Set(items.map((i) => i.shot.user))]) {
-      for (const phone of [false, true]) {
-        const group = items.filter((i) => i.shot.user === user && (i.shot.viewport === 'phone') === phone);
+      for (const viewport of ['desktop', 'phone', 'phone-ios']) {
+        const phone = viewport !== 'desktop';
+        const group = items.filter(
+          (i) => i.shot.user === user && (i.shot.viewport ?? 'desktop') === viewport,
+        );
         if (group.length === 0) continue;
-        const context = await newContext(browser, lang, phone);
+        const context = await newContext(
+          browser,
+          lang,
+          phone,
+          viewport === 'phone-ios' ? IOS_SAFARI_UA : undefined,
+        );
         await setLocale(context, lang);
         const page = await context.newPage();
         try {

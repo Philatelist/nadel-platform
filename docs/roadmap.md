@@ -4,12 +4,12 @@ The map comes late on purpose: plots exist as data from phase 1 (number, street,
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0. Foundation | Monorepo, CI, Keycloak, RLS, web and mobile shells, CLAUDE.md, ADRs, AWOS product and architecture | done |
+| 0. Foundation | Monorepo, CI, Keycloak, RLS, web shell, CLAUDE.md, ADRs, AWOS product and architecture | done |
 | 1. Plots and members | Plots as data without polygons (number, street, area, cadastral number), members, co-owners with shares, ownership history, configurable admin roles, Excel import of plots and members | done |
 | 2. Tariffs and charges | 009 charge types and tariffs (chairman sets tariffs, start dates, bases, which plots they apply to); 010 meters and readings (meter tree, replacement, electrician screen on the web); 011 ledger, charges and period closing (losses per node, common consumers split); 012 retroactive recalculation; 013 reports for the board and report templates (tax report placeholder) | done |
 | 3. Payments | Manual entry, cash desk receipts, bank statement import (CSV/XLSX), matching hints, allocation, prepayments, debt status in the plots list | — |
 | 4. Invoices and delivery | PDF + NBU QR, debt certificate, email, Telegram, Viber, delivery statuses | — |
-| 5. Member account | Web account, mobile apps, meter reading submission with photo, push | — |
+| 5. Member account | Web account as an installable phone app (PWA), meter reading submission with photo, push notifications on devices | — |
 | 6. Map | Import of plot polygons (DXF, State Land Cadastre XML, GeoJSON, KML, Shapefile) with coordinate system conversion (UCS-2000, SK-63, local systems to WGS84), import preview, matching polygons to plots, polygon editor, cooperative boundary, georeferenced image underlay, map colored by debt | — |
 | 6a. Deployment | Staging and production servers, release and rollback workflows, backups, monitoring, runbook (`docs/features/backlog/deployment.md`, ADR 0010). Done last: the product is finished locally first | — |
 | 7. SaaS | Cooperative onboarding, subscriptions and billing, privacy policy (backups and monitoring arrive with 6a) | — |
@@ -17,5 +17,5 @@ The map comes late on purpose: plots exist as data from phase 1 (number, street,
 
 **Order from 28.10.2026 (owner's decision).** The cooperative «Надія» starts real use first, so phase 4 comes before
 the rest of phase 3: `015 Payments` (done) → `016 Invoices, debt certificates and cash receipts` → `017 Delivery by
-e-mail and Telegram` → `018 Cash book and reconciliation` → phase 5 (member account and mobile) → the bank statement
+e-mail and Telegram` → `018 Cash book and reconciliation` → phase 5 (member account as an installable web app) → the bank statement
 import (rest of phase 3) → phases 7 and 8 → phase 6 (map) last. Deployment (6a) is done by hand for now.

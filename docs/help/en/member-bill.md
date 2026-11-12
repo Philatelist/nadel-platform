@@ -55,6 +55,10 @@ Plot 9. The invoice for October 2026.
 
 More cases with numbers: [The numbers of the invoice](help:how-invoice-numbers).
 
+## The pay buttons in the account
+
+In [My account](help:account), in the {{ui:invoices.myTitle}} block, every invoice with an amount to pay has buttons. {{ui:invoices.pay.payInBank}} opens the transfer in the banking app (on a phone without scanning the QR code). {{ui:invoices.pay.copyIban}} and {{ui:invoices.pay.copyPurpose}} copy the IBAN and the payment purpose so that you can paste them into the bank if the app did not open. After copying, the button says "{{ui:invoices.pay.copied}}" for a moment. If it failed, the system says "{{ui:invoices.pay.copyFailed}}": select the value and copy it by hand. Check the recipient, the IBAN, the purpose and the amount just as with the QR code.
+
 ## The QR code
 
 The code follows the rules of the National Bank of Ukraine. A banking app reads the QR code and opens a filled-in transfer. Before you pay, check in the app:

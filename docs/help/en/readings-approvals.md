@@ -34,6 +34,7 @@ Each submitted reading is a card:
 - the plot ("{{ui:readings.plotNumber}}"), the resource and the serial number of the meter; the serial number leads to the [meter card](help:meter-card);
 - "{{ui:readings.approvals.submittedValue}}": what the owner submitted;
 - "{{ui:readings.approvals.wouldBe}}": what the consumption will be if approved;
+- a thumbnail of the meter photo, if the owner added one: press it to open the photo in a large window and check the number; the photo stays with the reading and cannot be deleted;
 - warnings, for example "{{ui:readings.warnings.UNUSUAL_CONSUMPTION}}".
 
 If the reading does not fit between the accepted readings, the card says: "{{ui:readings.approvals.noInterval}}". Then it cannot be approved without a correction, so reject it with a reason.

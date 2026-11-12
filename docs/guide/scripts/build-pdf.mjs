@@ -82,7 +82,7 @@ function renderNode(node, ctx) {
       return '<hr />';
     case 'img': {
       const file = join(helpImgDir, ctx.lang, `${node.shot}.png`);
-      const phone = ctx.page.shots.find((s) => s.name === node.shot)?.viewport === 'phone';
+      const phone = ctx.page.shots.find((s) => s.name === node.shot)?.viewport?.startsWith('phone');
       const body = existsSync(file)
         ? `<img src="${pathToFileURL(file).href}" alt="${escapeHtml(node.alt)}" />`
         : `<div class="shot-missing">${escapeHtml(ctx.text.missing)}</div>`;

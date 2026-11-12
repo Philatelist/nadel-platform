@@ -117,8 +117,12 @@
           Accounts, passwords, sign-in. Cooperative roles are not kept in Keycloak but in the database;
           Keycloak holds only the platform operator role.
         </dd>
-        <dt>Mobile app</dt>
-        <dd>An Expo shell exists; the real app is phase 5.</dd>
+        <dt>The app on a phone</dt>
+        <dd>
+          There is no separate mobile app: the web client is an installable app (a PWA). It can be added to
+          the home screen of a phone or computer, shows notifications on the device and tells the member when
+          there is no connection (chapter 2, "Device notifications and installation").
+        </dd>
       </dl>
       <h3>How a request flows</h3>
       <ol class="steps">
@@ -182,8 +186,8 @@ make e2e-install    # once: the browser for end-to-end tests</pre>
             </td>
           </tr>
           <tr>
-            <td><code>make backend</code>, <code>make web</code>, <code>make mobile</code></td>
-            <td>The backend, the web or the Expo server alone</td>
+            <td><code>make backend</code>, <code>make web</code></td>
+            <td>The backend or the web alone</td>
           </tr>
           <tr>
             <td><code>make down</code></td>
@@ -397,6 +401,61 @@ curl -s -X POST localhost:8091/control/reset</pre>
           (below) — it is only demo data.
         </li>
       </ul>
+      <h3>Device notifications and installation</h3>
+      <p>
+        A member can install the web client on a phone (a PWA) and receive short notifications on the device:
+        a new invoice, a payment, an accepted or rejected reading, an announcement, and the board gets new
+        readings to review. The notifications carry no amounts and no names. This works only when two things
+        hold: the site is opened over HTTPS (browsers make an exception for <code>localhost</code>) and the
+        server has VAPID keys.
+      </p>
+      <ul>
+        <li>
+          <strong>What VAPID keys are.</strong> The server's key pair: the browser sees the public key when a
+          device subscribes, and the private key signs every notification so that the Chrome, Firefox or
+          Safari notification service knows who sent it. The private key is a secret, like the master
+          encryption key.
+        </li>
+        <li>
+          <strong>Where they go.</strong> The server environment: <code>NADEL_WEBPUSH_PUBLIC_KEY</code>,
+          <code>NADEL_WEBPUSH_PRIVATE_KEY</code> and <code>NADEL_WEBPUSH_SUBJECT</code> (the owner's contact,
+          <code>mailto:…</code> or <code>https:…</code>). On the stand it is the file
+          <code>infra/stand/.env</code>. Without all three values notifications are off and the application
+          runs on (the log shows one warning and the account has no notification switch).
+        </li>
+        <li>
+          <strong>How to get them.</strong> The stand creates the pair itself once
+          (<code>infra/stand/stand-init.sh</code>) and keeps it afterwards. For another server run the same
+          <code>openssl</code> commands and put the two lines into the environment file:
+        </li>
+      </ul>
+      <pre class="formula">
+b64url() { sed 's/../\\x&/g' | { read -r esc; printf "$esc"; } | base64 | tr '+/' '-_' | tr -d '=\n'; }
+key_text=$(openssl ecparam -name prime256v1 -genkey -noout | openssl ec -text -noout 2>/dev/null)
+priv_hex=$(printf '%s\n' "$key_text" | awk '/^priv:/{f=1;next} /^pub:/{f=0} f' | tr -d ' :\n' | tail -c 64)
+pub_hex=$(printf '%s\n' "$key_text" | awk '/^pub:/{f=1;next} /^ASN1 OID|^NIST CURVE/{f=0} f' | tr -d ' :\n')
+echo "NADEL_WEBPUSH_PUBLIC_KEY=$(printf '%s' "$pub_hex" | b64url)"
+echo "NADEL_WEBPUSH_PRIVATE_KEY=$(printf '%s' "$priv_hex" | b64url)"</pre>
+      <ul>
+        <li>
+          <strong>Changing the keys.</strong> A new pair invalidates every subscription: notifications turn
+          off on every device until the members turn them on again (the switch "Notifications on this
+          device"). So create the keys once and do not change them without a reason.
+        </li>
+        <li>
+          <strong>In development.</strong> <code>application.yml</code> holds a test key pair for local work
+          only; it never reaches the stand or a production server. <code>make infra</code> also starts a fake
+          push service (<code>fake-push</code>, port 8092): it accepts notifications only from subscriptions
+          that point at it, decrypts nothing and forwards nothing. To see what arrived:
+          <code>curl localhost:8092/control/received</code>; to clear it:
+          <code>curl -X POST localhost:8092/control/reset</code>. Real notifications on a real phone need a
+          server with HTTPS and its own keys.
+        </li>
+        <li>
+          <strong>iPhone.</strong> Notifications work only in the installed app ("Share → Add to Home Screen")
+          on iOS 16.4 or newer.
+        </li>
+      </ul>
       <h3>Resetting the local database</h3>
       <pre class="formula">make down && docker compose -f infra/docker-compose.yml down -v && make up</pre>
       <p>
@@ -423,10 +482,11 @@ curl -s -X POST localhost:8091/control/reset</pre>
     <section class="chapter" id="keycloak">
       <h2><span class="num">3</span> Keycloak: sign-in and accounts</h2>
       <p>
-        Keycloak keeps accounts and passwords. The platform's realm is <code>nadel</code> with two clients,
-        <code>nadel-web</code> and <code>nadel-mobile</code>. Sign-in is by email, self sign-up is off,
-        password reset by email is allowed (it works once mail is configured), the sign-in page speaks
-        Ukrainian (default) and English.
+        Keycloak keeps accounts and passwords. The platform's realm is <code>nadel</code> with the client
+        <code>nadel-web</code> (the app, also when installed on a phone) and the service client
+        <code>nadel-backend-admin</code>; the <code>nadel-mobile</code> client stays in the realm file unused.
+        Sign-in is by email, self sign-up is off, password reset by email is allowed (it works once mail is
+        configured), the sign-in page speaks Ukrainian (default) and English.
       </p>
       <h3>How an account is tied to a cooperative</h3>
       <ul>
@@ -903,6 +963,15 @@ END $$;</pre>
           <tr>
             <td>Who sees plot colours</td>
             <td>"Own plots only" or "All plots"</td>
+            <td>Manage settings</td>
+          </tr>
+          <tr>
+            <td>Photo of a reading is required for members</td>
+            <td>
+              The panel "Meter readings". When on, a member cannot submit a reading without a photo of the
+              meter (JPEG, PNG; an iPhone HEIC photo is converted by the phone itself); the electrician and
+              the board add a photo if they wish
+            </td>
             <td>Manage settings</td>
           </tr>
           <tr>
@@ -2336,6 +2405,19 @@ END $$;</pre>
           backend also needs <code>NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET</code> (chapter 3).
         </li>
         <li>The Keycloak admin console and the database only through an SSH tunnel.</li>
+      </ul>
+      <h3>HTTPS and notification keys</h3>
+      <ul>
+        <li>
+          Installing on a phone and notifications need HTTPS; Caddy issues the certificate itself. Without
+          HTTPS the browser neither offers to install the app nor allows subscribing to notifications.
+        </li>
+        <li>
+          The VAPID keys and the owner's contact (<code>NADEL_WEBPUSH_PUBLIC_KEY</code>,
+          <code>NADEL_WEBPUSH_PRIVATE_KEY</code>, <code>NADEL_WEBPUSH_SUBJECT</code>) live in the server's
+          environment file, see chapter 2. Changing the keys turns notifications off on every device until the
+          members turn them on again.
+        </li>
       </ul>
       <h3>Help and search engines</h3>
       <p>
