@@ -88,3 +88,6 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `6006e4a..5c68807` | PASS | — | minor: `statusOf` depends on the CopyButton DOM shape (a data-testid later) |
+
+### Fix review — owner decisions (13eae91), round 1: MAJOR_ISSUES
+- M1: `HelpShot` kept its failed state when the page changed (keyed by index). Fixed: keyed by image and locale; unit test `HelpContent.test.tsx` re-renders with another screenshot. Minor notes taken: expiry comment in `cacheNames.ts`. Not taken: QueryBoundary brief offline flash for the always-mode help query (acceptable, the offline banner is true); e2e "seen" check could also pass from the HTTP cache (the cache path is asserted first).

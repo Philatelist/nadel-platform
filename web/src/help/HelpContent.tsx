@@ -95,7 +95,14 @@ function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visibl
     case 'hr':
       return <hr key={key} className="border-line" />;
     case 'img':
-      return <HelpShot key={key} src={`/help/img/${locale}/${node.shot}.png`} alt={node.alt} />;
+      // keyed by its image: a screenshot that failed on one page must not stay failed on the next
+      return (
+        <HelpShot
+          key={`${key}:${node.shot}:${locale}`}
+          src={`/help/img/${locale}/${node.shot}.png`}
+          alt={node.alt}
+        />
+      );
     case 'ui':
       return (
         <span key={key} className="rounded-control bg-accent-soft px-1.5 py-0.5 font-medium text-ink">
