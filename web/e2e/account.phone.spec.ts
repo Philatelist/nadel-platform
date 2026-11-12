@@ -47,6 +47,36 @@ test.describe('«My account» on a phone', () => {
     }
   });
 
+  test('«My details» fits the phone for a member and the menu holds the person, language and Sign out', async ({
+    browser,
+  }) => {
+    const member = await signedInPage(browser, 'member@demo.local');
+    try {
+      await member.goto('/account');
+      await expect(member.getByRole('heading', { level: 1 })).toBeVisible();
+      // the header is one compact row: the name, «?» and Menu; the rest is inside the menu
+      const header = member.getByRole('banner');
+      await expect(header.getByRole('button', { name: t.nav.menu, exact: true })).toBeVisible();
+      await expect(header.getByRole('button', { name: t.auth.signOut })).toBeHidden();
+      expect((await header.boundingBox())?.height ?? 999).toBeLessThanOrEqual(80);
+      await header.getByRole('button', { name: t.nav.menu, exact: true }).click();
+      const menu = member.locator('#app-menu');
+      await expect(menu.getByRole('group', { name: t.nav.language })).toBeVisible();
+      await expect(menu.getByRole('button', { name: t.auth.signOut })).toBeVisible();
+      await menu.locator('a[href="/account/profile"]').click();
+      await expect(member).toHaveURL(/\/account\/profile$/);
+      await expect(member.getByRole('heading', { level: 1, name: t.account.details })).toBeVisible();
+      await member.waitForLoadState('networkidle');
+      await expectNoSideScroll(member);
+      await expectTouchTargets(member);
+      await scrollThrough(member);
+      await expectNoSideScroll(member);
+      await expectTouchTargets(member);
+    } finally {
+      await member.context().close();
+    }
+  });
+
   test('the chairman sees every block without side scroll and with 44 px controls', async ({ browser }) => {
     const chairman = await signedInPage(browser, 'chairman@demo.local');
     try {

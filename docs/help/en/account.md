@@ -37,27 +37,25 @@ shots:
 
 ## What the screen is for
 
-{{ui:account.title}} is the personal page of everyone who signs in, and the home screen of a cooperative member: after signing in they land here, it is the first item of their menu, and the logo in the header leads back here. A plot owner sees everything about their plots in one place: what will be charged, what is already charged and paid, their meters and invoices. From here you can submit a meter reading, download an invoice, connect Telegram and get a reconciliation act.
+{{ui:account.title}} is the personal page of everyone who signs in, and the home screen of a cooperative member: after signing in they land here, it is the first item of their menu, and the logo in the header leads back here. A plot owner sees everything about their plots in one place: what will be charged, what is already charged and paid, their meters and invoices. From here you can submit a meter reading, download an invoice, and get a reconciliation act. Personal data, Telegram and notifications on the device are on a separate screen, [My details](help:profile).
 
 ## Who sees it
 
 Every signed-in user sees the account, and everyone sees only their own data. Other people's plots, amounts, owners and personal data are not here. Members are not shown the list of all plots. The setting "Who sees plot colours" applies to the plot map that will come later, and the amounts of other plots are never shown.
 
-If you have no plot, the parts about plots do not appear. Then you see only your own data and roles.
+If you have no plot, the parts about plots do not appear. Then the account is nearly empty, and your data and roles stay on the [My details](help:profile) screen.
 
 ## Every element
 
-The screen is made of separate blocks, one under another, in this order.
+The screen is made of separate blocks. On screen the debt and invoices come first, then the meters, then the plots; here they are described by topic.
 
 ### Installing the app
 
 At the top of the account there may be a card "{{ui:pwa.installTitle}}" with the button {{ui:pwa.install}}, and on an iPhone in Safari a card "{{ui:pwa.iosTitle}}" saying "{{ui:pwa.iosSteps}}". It offers to add Nadel to the home screen. The button "{{ui:pwa.dismiss}}" hides the card on this device. When Nadel is already installed, the card is not shown. Step by step: [Install on your phone](help:member-install).
 
-### My data, roles and rights
+### My details
 
-- The {{ui:account.details}} block shows your contacts, your preferred channel for invoices, whether Telegram is connected, and your roles. Only the board can change the data: write or tell them.
-- The {{ui:account.roles}} block shows your roles and the name of the cooperative ({{ui:account.cooperative}}).
-- The {{ui:account.permissions}} block lists what you are allowed to do, with a short explanation of each right. If your roles give no extra rights, it says "{{ui:account.noPermissions}}"
+Under the install card there is a link "{{ui:account.details}}". It opens a separate screen, [My details](help:profile): your contacts, your preferred channel for invoices, Telegram and notifications on the device. Your name in the menu leads there too. Roles and rights are shown there to board members only.
 
 ### My plots
 
@@ -85,11 +83,11 @@ Under an invoice that has an amount to pay there are buttons: {{ui:invoices.pay.
 
 ### Notifications and Telegram
 
-In the {{ui:notifications.title}} block you choose, in the "{{ui:notifications.channelLegend}}" field, one way: e-mail, Telegram or paper. Only the ways available to you are shown. The {{ui:notifications.save}} button saves the choice and the system answers "{{ui:notifications.saved}}".
+The choice of how to receive invoices, the Telegram connection and the switch for notifications on the device are now on the [My details](help:profile) screen. Step by step: [How to connect Telegram](help:member-telegram), [Notifications on your phone](help:member-push).
 
-Below, if your cooperative has a bot, is the {{ui:telegramLink.title}} block. The {{ui:telegramLink.connect}} button opens the bot; after that the block says "{{ui:telegramLink.connected}}" and has the {{ui:telegramLink.disconnect}} button. Step by step: [How to connect Telegram](help:member-telegram).
+### Announcements
 
-The same block has the switch "{{ui:notifications.push.title}}": it turns on short notifications on this phone or computer and applies to this device only. If notifications are not set up in the system, there is no switch. If they are blocked in the browser, on an iPhone the page is not opened in the installed app, or the browser cannot show them, an explanation stands in place of the switch. More: [Notifications on your phone](help:member-push).
+The {{ui:announcements.title}} block comes right after the meters. It shows the board's announcements of the last 12 months, newest first: the date and the full text. A new announcement you have not opened has a "New" mark. The mark disappears when you tap the announcement or open it from the phone notification. If there were none, you see "There are no announcements from the board yet."
 
 ### My charges and payments
 
@@ -128,6 +126,7 @@ Olena owns plot 9. She opens her account after the board has closed October.
 - [How to connect Telegram](help:member-telegram)
 - [Install on your phone](help:member-install)
 - [Notifications on your phone](help:member-push)
+- [My details](help:profile)
 - [Plot card](help:plot-card)
 - [Getting started as a member](help:member-getting-started)
 - [Getting started](help:getting-started)

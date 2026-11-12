@@ -32,6 +32,11 @@ follow the permissions in `/me` (`useCan`, `RequirePermission`); hiding is a con
 
 ## Installable app (PWA)
 
+Keycloak on the same origin (the stand serves it under `/auth/`): the worker's navigation fallback skips `/realms/` and
+the same-origin path of `VITE_OIDC_AUTHORITY` (`src/pwa/authPaths.ts`, the build passes it to `sw.ts` as `__OIDC_AUTHORITY__`),
+so the sign-in and sign-out redirects reach Keycloak. When the app is shown again (visible, focus, pageshow, or opened
+from a push) `src/pwa/refreshOnResume.ts` refetches the queries of the current screen.
+
 `vite build` adds a service worker (`src/sw.ts`, injected precache of the build output and the help pages) and the manifest
 (`manifest.webmanifest`, name «Наділ», standalone). `vite dev` has neither, so the dev e2e stays as it is. The worker
 precaches static files only and has no runtime caching: personal data, PDFs and photos never reach the device storage
@@ -40,7 +45,7 @@ precaches static files only and has no runtime caching: personal data, PDFs and 
 sign-out clean-up (`useSignOut`).
 
 ```bash
-make e2e-pwa    # production build on `vite preview` (:5173) + backend, runs playwright.pwa.config.ts (e2e/pwa)
+make e2e-pwa    # (Keycloak is also served on :5173 under /auth/ by a preview proxy, as on the stand) production build on `vite preview` (:5173) + backend, runs playwright.pwa.config.ts (e2e/pwa)
 pnpm --filter web exec node scripts/make-icons.mjs   # regenerate public/icon-*.png and apple-touch-icon.png (once; committed)
 ```
 

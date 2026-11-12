@@ -43,6 +43,7 @@ import type {
   PendingReading,
   ReadingBatch,
   ReadingBatchResult,
+  ReadingCheck,
   ReadingCorrection,
   ReadingRejection,
   ReadingSaved,
@@ -290,6 +291,121 @@ export const useSubmitPlotReadingWithPhoto = <TError = BadRequestResponse | Unau
         TContext
       > => {
       return useMutation(getSubmitPlotReadingWithPhotoMutationOptions(options), queryClient);
+    }
+    export const getCheckPlotReadingUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/plots/${id}/reading-submissions/check`
+}
+
+/**
+ * «Передати показ» (feature 021, follow-up): what `submitPlotReadingWithPhoto` would answer for this reading,
+ * without saving anything, so the member can check the digits before sending. Only the server decides: the same
+ * rules and the same warning as the submission, against the counted readings of the meter as they are now.
+ *
+ * The answer (200) has:
+ * - `previous`: the counted point of the meter just before `takenOn` (an approved reading, or the initial reading
+ *   on the installation day) that the value is compared with; absent when there is none (a date before the
+ *   installation);
+ * - `pending`: the newest reading of the meter still waiting for approval (any member's submission); a
+ *   submission on its date replaces it. Absent when nothing waits;
+ * - `problem`: the rule the submission would break, as the 409 of `submitPlotReadingWithPhoto` would say it, with
+ *   its `field` and `params` (`READING_DATE_IN_FUTURE` with `today`, `READING_DATE_OUTSIDE_METER` with
+ *   `installedOn` and `removedOn`, `READING_OUT_OF_ORDER` with `previousTakenOn` and `previousValue`, or
+ *   `nextTakenOn` and `nextValue`); absent when the reading would be accepted;
+ * - `interval`: the interval from `previous` to this reading with its consumption (calculated by the server);
+ *   absent with a `problem` or without `previous`;
+ * - `warnings`: the warnings the submission would carry, as `ReadingSaved.warnings`: `UNUSUAL_CONSUMPTION` when
+ *   the daily consumption of `interval` is more than 3 times the meter's usual daily consumption over the last
+ *   180 days (nothing to compare with, nothing to warn about). Empty with a `problem`. A warning never stops the
+ *   submission: the member may still send the reading.
+ *
+ * Access is that of `submitPlotReadingWithPhoto`: only a current owner of the plot (any other plot, an unknown id
+ * and a plot of another cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot
+ * is 404 `NOT_FOUND` with `errors[{field: meterId, code: NOT_FOUND}]`; the platform operator has no cooperative
+ * data: 403); 409 `METER_REMOVED` for a removed meter of the plot; 400 `VALIDATION_FAILED` with `value`
+ * `METER_VALUE_INVALID` for a malformed value. The photo rule (`readingPhotoRequired`) is not checked here.
+ * Nothing is written, not even to the audit log.
+ * @summary Check a reading of an own meter before submitting it
+ */
+export const checkPlotReading = async (id: string,
+    readingSubmission: ReadingSubmission, options?: Parameters<typeof nadelFetch>[1]): Promise<ReadingCheck> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<ReadingCheck>(getCheckPlotReadingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(readingSubmission)
+  }
+);}
+
+
+
+
+
+export const getCheckPlotReadingMutationKey = () => ['checkPlotReading'] as const;
+
+export const getCheckPlotReadingMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPlotReading>>, TError,CheckPlotReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkPlotReading>>, TError,CheckPlotReadingMutationVariables, TContext> => {
+
+const mutationKey = getCheckPlotReadingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkPlotReading>>, CheckPlotReadingMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  checkPlotReading(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckPlotReadingMutationResult = NonNullable<Awaited<ReturnType<typeof checkPlotReading>>>
+    export type CheckPlotReadingMutationBody = ReadingSubmission
+    export type CheckPlotReadingMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse
+    export type CheckPlotReadingMutationVariables = {id: string;data: ReadingSubmission}
+
+    /**
+ * @summary Check a reading of an own meter before submitting it
+ */
+export const useCheckPlotReading = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPlotReading>>, TError,CheckPlotReadingMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkPlotReading>>,
+        TError,
+        CheckPlotReadingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckPlotReadingMutationOptions(options), queryClient);
     }
     export const getListMeterReadingsUrl = (id: string,) => {
 

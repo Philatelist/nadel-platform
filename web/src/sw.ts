@@ -14,9 +14,12 @@ import {
   HELP_SHOTS_MAX_ENTRIES,
   HELP_SHOTS_PATH,
 } from './pwa/cacheNames';
+import { keycloakDenylist, keycloakPathPrefixes } from './pwa/authPaths';
 import { buildPushView, safeUrl } from './pwa/pushPayload';
 
 declare let self: ServiceWorkerGlobalScope;
+/** The OIDC authority of this build (vite `define`); its same-origin path, e.g. `/auth/`, is Keycloak's. */
+declare const __OIDC_AUTHORITY__: string;
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
@@ -24,7 +27,11 @@ cleanupOutdatedCaches();
 // Navigations get the app shell, except the API, Keycloak and anything that looks like a file (PDF, image, asset).
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/api\//, /^\/realms\//, /\/[^/?]+\.[^/]+$/],
+    denylist: [
+      /^\/api\//,
+      ...keycloakDenylist(keycloakPathPrefixes(__OIDC_AUTHORITY__, self.location.origin)),
+      /\/[^/?]+\.[^/]+$/,
+    ],
   }),
 );
 
@@ -81,6 +88,8 @@ self.addEventListener('notificationclick', (event) => {
       const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
       if (existing) {
         await existing.focus();
+        // the page refetches what it shows even if navigate is unsupported or goes to the same address
+        existing.postMessage({ type: 'NADEL_REFRESH' });
         if ('navigate' in existing) await existing.navigate(url);
       } else {
         await self.clients.openWindow(url);

@@ -1760,6 +1760,64 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /me/announcements:
+    get:
+      tags: [notifications]
+      operationId: listMyAnnouncements
+      summary: The board's announcements the signed-in member received
+      description: |
+        «Оголошення» in the member account (feature 021, follow-up): the announcements of the board that the signed-in
+        member was a recipient of, through any channel (a delivery of the announcement to the member exists: e-mail,
+        Telegram or paper, the same recipients as the push «Нове оголошення від правління»), sent in the last 12 months
+        (from the same moment twelve months ago, Europe/Kyiv), newest first. Each has its full text as the board
+        entered it and `unread`, true until the member opened it (`markMyAnnouncementRead`). An announcement has no
+        title. No permission is needed; the member is always the one behind the token (never a request parameter). A
+        member who received nothing gets an empty list. The platform operator has no cooperative data: 403.
+
+        The push `ANNOUNCEMENT` opens `/account#announcement-{id}`: the account shows this list and brings that
+        announcement into view.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyAnnouncement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/announcements/{id}/read:
+    post:
+      tags: [notifications]
+      operationId: markMyAnnouncementRead
+      summary: Mark an announcement as opened by the signed-in member
+      description: |
+        Records that the signed-in member opened the announcement, so `listMyAnnouncements` shows it with `unread`
+        false. Idempotent: marking it again changes nothing and is 204 too; the first time it was opened is kept. Only
+        an announcement the member was a recipient of: another member's announcement, one of another cooperative and an
+        unknown id are the same 404 `NOT_FOUND`. Not written to the audit log (the member's own reading state). The
+        platform operator: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Marked as opened (or it already was)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /billing-months/{month}/invoices/send:
     post:
       tags: [notifications]
@@ -2003,7 +2061,10 @@ paths:
         `text`, code `TOO_LONG`). A blank street is 400 `VALIDATION_FAILED` (field `streets`, code `INVALID`).
 
         With `preview=true` nothing is written: the answer has the counts per channel and the members on paper
-        (`paperMembers`, "Last First", in alphabetical order). With `preview=false` the announcement is saved, each
+        (`paperMembers`, "Last First", in alphabetical order). Both answers also have `pushMembers`: how many of the
+        recipients (every channel, paper included) have at least one device with push on, so they also get the push
+        «Нове оголошення від правління» (feature 021); 0 while push is off on the server. Push is a signal on top of
+        the channel, not a channel: it changes neither the counts nor the paper list. With `preview=false` the announcement is saved, each
         member gets one delivery (`kind` `ANNOUNCEMENT`; Telegram and e-mail `QUEUED` and sent in the background,
         paper `TO_PRINT`, listed so the board can inform them), and the send is written to the audit log as
         `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`; fields `audience` (`ALL` or `STREETS`), `streets` (only for
@@ -3628,6 +3689,70 @@ paths:
           $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+
+  /plots/{id}/reading-submissions/check:
+    post:
+      tags: [readings]
+      operationId: checkPlotReading
+      summary: Check a reading of an own meter before submitting it
+      description: |
+        «Передати показ» (feature 021, follow-up): what `submitPlotReadingWithPhoto` would answer for this reading,
+        without saving anything, so the member can check the digits before sending. Only the server decides: the same
+        rules and the same warning as the submission, against the counted readings of the meter as they are now.
+
+        The answer (200) has:
+        - `previous`: the counted point of the meter just before `takenOn` (an approved reading, or the initial reading
+          on the installation day) that the value is compared with; absent when there is none (a date before the
+          installation);
+        - `pending`: the newest reading of the meter still waiting for approval (any member's submission); a
+          submission on its date replaces it. Absent when nothing waits;
+        - `problem`: the rule the submission would break, as the 409 of `submitPlotReadingWithPhoto` would say it, with
+          its `field` and `params` (`READING_DATE_IN_FUTURE` with `today`, `READING_DATE_OUTSIDE_METER` with
+          `installedOn` and `removedOn`, `READING_OUT_OF_ORDER` with `previousTakenOn` and `previousValue`, or
+          `nextTakenOn` and `nextValue`); absent when the reading would be accepted;
+        - `interval`: the interval from `previous` to this reading with its consumption (calculated by the server);
+          absent with a `problem` or without `previous`;
+        - `warnings`: the warnings the submission would carry, as `ReadingSaved.warnings`: `UNUSUAL_CONSUMPTION` when
+          the daily consumption of `interval` is more than 3 times the meter's usual daily consumption over the last
+          180 days (nothing to compare with, nothing to warn about). Empty with a `problem`. A warning never stops the
+          submission: the member may still send the reading.
+
+        Access is that of `submitPlotReadingWithPhoto`: only a current owner of the plot (any other plot, an unknown id
+        and a plot of another cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot
+        is 404 `NOT_FOUND` with `errors[{field: meterId, code: NOT_FOUND}]`; the platform operator has no cooperative
+        data: 403); 409 `METER_REMOVED` for a removed meter of the plot; 400 `VALIDATION_FAILED` with `value`
+        `METER_VALUE_INVALID` for a malformed value. The photo rule (`readingPhotoRequired`) is not checked here.
+        Nothing is written, not even to the audit log.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadingSubmission'
+      responses:
+        '200':
+          description: What the submission would meet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingCheck'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /plots/{id}/meters:
     get:
@@ -11581,6 +11706,41 @@ components:
         value:
           $ref: '#/components/schemas/MeterValue'
 
+    ReadingCheck:
+      type: object
+      description: >-
+        What a submission of a reading would meet (`checkPlotReading`); nothing is saved
+      required: [meterId, takenOn, warnings]
+      properties:
+        meterId:
+          type: string
+          format: uuid
+        takenOn:
+          type: string
+          format: date
+          description: The day checked; today in Europe/Kyiv when the request has none
+        previous:
+          $ref: '#/components/schemas/MeterPoint'
+          description: >-
+            The counted point just before `takenOn` (an approved reading or the initial reading) the value is compared
+            with; absent when there is none
+        pending:
+          $ref: '#/components/schemas/MeterPoint'
+          description: The newest reading of the meter waiting for approval; absent when nothing waits
+        problem:
+          $ref: '#/components/schemas/ReadingRowError'
+          description: >-
+            The rule the submission would break (`READING_DATE_IN_FUTURE`, `READING_DATE_OUTSIDE_METER` or
+            `READING_OUT_OF_ORDER`, with `field` and `params`); absent when it would be accepted
+        interval:
+          $ref: '#/components/schemas/ReadingInterval'
+          description: The interval from `previous` to the reading; absent with a `problem` or without `previous`
+        warnings:
+          type: array
+          description: The warnings the submission would carry; empty with a `problem`
+          items:
+            $ref: '#/components/schemas/ReadingWarning'
+
     ReadingRejection:
       type: object
       description: Why a submitted reading is not approved
@@ -16736,7 +16896,7 @@ components:
     AnnouncementSendResult:
       type: object
       description: What a send of an announcement created, or with `preview` would create
-      required: [counts, paperMembers]
+      required: [counts, paperMembers, pushMembers]
       properties:
         announcementId:
           type: string
@@ -16749,6 +16909,14 @@ components:
           description: The members no chosen channel reaches («на папері»), to inform in person
           items:
             $ref: '#/components/schemas/AnnouncementPaperMember'
+        pushMembers:
+          type: integer
+          format: int32
+          minimum: 0
+          description: >-
+            How many of the recipients (every channel, paper included) have at least one device with push on and so
+            also get the push «Нове оголошення від правління»; 0 while push is off on the server. Not a channel: the
+            counts and the paper list stay as they are
 
     AnnouncementCounts:
       type: object
@@ -16846,3 +17014,24 @@ components:
           $ref: '#/components/schemas/AnnouncementCounts'
         deliveries:
           $ref: '#/components/schemas/DeliveryPage'
+
+    MyAnnouncement:
+      type: object
+      description: >-
+        An announcement of the board the signed-in member received (`listMyAnnouncements`). It has no title: the text
+        is the whole announcement
+      required: [id, sentAt, text, unread]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sentAt:
+          type: string
+          format: date-time
+          description: When the board sent it
+        text:
+          type: string
+          description: The text as the board entered it (user content, plain text, line breaks kept)
+        unread:
+          type: boolean
+          description: True until the member opened it (`markMyAnnouncementRead`)

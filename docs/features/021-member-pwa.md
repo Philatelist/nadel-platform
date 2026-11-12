@@ -181,6 +181,44 @@ The screens used on a phone must work at 360 px wide without horizontal scrollin
 - **The stand's VAPID variables.** The owner adds them to `infra/stand/.env.example` from the PR's text. `deploy.sh` or
   `stand-init.sh` generates a key pair once when the variables are empty, and keeps it across runs.
 
+## 7a. Follow-ups after the owner's review
+
+**Announcements in the member account.** The board's announcements reached members only by e-mail, Telegram or in
+person. The account now has «Оголошення»:
+
+- `GET /me/announcements` (`listMyAnnouncements`): the announcements the signed-in member received through any channel
+  (a delivery of the announcement to them exists, paper included: the same members the push goes to), sent in the last
+  12 months, newest first, each with `id`, `sentAt`, the full `text` and `unread`. An announcement has no title.
+- `POST /me/announcements/{id}/read` (`markMyAnnouncementRead`, 204): the member opened it. Idempotent; the first
+  opening is kept (table `announcement_read`, V40, RLS). Another member's announcement, another cooperative's and an
+  unknown id are 404 `NOT_FOUND`; the platform operator 403. Not audited: it is the member's own state.
+- The push «Нове оголошення від правління» opens `/account#announcement-<id>`: the account shows the list with that
+  announcement in view (and marks it opened when the member opens it).
+- Demo: `member@demo.local` has two announcements, one of them opened.
+
+**The announcement form mentions push.** The preview and the send of an announcement answer `pushMembers`: how many of
+the recipients (every channel, paper included) have at least one device with push on, so they also get the push; 0
+while push is off on the server. Push stays a signal, not a channel: the counts per channel and the paper list do not
+change. Example: 12 recipients, 3 by e-mail, 2 by Telegram, 7 on paper; 4 of them (one on paper) have push on the
+phone: the form shows Telegram 2, e-mail 3, paper 7, and that 4 of them also get a push on their phone.
+
+**«Передати показ» shows the previous reading and warns about a jump.** Before sending, the member sees the meter's
+last counted reading (date, value) and the one still waiting for approval, and the server says whether the value typed
+would be warned about:
+
+- the last counted reading is the register's `lastReading` (`listPlotMeters`) and the readings with their statuses are
+  in `listMeterReadings`;
+- `POST /plots/{id}/reading-submissions/check` (`checkPlotReading`, body `ReadingSubmission`) answers what the
+  submission would meet without saving anything: `previous` (the counted point the value is compared with), `pending`
+  (the newest reading waiting for approval), and either `problem` (the rule the submission would break, with its
+  parameters, e.g. `READING_OUT_OF_ORDER`) or `interval` (with its consumption) and `warnings`. Access is the
+  submission's. Only the server applies the rule (the one `UNUSUAL_CONSUMPTION` rule of `enterReadings`: the daily
+  consumption more than 3 times the usual daily consumption over the last 180 days); the member may still send.
+- Example: the readings so far are 2000 (installation, 270 days ago), 2200, 2400 and 2553.9 (30 days ago), about 2.2
+  kWh a day. Typing 12331 today gives `previous` 2553.900, `interval` 30 days and 9777.100 kWh (about 326 kWh a day)
+  and the warning `UNUSUAL_CONSUMPTION`, so the form asks the member to check the digits. Typing 2600 gives
+  46.100 kWh and no warning. A jump right after the installation has nothing to compare with and is not warned about.
+
 ## 8. Out of scope
 
 - native apps and store publishing;

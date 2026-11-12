@@ -7,7 +7,7 @@ import {
   type ReadingStatus,
 } from '@nadel/api-client';
 import { format, formatDay, formatMeterValue } from '@nadel/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import { useMe } from '../../me';
 import { meterLabel, resourceUnit } from '../../meters';
@@ -64,6 +64,19 @@ function MyMeterCard({ plotId, meter }: { plotId: string; meter: Meter }) {
   const [dialog, setDialog] = useState(false);
   const [done, setDone] = useState(false);
   const unit = resourceUnit(t, meter.resource);
+  // «submitted, awaiting confirmation» is true only while a reading of this meter is still pending: once it is approved
+  // or rejected (after a push or a refetch) the banner goes away.
+  const hasPending = history.data?.readings.some((r) => r.status === 'PENDING') ?? false;
+  const sawPending = useRef(false);
+  useEffect(() => {
+    if (!done) {
+      sawPending.current = false;
+    } else if (hasPending) {
+      sawPending.current = true;
+    } else if (sawPending.current) {
+      setDone(false);
+    }
+  }, [done, hasPending]);
   return (
     <li className="flex flex-col gap-3 rounded-control border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -82,7 +95,7 @@ function MyMeterCard({ plotId, meter }: { plotId: string; meter: Meter }) {
           date: formatDay(meter.lastReading.takenOn, locale),
         })}
       </p>
-      {done && <Notice tone="success">{t.readings.mine.submitted}</Notice>}
+      {done && hasPending && <Notice tone="success">{t.readings.mine.submitted}</Notice>}
       {meter.active && (
         <div>
           <Button
@@ -112,6 +125,7 @@ function MyMeterCard({ plotId, meter }: { plotId: string; meter: Meter }) {
         <SubmitReadingDialog
           plotId={plotId}
           meter={meter}
+          pending={history.data?.readings.find((r) => r.status === 'PENDING')}
           onSubmitted={() => {
             setDialog(false);
             setDone(true);

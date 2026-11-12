@@ -9,6 +9,7 @@ import app.nadel.members.MemberRef;
 import app.nadel.notifications.internal.AnnouncementRows.Stored;
 import app.nadel.notifications.internal.ChannelResolver.Resolution;
 import app.nadel.notifications.internal.DeliveryRows.AnnouncementCounts;
+import app.nadel.notifications.internal.push.PushDevices;
 import app.nadel.plots.PlotCatalog;
 import app.nadel.plots.PlotCatalog.PlotFacts;
 import app.nadel.plots.PlotOwners;
@@ -51,7 +52,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>The text</b> is user content: stored as entered (surrounding spaces removed) and sent as is, never in the audit
  * log, the outbox or a log. The send is audited as {@code ANNOUNCEMENT_SENT} (entity type {@code ANNOUNCEMENT}, the
  * announcement's id, label {@code announcement}) with the audience, the channels and the counts per channel, and
- * publishes {@link AnnouncementSent} (ids only) for the push to its recipients (feature 021).
+ * publishes {@link AnnouncementSent} (ids only) for the push to its recipients (feature 021). The preview and the send
+ * also count the recipients (every channel, paper included) with a device that receives push
+ * ({@link PushDevices#membersWithPush}): the form tells the board who also gets the push.
  */
 @Service
 class Announcements {
@@ -72,8 +75,12 @@ class Announcements {
     record PaperMember(UUID memberId, String name) {
     }
 
-    /** What a send created (or a preview would create): the deliveries per channel and the members on paper. */
-    record Plan(@Nullable UUID announcementId, int telegram, int email, int paper, List<PaperMember> paperMembers) {
+    /**
+     * What a send created (or a preview would create): the deliveries per channel, the members on paper and how many
+     * recipients also get the push (feature 021 follow-up: push is a signal, not a channel).
+     */
+    record Plan(@Nullable UUID announcementId, int telegram, int email, int paper, List<PaperMember> paperMembers,
+            int pushMembers) {
     }
 
     /** An announcement of the list (no text) or of its page (with the text), its author's name and counts. */
@@ -92,12 +99,13 @@ class Announcements {
     private final RecipientChannels recipients;
     private final DeliverySettingsService settings;
     private final DeliveryQueue queue;
+    private final PushDevices pushDevices;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     Announcements(AnnouncementRows announcements, DeliveryRows rows, MemberDirectory members, PlotCatalog plots,
             PlotOwners owners, RecipientChannels recipients, DeliverySettingsService settings, DeliveryQueue queue,
-            ApplicationEventPublisher events, Clock clock) {
+            PushDevices pushDevices, ApplicationEventPublisher events, Clock clock) {
         this.announcements = announcements;
         this.rows = rows;
         this.members = members;
@@ -106,6 +114,7 @@ class Announcements {
         this.recipients = recipients;
         this.settings = settings;
         this.queue = queue;
+        this.pushDevices = pushDevices;
         this.events = events;
         this.clock = clock;
     }
@@ -149,7 +158,8 @@ class Announcements {
             }
         }
         return new Plan(announcementId, counts.getOrDefault(Channel.TELEGRAM, 0),
-                counts.getOrDefault(Channel.EMAIL, 0), counts.getOrDefault(Channel.PAPER, 0), names(paper));
+                counts.getOrDefault(Channel.EMAIL, 0), counts.getOrDefault(Channel.PAPER, 0), names(paper),
+                pushDevices.membersWithPush(channels.keySet()));
     }
 
     /** A page of the announcements, newest first, without their text. */

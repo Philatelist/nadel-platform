@@ -1,5 +1,11 @@
-import { getListMeterReadingsQueryKey, useSubmitPlotReadingWithPhoto, type Meter } from '@nadel/api-client';
-import { parseMeterValue } from '@nadel/shared';
+import {
+  checkPlotReading,
+  getListMeterReadingsQueryKey,
+  useSubmitPlotReadingWithPhoto,
+  type Meter,
+  type MeterReading,
+} from '@nadel/api-client';
+import { format, formatDay, formatMeterValue, parseMeterValue } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 import { useDirtyGuard } from '../../pwa/dirtyForms';
@@ -17,11 +23,14 @@ import { ReadingDateField } from './ReadingDateField';
 export function SubmitReadingDialog({
   plotId,
   meter,
+  pending,
   onSubmitted,
   onClose,
 }: {
   plotId: string;
   meter: Meter;
+  /** The newest reading of this meter waiting for approval, when there is one. */
+  pending?: MeterReading | undefined;
   onSubmitted: () => void;
   onClose: () => void;
 }) {
@@ -36,6 +45,8 @@ export function SubmitReadingDialog({
   const [photo, setPhoto] = useState<File>();
   const [photoError, setPhotoError] = useState<string>();
   const [processing, setProcessing] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [unusual, setUnusual] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const photoUrl = useObjectUrl(photo);
   useDirtyGuard(input !== '' || photo !== undefined || takenOn !== undefined);
@@ -62,6 +73,7 @@ export function SubmitReadingDialog({
   function edit(change: () => void) {
     setServerErrors({});
     setNotice(undefined);
+    setUnusual(false);
     change();
   }
 
@@ -86,20 +98,72 @@ export function SubmitReadingDialog({
     }
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    setSubmitted(true);
-    if (parsed === undefined) return;
+  function send(value: string) {
+    setUnusual(false);
     submitReading.mutate({
       id: plotId,
-      data: { reading: { meterId: meter.id, takenOn, value: parsed }, photo },
+      data: { reading: { meterId: meter.id, takenOn, value }, photo },
     });
   }
 
+  /** Asks the server first (no photo): a rule break shows as a field error, an unusual jump asks for confirmation. */
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSubmitted(true);
+    if (parsed === undefined) return;
+    setChecking(true);
+    try {
+      const check = await checkPlotReading(plotId, { meterId: meter.id, takenOn, value: parsed });
+      if (check.problem) {
+        const code = check.problem.code;
+        const text =
+          code in t.readings.errors ? t.readings.errors[code as keyof typeof t.readings.errors] : undefined;
+        if (text === undefined) {
+          setNotice(t.readings.errors.VALIDATION_FAILED);
+        } else if (check.problem.field === 'takenOn') {
+          setServerErrors({ takenOn: text });
+        } else {
+          setServerErrors({ value: text });
+        }
+        return;
+      }
+      if (check.warnings.includes('UNUSUAL_CONSUMPTION')) {
+        setUnusual(true);
+        return;
+      }
+    } catch {
+      // the check itself failed: submit as usual, the server decides
+    } finally {
+      setChecking(false);
+    }
+    send(parsed);
+  }
+
+  const unit = resourceUnit(t, meter.resource);
+
   return (
     <Modal title={t.readings.mine.submitTitle} onClose={onClose}>
-      <form className="mt-3 flex flex-col gap-4" onSubmit={submit} noValidate>
+      <form className="mt-3 flex flex-col gap-4" onSubmit={(event) => void submit(event)} noValidate>
         <p className="text-[15px] text-ink-muted">{t.readings.mine.submitText}</p>
+        <div className="flex flex-col gap-1 text-[15px]">
+          <p>
+            {format(t.readings.mine.previousReading, {
+              value: formatMeterValue(meter.lastReading.value, locale),
+              unit,
+              date: formatDay(meter.lastReading.takenOn, locale),
+              status: t.readings.history.status.APPROVED,
+            })}
+          </p>
+          {pending && (
+            <p>
+              {format(t.readings.mine.pendingReading, {
+                value: formatMeterValue(pending.value, locale),
+                unit,
+                date: formatDay(pending.takenOn, locale),
+              })}
+            </p>
+          )}
+        </div>
         {notice && <Notice tone="danger">{notice}</Notice>}
         <ReadingDateField
           value={takenOn}
@@ -108,7 +172,7 @@ export function SubmitReadingDialog({
           onChange={(value) => edit(() => setTakenOn(value))}
         />
         <TextField
-          label={`${t.readings.history.columns.value}, ${resourceUnit(t, meter.resource)}`}
+          label={`${t.readings.history.columns.value}, ${unit}`}
           inputMode="decimal"
           value={input}
           hint={t.meters.valueHint}
@@ -150,11 +214,24 @@ export function SubmitReadingDialog({
             <Notice tone="danger">{photoError ?? serverErrors.photo}</Notice>
           )}
         </div>
+        {unusual && (
+          <Notice tone="warning">
+            <p>{t.readings.warnings.UNUSUAL_CONSUMPTION}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setUnusual(false)}>
+                {t.readings.mine.correctValue}
+              </Button>
+              <Button onClick={() => parsed !== undefined && send(parsed)}>
+                {t.readings.mine.confirmAnyway}
+              </Button>
+            </div>
+          </Notice>
+        )}
         <div className="sticky -bottom-5 -mx-5 -mb-5 flex justify-end gap-2 border-t border-line bg-surface p-5">
           <Button variant="secondary" onClick={onClose}>
             {t.meters.cancel}
           </Button>
-          <Button type="submit" disabled={submitReading.isPending || processing}>
+          <Button type="submit" disabled={submitReading.isPending || processing || checking}>
             {submitReading.isPending ? t.meters.saving : t.readings.mine.submit}
           </Button>
         </div>

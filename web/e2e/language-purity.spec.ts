@@ -216,6 +216,7 @@ const CHAIRMAN_SCREENS = [
   '/members',
   '/members/new',
   '/account',
+  '/account/profile',
   '/tariffs',
   '/tariffs/new',
   '/charge-types',
@@ -366,6 +367,7 @@ for (const locale of ['uk', 'en'] as const) {
       try {
         const findings: Finding[] = [];
         findings.push(...(await auditScreen(page, '/account', locale)));
+        findings.push(...(await auditScreen(page, '/account/profile', locale)));
 
         // the card of a plot the member owns (a member has no plots list: it opens from the account)
         await page.goto('/account');

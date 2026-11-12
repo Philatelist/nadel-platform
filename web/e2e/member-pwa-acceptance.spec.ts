@@ -115,6 +115,50 @@ test.describe('the member phone journey', () => {
     expect(view.url).toMatch(/^\//);
   });
 
+  test('the member sees an announcement in «My account», and its push link marks it read', async ({
+    browser,
+  }) => {
+    const text = `E2E announcement ${randomUUID().slice(0, 8)}`;
+    expectCreated(
+      await api(chairman, 'POST', '/announcements', { text, streets: [], channels: ['EMAIL'] }),
+      200,
+    );
+    const mine = expectCreated<{ id: string; text: string; unread: boolean }[]>(
+      await api(member, 'GET', '/me/announcements'),
+      200,
+    );
+    const sent = mine.find((a) => a.text === text);
+    expect(sent?.unread).toBe(true);
+    const id = (sent as { id: string }).id;
+
+    const phone = await signedIn(browser, 'member@demo.local', true);
+    try {
+      // the block lists it with «New» (the demo announcements of the seed sit below it)
+      await phone.goto('/account');
+      const item = phone.locator(`#announcement-${id}`);
+      await expect(item).toContainText(text);
+      await expect(item).toContainText(messages('en').announcements.my.new);
+
+      // the push opens /account#announcement-<id>: the item is read afterwards
+      await phone.goto(`/account#announcement-${id}`);
+      await expect(item).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            (
+              expectCreated<{ id: string; unread: boolean }[]>(
+                await api(member, 'GET', '/me/announcements'),
+                200,
+              ).find((a) => a.id === id) as { unread: boolean }
+            ).unread,
+        )
+        .toBe(false);
+      await expect(item).not.toContainText(messages('en').announcements.my.new);
+    } finally {
+      await phone.context().close();
+    }
+  });
+
   test('the push path opens on a phone and the member pays from the invoice there', async ({ browser }) => {
     test.setTimeout(120_000);
     const subscription = randomUUID();

@@ -20,6 +20,8 @@ Nadel can be installed like an ordinary app: it gets its own icon on the home sc
 
 A secure connection is needed: the address of the system must start with `https://`. The board gives you exactly such an address. If the browser does not offer installation, check this first.
 
+If you already hid the install card with "{{ui:pwa.dismiss}}", you can always find these steps through the "{{ui:pwa.howToInstall}}" link on the [My details](help:profile) screen. The link is not shown in an already installed app.
+
 ## Android, Chrome
 
 1. Open [My account](help:account). When the browser allows installation, there is a card "{{ui:pwa.installTitle}}" at the top with the button {{ui:pwa.install}}.

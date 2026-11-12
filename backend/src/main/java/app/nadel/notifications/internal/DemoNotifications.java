@@ -15,6 +15,7 @@ import app.nadel.tenancy.TenantContext;
 import app.nadel.tenancy.TenantDirectory;
 import app.nadel.tenancy.TenantSummary;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
@@ -65,7 +66,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       its latest invoices with something due, to every current owner of the plot through the channel of the rule of
  *       invoices ({@link RecipientChannels}), written directly as {@code SENT} (e-mail and Telegram, one attempt, sent
  *       now) or {@code TO_PRINT} (paper). Nothing is queued or sent, so a start never floods Mailpit or the fake
- *       Telegram server; {@code ON CONFLICT DO NOTHING} keeps a second run from adding anything.</li>
+ *       Telegram server; {@code ON CONFLICT DO NOTHING} keeps a second run from adding anything;</li>
+ *   <li>two announcements of the board (feature 021 follow-up, «Оголошення» in the member account), sent
+ *       {@value #OLDER_ANNOUNCEMENT_DAYS} and {@value #NEWER_ANNOUNCEMENT_DAYS} days ago by the demo chairman to every
+ *       active member through e-mail and Telegram by the rule of announcements ({@link RecipientChannels}), their
+ *       deliveries written directly as {@code SENT} or {@code TO_PRINT} like the month's invoices (nothing is sent and
+ *       no push goes out); the member behind {@code member@demo.local} has opened the older one, so the account shows
+ *       one new and one read announcement. Only while the cooperative has no announcement at all, so the board's own
+ *       announcements are never joined by demo ones.</li>
  * </ul>
  * Idempotent: a second run finds everything and writes nothing. A failure is logged with its problem code or class only
  * and never stops the application. The log has counts only.
@@ -81,6 +89,20 @@ class DemoNotifications implements ApplicationRunner {
 
     /** The demo member behind {@code member@demo.local}. */
     static final UUID DEMO_MEMBER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003");
+
+    /** The demo chairman, the author of the demo announcements. */
+    static final UUID DEMO_CHAIRMAN = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+
+    /** How many days ago the demo announcements were sent. */
+    static final int OLDER_ANNOUNCEMENT_DAYS = 20;
+    static final int NEWER_ANNOUNCEMENT_DAYS = 2;
+
+    /** The demo announcements, older first; demo data is Ukrainian like real data. */
+    static final List<String> ANNOUNCEMENTS = List.of(
+            "Шановні садівники! Загальні збори членів товариства відбудуться в неділю о 10:00 біля будиночка "
+                    + "правління.\nПорядок денний: звіт правління, кошторис на наступний рік, ремонт дороги.",
+            "Увага! У суботу з 9:00 до 15:00 не буде електроенергії на вул. Садовій: заміна опори.\n"
+                    + "Просимо передати покази лічильників до кінця місяця.");
 
     /** Дмитро Кравченко, a demo member who prefers Telegram (plot 11). */
     static final UUID TELEGRAM_MEMBER = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000008");
@@ -106,9 +128,10 @@ class DemoNotifications implements ApplicationRunner {
 
     /**
      * What one run did: whether it saved the mailbox and the bot, the links it made, the month it marked as sent (null
-     * when the cooperative has no billing month) and the delivery rows it wrote.
+     * when the cooperative has no billing month), the invoice delivery rows it wrote and the announcements it added.
      */
-    record Seeded(boolean mailbox, boolean bot, int links, @Nullable YearMonth month, int deliveries) {
+    record Seeded(boolean mailbox, boolean bot, int links, @Nullable YearMonth month, int deliveries,
+            int announcements) {
     }
 
     private final TransactionTemplate transaction;
@@ -121,13 +144,15 @@ class DemoNotifications implements ApplicationRunner {
     private final PlotOwners owners;
     private final RecipientChannels recipients;
     private final TenantDirectory tenants;
+    private final AnnouncementRows announcementRows;
+    private final AnnouncementReads announcementReads;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
     DemoNotifications(PlatformTransactionManager transactionManager, DeliverySettingsService settings,
             LinkCodes codes, TelegramLinks links, MemberDirectory members, LedgerReadModel ledger,
             DocumentsFacade documents, PlotOwners owners, RecipientChannels recipients, TenantDirectory tenants,
-            JdbcTemplate jdbc, Clock clock) {
+            AnnouncementRows announcementRows, AnnouncementReads announcementReads, JdbcTemplate jdbc, Clock clock) {
         this.transaction = new TransactionTemplate(transactionManager);
         this.settings = settings;
         this.codes = codes;
@@ -138,6 +163,8 @@ class DemoNotifications implements ApplicationRunner {
         this.owners = owners;
         this.recipients = recipients;
         this.tenants = tenants;
+        this.announcementRows = announcementRows;
+        this.announcementReads = announcementReads;
         this.jdbc = jdbc;
         this.clock = clock;
     }
@@ -147,8 +174,8 @@ class DemoNotifications implements ApplicationRunner {
         try {
             Seeded seeded = seed();
             log.info("Demo delivery: mailbox saved: {}, bot saved: {}, {} Telegram links made, month {}, "
-                    + "{} delivery rows written", seeded.mailbox(), seeded.bot(), seeded.links(), seeded.month(),
-                    seeded.deliveries());
+                    + "{} delivery rows written, {} announcements added", seeded.mailbox(), seeded.bot(),
+                    seeded.links(), seeded.month(), seeded.deliveries(), seeded.announcements());
         } catch (ApiProblemException e) {
             log.warn("Demo delivery not set up: {}", e.code());
         } catch (RuntimeException e) {
@@ -185,7 +212,43 @@ class DemoNotifications implements ApplicationRunner {
         }
         YearMonth month = transaction.execute(status -> ledger.firstBillingMonth().orElse(null));
         Integer written = month == null ? Integer.valueOf(0) : transaction.execute(status -> markSent(month));
-        return new Seeded(mailbox, bot, linked, month, Objects.requireNonNullElse(written, 0));
+        Integer announced = transaction.execute(status -> announce());
+        return new Seeded(mailbox, bot, linked, month, Objects.requireNonNullElse(written, 0),
+                Objects.requireNonNullElse(announced, 0));
+    }
+
+    /**
+     * Adds the demo announcements with their deliveries, sent or waiting to be printed, while the cooperative has none;
+     * the demo member has opened the older one. How many were added.
+     */
+    private int announce() {
+        if (announcementRows.count() > 0) {
+            return 0;
+        }
+        Set<Channel> chosen = Set.of(Channel.EMAIL, Channel.TELEGRAM);
+        Map<UUID, Resolution> channels = recipients.resolveForAnnouncement(members.activeIds(), settings.current(),
+                chosen);
+        Instant now = clock.instant();
+        List<Integer> daysAgo = List.of(OLDER_ANNOUNCEMENT_DAYS, NEWER_ANNOUNCEMENT_DAYS);
+        for (int i = 0; i < ANNOUNCEMENTS.size(); i++) {
+            Instant sentAt = now.minus(Duration.ofDays(daysAgo.get(i)));
+            UUID announcement = announcementRows.insert(DEMO_TENANT, ANNOUNCEMENTS.get(i), List.of(), chosen,
+                    DEMO_CHAIRMAN, sentAt);
+            channels.forEach((member, resolution) -> insert(announcement, member, resolution, sentAt));
+            if (i == 0 && channels.containsKey(DEMO_MEMBER)) {
+                announcementReads.markRead(DEMO_TENANT, announcement, DEMO_MEMBER, sentAt.plus(Duration.ofDays(1)));
+            }
+        }
+        return ANNOUNCEMENTS.size();
+    }
+
+    private void insert(UUID announcement, UUID member, Resolution resolution, Instant sentAt) {
+        boolean paper = resolution.channel() == Channel.PAPER;
+        jdbc.update("insert into delivery (tenant_id, kind, announcement_id, member_id, channel, note, status, "
+                + "attempts, sent_at, created_at) values (?, 'ANNOUNCEMENT', ?, ?, ?, ?, ?, ?, ?, ?) "
+                + "on conflict do nothing", DEMO_TENANT, announcement, member, resolution.channel().name(),
+                resolution.note(), paper ? DeliveryRows.TO_PRINT : DeliveryRows.SENT, paper ? 0 : 1,
+                paper ? null : sentAt.atOffset(ZoneOffset.UTC), sentAt.atOffset(ZoneOffset.UTC));
     }
 
     /** Links the member's Telegram to the chat as {@code /start <code>} would; false when nothing was linked. */

@@ -40,7 +40,7 @@ Telegram works only if the cooperative's bot is connected in the [settings](help
 
 ### The button "{{ui:announcements.form.preview}}"
 
-It sends nothing. It shows "{{ui:announcements.form.previewTitle}}": how many members will receive the announcement (by channel: "{{ui:announcements.form.previewCounts}}") and the list "{{ui:announcements.form.paperTitle}}". These members have none of the chosen channels: you must notify them yourselves. Print this list and tell each of them. If there is no such list, you see "{{ui:announcements.form.paperNone}}".
+It sends nothing. It shows "{{ui:announcements.form.previewTitle}}": how many members will receive the announcement (by channel: "{{ui:announcements.form.previewCounts}}") and a line "Also a phone notification: N people" with the number of members who will get a short notification in the installed app (it goes to every member who turned notifications on, whatever channels you chose). Below it is the list "{{ui:announcements.form.paperTitle}}". These members have none of the chosen channels: you must notify them yourselves. Print this list and tell each of them. If there is no such list, you see "{{ui:announcements.form.paperNone}}".
 
 ### The button "{{ui:announcements.form.send}}"
 

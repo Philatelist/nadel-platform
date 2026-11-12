@@ -11,7 +11,7 @@ order: 50
 shots:
   - name: member-telegram-panel
     user: member
-    path: /account
+    path: /account/profile
     element: { heading: Сповіщення }
 ---
 
@@ -19,15 +19,15 @@ Telegram потрібен, щоб рахунки приходили вам пр�
 
 Кнопка підключення є лише тоді, коли у вашому кооперативі налаштовано бота. Якщо її немає, зверніться до правління.
 
-![Блок «Сповіщення» в кабінеті](shot:member-telegram-panel)
+![Блок «Сповіщення» на екрані «Мої дані»](shot:member-telegram-panel)
 
-## Спосіб 1. З кабінету
+## Спосіб 1. З екрана «Мої дані»
 
-1. Відкрийте [кабінет](help:account), блок {{ui:notifications.title}}, нижче блок {{ui:telegramLink.title}}.
+1. Відкрийте [Мої дані](help:profile), блок {{ui:notifications.title}}, нижче блок {{ui:telegramLink.title}}.
 2. Натисніть {{ui:telegramLink.connect}}.
 3. Відкриється бот кооперативу з одноразовим кодом. {{ui:telegramLink.hint}}
 4. Бот привітає вас за ім’ям і покаже кнопки меню.
-5. Поверніться в кабінет. Там тепер написано «{{ui:telegramLink.connected}}» і є кнопка {{ui:telegramLink.disconnect}}.
+5. Поверніться на екран «Мої дані». Там тепер написано «{{ui:telegramLink.connected}}» і є кнопка {{ui:telegramLink.disconnect}}.
 
 ## Спосіб 2. З паперового рахунку
 
@@ -66,7 +66,7 @@ Telegram потрібен, щоб рахунки приходили вам пр�
 
 ## Як відключити Telegram
 
-У кабінеті натисніть {{ui:telegramLink.disconnect}} і підтвердьте у вікні «{{ui:telegramLink.disconnectTitle}}». {{ui:telegramLink.disconnectMessage}}
+На екрані [Мої дані](help:profile) натисніть {{ui:telegramLink.disconnect}} і підтвердьте у вікні «{{ui:telegramLink.disconnectTitle}}». {{ui:telegramLink.disconnectMessage}}
 
 ## Яким каналом прийде рахунок
 

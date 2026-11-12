@@ -226,7 +226,7 @@ test.describe('push on a device and the first push', () => {
       if (m.type() === 'error') errors.push(m.text());
     });
     try {
-      await page.goto('/account');
+      await page.goto('/account/profile');
       const block = page.getByRole('main').locator('section', {
         has: page.getByRole('heading', { name: t.notifications.title, exact: true }),
       });

@@ -50,6 +50,10 @@ export const appRoutes: RouteObject[] = [
         lazy: () => import('./pages/AccountPage').then((m) => ({ Component: m.AccountPage })),
       },
       {
+        path: 'account/profile',
+        lazy: () => import('./pages/ProfilePage').then((m) => ({ Component: m.ProfilePage })),
+      },
+      {
         element: <RequirePermission permission="MEMBERS_VIEW" />,
         children: [
           {

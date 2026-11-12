@@ -39,7 +39,12 @@ describe('buildPushView for every code', () => {
     ['PAYMENT_RECORDED', '/account#my-charges', 'Платіж зараховано', 'Payment recorded'],
     ['READING_APPROVED', '/account#my-meters', 'Показ лічильника прийнято', 'Meter reading accepted'],
     ['READING_REJECTED', '/account#my-meters', 'Показ лічильника відхилено', 'Meter reading rejected'],
-    ['ANNOUNCEMENT', '/account', 'Нове оголошення від правління', 'New announcement from the board'],
+    [
+      'ANNOUNCEMENT',
+      '/account#announcement-3f2b8c1e-5d4a-4c7b-9a10-6e2d1f0a8b44',
+      'Нове оголошення від правління',
+      'New announcement from the board',
+    ],
     ['READINGS_TO_APPROVE', '/readings/approvals', 'Нові покази на перевірку', 'New readings to review'],
   ] as const;
 

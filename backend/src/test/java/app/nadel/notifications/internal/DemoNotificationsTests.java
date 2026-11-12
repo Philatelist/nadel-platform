@@ -93,9 +93,15 @@ class DemoNotificationsTests extends NotificationsTestSupport {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private AnnouncementRows announcementRows;
+
+    @Autowired
+    private AnnouncementReads announcementReads;
+
     private DemoNotifications demo() {
         return new DemoNotifications(transactionManager, settings, codes, links, members, ledger, documents, owners,
-                recipients, tenants, jdbc, clock);
+                recipients, tenants, announcementRows, announcementReads, jdbc, clock);
     }
 
     @BeforeEach
@@ -116,6 +122,7 @@ class DemoNotificationsTests extends NotificationsTestSupport {
             sql.update("delete from audit_entry where tenant_id = ? and action in "
                     + "('DELIVERY_SETTINGS_CHANGED', 'TELEGRAM_LINKED')", DEMO_TENANT);
             sql.update("delete from delivery where tenant_id = ?", DEMO_TENANT);
+            sql.update("delete from announcement where tenant_id = ?", DEMO_TENANT);
             sql.update("delete from invoice where tenant_id = ? and month = ?", DEMO_TENANT, MONTH.atDay(1));
             sql.update("delete from billing_month where tenant_id = ? and month = ?", DEMO_TENANT, MONTH.atDay(1));
         });
@@ -135,6 +142,7 @@ class DemoNotificationsTests extends NotificationsTestSupport {
         assertThat(first.links()).isEqualTo(2);
         assertThat(first.month()).isEqualTo(MONTH);
         assertThat(first.deliveries()).isPositive();
+        assertThat(first.announcements()).isEqualTo(2);
 
         // the mailbox and the bot; the second cooperative stays unconfigured
         Map<String, Object> row = owner.queryForMap("select smtp_host, smtp_port, smtp_security, smtp_user, "
@@ -194,12 +202,42 @@ class DemoNotificationsTests extends NotificationsTestSupport {
 
         DemoNotifications.Seeded second = demo().seed();
 
-        assertThat(second).isEqualTo(new DemoNotifications.Seeded(false, false, 0, MONTH, 0));
+        assertThat(second).isEqualTo(new DemoNotifications.Seeded(false, false, 0, MONTH, 0, 0));
         assertThat(deliveries()).isEqualTo(deliveries);
         assertThat(owner.queryForObject("select count(*) from telegram_link where tenant_id = ?", Integer.class,
                 DEMO_TENANT)).isEqualTo(2);
         assertThat(owner.queryForObject("select settings_version from delivery_settings where tenant_id = ?",
                 Integer.class, DEMO_TENANT)).isEqualTo(2);
+    }
+
+    @Test
+    void theDemoMemberHasTwoAnnouncementsOneOfThemOpenedAndASecondRunAddsNone() throws Exception {
+        assertThat(demo().seed().announcements()).isEqualTo(2);
+
+        List<Map<String, Object>> announcements = owner.queryForList("select id, text, created_by, created_at "
+                + "from announcement where tenant_id = ? order by created_at", DEMO_TENANT);
+        assertThat(announcements).extracting(row -> row.get("text")).containsExactlyElementsOf(
+                DemoNotifications.ANNOUNCEMENTS);
+        assertThat(announcements).extracting(row -> row.get("created_by")).containsOnly(DemoNotifications.DEMO_CHAIRMAN);
+        // every active member got both, sent or on paper; nothing waits to be sent
+        int active = owner.queryForObject("select count(*) from member where tenant_id = ? and archived_at is null",
+                Integer.class, DEMO_TENANT);
+        for (Map<String, Object> announcement : announcements) {
+            List<Map<String, Object>> rows = owner.queryForList("select member_id, channel, status from delivery "
+                    + "where tenant_id = ? and announcement_id = ?", DEMO_TENANT, announcement.get("id"));
+            assertThat(rows).hasSize(active).allSatisfy(row -> assertThat(row.get("status"))
+                    .isEqualTo("PAPER".equals(row.get("channel")) ? "TO_PRINT" : "SENT"));
+        }
+        assertThat(owner.queryForList("select announcement_id, member_id from announcement_read where tenant_id = ?",
+                DEMO_TENANT)).singleElement().satisfies(row -> {
+                    assertThat(row.get("announcement_id")).isEqualTo(announcements.getFirst().get("id"));
+                    assertThat(row.get("member_id")).isEqualTo(DemoNotifications.DEMO_MEMBER);
+                });
+        assertThat(FakeBotApi.shared().calls()).isEmpty();
+
+        assertThat(demo().seed().announcements()).isZero();
+        assertThat(owner.queryForObject("select count(*) from announcement where tenant_id = ?", Integer.class,
+                DEMO_TENANT)).isEqualTo(2);
     }
 
     @Test
@@ -219,7 +257,7 @@ class DemoNotificationsTests extends NotificationsTestSupport {
         demo().run(null);
 
         assertThat(output.getAll()).contains("Demo delivery: mailbox saved: true, bot saved: true, 2 Telegram links "
-                + "made, month " + MONTH + ",");
+                + "made, month " + MONTH + ",").contains("2 announcements added");
         assertThat(owner.queryForObject("select count(*) from telegram_link where tenant_id = ? and ended_at is null",
                 Integer.class, DEMO_TENANT)).isEqualTo(2);
         assertThat(output.getAll()).doesNotContain(DemoNotifications.BOT_TOKEN)
@@ -230,7 +268,7 @@ class DemoNotificationsTests extends NotificationsTestSupport {
     @Test
     void aStartRunThatCannotSetTheDemoUpIsLoggedAndTheApplicationStarts(CapturedOutput output) {
         DemoNotifications broken = new DemoNotifications(transactionManager, null, codes, links, members, ledger,
-                documents, owners, recipients, tenants, jdbc, clock);
+                documents, owners, recipients, tenants, announcementRows, announcementReads, jdbc, clock);
 
         assertThatCode(() -> broken.run(null)).doesNotThrowAnyException();
 
@@ -254,7 +292,8 @@ class DemoNotificationsTests extends NotificationsTestSupport {
 
     private List<Map<String, Object>> deliveries() {
         return owner.queryForList("select id, kind, invoice_id, billing_month, member_id, channel, note, status, "
-                + "attempts, next_attempt_at, sent_at from delivery where tenant_id = ? order by id", DEMO_TENANT);
+                + "attempts, next_attempt_at, sent_at from delivery where tenant_id = ? and kind = 'INVOICE' "
+                + "order by id", DEMO_TENANT);
     }
 
     private static String channelOf(List<Map<String, Object>> deliveries, UUID member) {

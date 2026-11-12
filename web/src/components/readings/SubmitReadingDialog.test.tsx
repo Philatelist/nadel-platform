@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApiError } from '@nadel/api-client';
+import { ApiError, type MeterReading } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { plotMeter } from '../../test/meterFixtures';
 import { renderWithApp } from '../../test/render';
@@ -10,9 +10,11 @@ import { SubmitReadingDialog } from './SubmitReadingDialog';
 const submit = vi.fn();
 let mutationOptions: { mutation: { onError: (error: unknown) => void } };
 const normalizeImage = vi.fn();
+const check = vi.fn();
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
+  checkPlotReading: (...args: unknown[]) => check(...args),
   useSubmitPlotReadingWithPhoto: (o: typeof mutationOptions) => {
     mutationOptions = o;
     return { mutate: submit, isPending: false };
@@ -24,10 +26,16 @@ vi.mock('../../lib/normalizeImage', () => ({
 
 const jpeg = (name = 'm.jpg', size = 10) => new File([new Uint8Array(size)], name, { type: 'image/jpeg' });
 
-function renderDialog() {
+function renderDialog(pending?: MeterReading) {
   renderWithApp(
     <QueryClientProvider client={new QueryClient()}>
-      <SubmitReadingDialog plotId="p7" meter={plotMeter} onSubmitted={vi.fn()} onClose={vi.fn()} />
+      <SubmitReadingDialog
+        plotId="p7"
+        meter={plotMeter}
+        pending={pending}
+        onSubmitted={vi.fn()}
+        onClose={vi.fn()}
+      />
     </QueryClientProvider>,
   );
 }
@@ -36,6 +44,8 @@ describe('SubmitReadingDialog photo', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'uk');
     submit.mockReset();
+    check.mockReset();
+    check.mockResolvedValue({ meterId: 'm1', takenOn: '2026-11-06', warnings: [] });
     normalizeImage.mockReset();
     normalizeImage.mockImplementation((file: File) => Promise.resolve(file));
     let counter = 0;
@@ -56,10 +66,12 @@ describe('SubmitReadingDialog photo', () => {
     expect(screen.getByRole('button', { name: 'Замінити' })).toBeInTheDocument();
     await user.type(screen.getByLabelText(/^Показ, /), '8300.5');
     await user.click(screen.getByRole('button', { name: 'Передати показ' }));
-    expect(submit).toHaveBeenCalledWith({
-      id: 'p7',
-      data: { reading: { meterId: 'm1', takenOn: undefined, value: '8300.5' }, photo: file },
-    });
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith({
+        id: 'p7',
+        data: { reading: { meterId: 'm1', takenOn: undefined, value: '8300.5' }, photo: file },
+      }),
+    );
   });
 
   it('removes the photo before saving and revokes its object URL', async () => {
@@ -128,5 +140,96 @@ describe('SubmitReadingDialog photo', () => {
     expect(
       await screen.findByText('Додайте фото лічильника: правління просить фото до кожного показу.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('SubmitReadingDialog check', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('nadel.locale', 'uk');
+    submit.mockReset();
+    check.mockReset();
+    check.mockResolvedValue({ meterId: 'm1', takenOn: '2026-11-06', warnings: [] });
+  });
+
+  async function enter(value: string) {
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/^Показ, /), value);
+    await user.click(screen.getByRole('button', { name: 'Передати показ' }));
+    return user;
+  }
+
+  it('shows the previous reading and the one waiting for approval above the value field', () => {
+    renderDialog({
+      id: 'r9',
+      takenOn: '2026-11-07',
+      value: '8300.500',
+      status: 'PENDING',
+    } as MeterReading);
+    expect(screen.getByText('Попередній показ: 8 205 кВт·год на 01.06.2026 (враховано)')).toBeInTheDocument();
+    expect(screen.getByText('На підтвердженні: 8 300,5 кВт·год на 07.11.2026')).toBeInTheDocument();
+  });
+
+  it('has no pending line when nothing waits', () => {
+    renderDialog();
+    expect(screen.queryByText(/На підтвердженні/)).not.toBeInTheDocument();
+  });
+
+  it('submits straight away when the check has no warning', async () => {
+    renderDialog();
+    await enter('8300.5');
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(check).toHaveBeenCalledWith('p7', { meterId: 'm1', takenOn: undefined, value: '8300.5' });
+  });
+
+  it('warns about an unusual jump and submits only after «Все одно передати»', async () => {
+    check.mockResolvedValue({
+      meterId: 'm1',
+      takenOn: '2026-11-06',
+      warnings: ['UNUSUAL_CONSUMPTION'],
+    });
+    renderDialog();
+    const user = await enter('12331');
+    expect(
+      await screen.findByText('Перевірте показ: споживання значно більше звичайного'),
+    ).toBeInTheDocument();
+    expect(submit).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Все одно передати' }));
+    expect(submit).toHaveBeenCalledWith({
+      id: 'p7',
+      data: { reading: { meterId: 'm1', takenOn: undefined, value: '12331' }, photo: undefined },
+    });
+  });
+
+  it('lets the member correct the value after the warning', async () => {
+    check.mockResolvedValue({ meterId: 'm1', takenOn: '2026-11-06', warnings: ['UNUSUAL_CONSUMPTION'] });
+    renderDialog();
+    const user = await enter('12331');
+    await user.click(await screen.findByRole('button', { name: 'Виправити показ' }));
+    expect(
+      screen.queryByText('Перевірте показ: споживання значно більше звичайного'),
+    ).not.toBeInTheDocument();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('shows a rule break of the check as a field error without submitting', async () => {
+    check.mockResolvedValue({
+      meterId: 'm1',
+      takenOn: '2026-11-06',
+      warnings: [],
+      problem: { code: 'READING_OUT_OF_ORDER', field: 'value' },
+    });
+    renderDialog();
+    await enter('1');
+    expect(
+      await screen.findByText('Показ менший за попередній або більший за наступний'),
+    ).toBeInTheDocument();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a plain submit when the check request fails', async () => {
+    check.mockRejectedValue(new Error('offline'));
+    renderDialog();
+    await enter('8300.5');
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
   });
 });

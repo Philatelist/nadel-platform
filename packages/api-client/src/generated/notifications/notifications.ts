@@ -46,6 +46,7 @@ import type {
   InvoiceSendResult,
   ListAnnouncementsParams,
   ListDeliveriesParams,
+  MyAnnouncement,
   MyNotifications,
   MyNotificationsUpdate,
   NotFoundResponse,
@@ -1197,6 +1198,194 @@ export const useDeleteMyPushDevice = <TError = UnauthorizedResponse | ForbiddenR
       > => {
       return useMutation(getDeleteMyPushDeviceMutationOptions(options), queryClient);
     }
+    export const getListMyAnnouncementsUrl = () => {
+
+
+
+
+  return `/api/v1/me/announcements`
+}
+
+/**
+ * «Оголошення» in the member account (feature 021, follow-up): the announcements of the board that the signed-in
+ * member was a recipient of, through any channel (a delivery of the announcement to the member exists: e-mail,
+ * Telegram or paper, the same recipients as the push «Нове оголошення від правління»), sent in the last 12 months
+ * (from the same moment twelve months ago, Europe/Kyiv), newest first. Each has its full text as the board
+ * entered it and `unread`, true until the member opened it (`markMyAnnouncementRead`). An announcement has no
+ * title. No permission is needed; the member is always the one behind the token (never a request parameter). A
+ * member who received nothing gets an empty list. The platform operator has no cooperative data: 403.
+ *
+ * The push `ANNOUNCEMENT` opens `/account#announcement-{id}`: the account shows this list and brings that
+ * announcement into view.
+ * @summary The board's announcements the signed-in member received
+ */
+export const listMyAnnouncements = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<MyAnnouncement[]> => {
+
+  return nadelFetch<MyAnnouncement[]>(getListMyAnnouncementsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyAnnouncementsQueryKey = () => {
+    return [
+    `/api/v1/me/announcements`
+    ] as const;
+    }
+
+
+export const getListMyAnnouncementsQueryOptions = <TData = Awaited<ReturnType<typeof listMyAnnouncements>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyAnnouncementsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyAnnouncements>>> = ({ signal }) => listMyAnnouncements({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMyAnnouncementsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyAnnouncements>>>
+export type ListMyAnnouncementsQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListMyAnnouncements<TData = Awaited<ReturnType<typeof listMyAnnouncements>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyAnnouncements>>,
+          TError,
+          Awaited<ReturnType<typeof listMyAnnouncements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyAnnouncements<TData = Awaited<ReturnType<typeof listMyAnnouncements>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyAnnouncements>>,
+          TError,
+          Awaited<ReturnType<typeof listMyAnnouncements>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyAnnouncements<TData = Awaited<ReturnType<typeof listMyAnnouncements>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The board's announcements the signed-in member received
+ */
+
+export function useListMyAnnouncements<TData = Awaited<ReturnType<typeof listMyAnnouncements>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyAnnouncements>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMyAnnouncementsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getMarkMyAnnouncementReadUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/me/announcements/${id}/read`
+}
+
+/**
+ * Records that the signed-in member opened the announcement, so `listMyAnnouncements` shows it with `unread`
+ * false. Idempotent: marking it again changes nothing and is 204 too; the first time it was opened is kept. Only
+ * an announcement the member was a recipient of: another member's announcement, one of another cooperative and an
+ * unknown id are the same 404 `NOT_FOUND`. Not written to the audit log (the member's own reading state). The
+ * platform operator: 403.
+ * @summary Mark an announcement as opened by the signed-in member
+ */
+export const markMyAnnouncementRead = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getMarkMyAnnouncementReadUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkMyAnnouncementReadMutationKey = () => ['markMyAnnouncementRead'] as const;
+
+export const getMarkMyAnnouncementReadMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMyAnnouncementRead>>, TError,MarkMyAnnouncementReadMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markMyAnnouncementRead>>, TError,MarkMyAnnouncementReadMutationVariables, TContext> => {
+
+const mutationKey = getMarkMyAnnouncementReadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markMyAnnouncementRead>>, MarkMyAnnouncementReadMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  markMyAnnouncementRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkMyAnnouncementReadMutationResult = NonNullable<Awaited<ReturnType<typeof markMyAnnouncementRead>>>
+
+    export type MarkMyAnnouncementReadMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type MarkMyAnnouncementReadMutationVariables = {id: string}
+
+    /**
+ * @summary Mark an announcement as opened by the signed-in member
+ */
+export const useMarkMyAnnouncementRead = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMyAnnouncementRead>>, TError,MarkMyAnnouncementReadMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markMyAnnouncementRead>>,
+        TError,
+        MarkMyAnnouncementReadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkMyAnnouncementReadMutationOptions(options), queryClient);
+    }
     export const getSendMonthInvoicesUrl = (month: string,
     params: SendMonthInvoicesParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -1692,7 +1881,10 @@ export const useMarkMonthPrinted = <TError = BadRequestResponse | UnauthorizedRe
  * `text`, code `TOO_LONG`). A blank street is 400 `VALIDATION_FAILED` (field `streets`, code `INVALID`).
  *
  * With `preview=true` nothing is written: the answer has the counts per channel and the members on paper
- * (`paperMembers`, "Last First", in alphabetical order). With `preview=false` the announcement is saved, each
+ * (`paperMembers`, "Last First", in alphabetical order). Both answers also have `pushMembers`: how many of the
+ * recipients (every channel, paper included) have at least one device with push on, so they also get the push
+ * «Нове оголошення від правління» (feature 021); 0 while push is off on the server. Push is a signal on top of
+ * the channel, not a channel: it changes neither the counts nor the paper list. With `preview=false` the announcement is saved, each
  * member gets one delivery (`kind` `ANNOUNCEMENT`; Telegram and e-mail `QUEUED` and sent in the background,
  * paper `TO_PRINT`, listed so the board can inform them), and the send is written to the audit log as
  * `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`; fields `audience` (`ALL` or `STREETS`), `streets` (only for

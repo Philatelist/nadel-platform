@@ -51,6 +51,7 @@ export const en = {
     iosTitle: 'Install on iPhone',
     iosSteps: 'Share → Add to Home Screen',
     dismiss: 'Do not show again',
+    howToInstall: 'How to install on your phone',
   },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
@@ -68,6 +69,7 @@ export const en = {
     permissions: 'What you can do',
     noPermissions: 'Your roles give no extra permissions. You can see your own data.',
     details: 'My details',
+    backToAccount: 'To my account',
   },
   notifications: {
     title: 'Notifications',
@@ -1525,6 +1527,10 @@ export const en = {
       submitTitle: 'Submit a reading',
       submitText: 'The reading will be counted after the board approves it.',
       submitted: 'The reading is submitted and waits for approval',
+      previousReading: 'Previous reading: {value} {unit} on {date} ({status})',
+      pendingReading: 'Awaiting approval: {value} {unit} on {date}',
+      confirmAnyway: 'Submit anyway',
+      correctValue: 'Correct the reading',
       meterOfPlot: 'Plot {number}',
     },
     photo: {
@@ -2862,6 +2868,7 @@ export const en = {
   },
   announcements: {
     title: 'Announcements',
+    my: { new: 'New', empty: 'There are no announcements from the board yet.' },
     newAnnouncement: 'New announcement',
     empty: 'No announcements yet.',
     allMembers: 'All members',
@@ -2891,6 +2898,12 @@ export const en = {
       preview: 'Preview',
       previewTitle: 'Who gets the announcement',
       previewCounts: 'Telegram: {telegram}, e-mail: {email}, on paper: {paper}',
+      previewPush: {
+        one: 'Also a phone notification: {count} person',
+        few: 'Also a phone notification: {count} people',
+        many: 'Also a phone notification: {count} people',
+        other: 'Also a phone notification: {count} people',
+      },
       paperTitle: 'On paper (inform in person)',
       paperNone: 'Every member gets the announcement in the chosen channels.',
       send: 'Send',

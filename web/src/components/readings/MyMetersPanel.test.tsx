@@ -7,6 +7,7 @@ import { renderWithApp } from '../../test/render';
 import { MyMetersPanel } from './MyMetersPanel';
 
 const submit = vi.fn();
+let pendingStatus: MeterReading['status'];
 let ownedPlots: { plotId: string; number: string; share: string }[];
 
 const reading = (overrides: Partial<MeterReading>): MeterReading => ({
@@ -34,7 +35,13 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
       meterId: 'm1',
       intervals: [],
       readings: [
-        reading({ id: 'r3', takenOn: '2026-10-20', value: '8260.000', status: 'PENDING', source: 'MEMBER' }),
+        reading({
+          id: 'r3',
+          takenOn: '2026-10-20',
+          value: '8260.000',
+          status: pendingStatus,
+          source: 'MEMBER',
+        }),
         reading({
           id: 'r2',
           takenOn: '2026-10-10',
@@ -49,13 +56,20 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
         }),
       ],
     }),
-  useSubmitPlotReadingWithPhoto: () => ({ mutate: submit, isPending: false }),
+  useSubmitPlotReadingWithPhoto: (options?: { mutation?: { onSuccess?: () => Promise<void> } }) => ({
+    mutate: (vars: unknown) => {
+      submit(vars);
+      return options?.mutation?.onSuccess?.();
+    },
+    isPending: false,
+  }),
 }));
 
 describe('MyMetersPanel', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'en');
     submit.mockReset();
+    pendingStatus = 'PENDING';
     ownedPlots = [{ plotId: 'p7', number: '7', share: '1/1' }];
   });
 
@@ -86,5 +100,19 @@ describe('MyMetersPanel', () => {
       id: 'p7',
       data: { reading: { meterId: 'm1', takenOn: undefined, value: '8300.5' }, photo: undefined },
     });
+  });
+
+  it('shows the submitted banner while the reading is pending and drops it once it is approved', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithApp(withQueries(<MyMetersPanel />));
+    await user.click(screen.getByRole('button', { name: 'Submit a reading' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^Reading, kWh/), '8300.5');
+    await user.click(within(dialog).getByRole('button', { name: 'Submit a reading' }));
+    expect(await screen.findByText(/waits for approval/)).toBeInTheDocument();
+
+    pendingStatus = 'APPROVED';
+    rerender(withQueries(<MyMetersPanel />));
+    expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
   });
 });

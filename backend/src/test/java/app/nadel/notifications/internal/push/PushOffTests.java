@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.nadel.notifications.TestPushDevice;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * A server without push keys (feature 021 §2.2): the application starts and works, the account learns that push is off
  * and gets no key, registering a device is 409 {@code PUSH_DISABLED}, the member can still list and delete their
- * devices, and issuing invoices queues no push.
+ * devices, issuing invoices queues no push, and the announcement form counts nobody as getting the push.
  */
 @TestPropertySource(properties = "nadel.test.push-public-key=")
 class PushOffTests extends PushTestSupport {
@@ -43,5 +45,14 @@ class PushOffTests extends PushTestSupport {
 
         assertThat(buildInvoices().get("built").asInt()).isEqualTo(1);
         assertThat(queuedPushes()).isEmpty();
+
+        // a device kept from before counts for nobody: the announcement form says no one gets the push
+        ownerJdbc().update("insert into push_subscription (id, tenant_id, member_id, endpoint_enc, p256dh_enc, "
+                + "auth_enc, endpoint_index, server_key_id, language) values (gen_random_uuid(), ?, ?, '\\x01', "
+                + "'\\x02', '\\x03', sha256(?::bytea), '\\x0102030405060708', 'uk')", tenant, memberId,
+                memberId.toString().getBytes());
+        send(chairman, post("/api/v1/announcements?preview=true"), Map.of("text", "Збори", "streets", List.of(),
+                "channels", List.of("EMAIL"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.pushMembers").value(0));
     }
 }

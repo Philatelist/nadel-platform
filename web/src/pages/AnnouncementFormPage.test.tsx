@@ -22,6 +22,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
 
 const previewResult: AnnouncementSendResult = {
   counts: { telegram: 3, email: 2, paper: 1 },
+  pushMembers: 5,
   paperMembers: [{ memberId: 'm1', name: 'Петренко Петро' }],
 };
 
@@ -93,6 +94,18 @@ describe('AnnouncementFormPage', () => {
     await user.click(screen.getByLabelText('Електронна пошта'));
     expect(send).toBeDisabled();
     expect(screen.queryByText('Петренко Петро')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [1, 'Також сповіщення на телефон: 1 особа'],
+    [3, 'Також сповіщення на телефон: 3 особи'],
+    [5, 'Також сповіщення на телефон: 5 осіб'],
+  ])('shows how many members also get a phone notification (%i)', async (count, line) => {
+    answer({ ...previewResult, pushMembers: count });
+    renderWithApp(<AnnouncementFormPage />);
+    const user = await typeText('Збори в суботу');
+    await user.click(screen.getByRole('button', { name: 'Попередній перегляд' }));
+    expect(screen.getByText(line)).toBeInTheDocument();
   });
 
   it('invalidates the preview when the text is edited', async () => {

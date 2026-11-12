@@ -172,6 +172,20 @@ class PushSubscriptions {
                 (rs, n) -> new Recipient(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getBytes(3)));
     }
 
+    /**
+     * How many of the members have at least one device made with the key pair {@code serverKeyId} (the devices that can
+     * still receive a message).
+     */
+    int membersWithDevices(Collection<UUID> memberIds, byte[] serverKeyId) {
+        if (memberIds.isEmpty()) {
+            return 0;
+        }
+        Integer count = named.queryForObject("select count(distinct member_id) from push_subscription "
+                + "where member_id in (:members) and server_key_id = :key", new MapSqlParameterSource()
+                        .addValue("members", memberIds).addValue("key", serverKeyId), Integer.class);
+        return count == null ? 0 : count;
+    }
+
     /** The device opened for sending; empty when it no longer exists. */
     Optional<Target> target(UUID id) {
         UUID tenantId = tenant();

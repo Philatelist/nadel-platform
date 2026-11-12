@@ -17,6 +17,7 @@ import app.nadel.meters.ReadingUsage;
 import app.nadel.meters.internal.MeterReadingRecord.Status;
 import app.nadel.meters.internal.ReadingValidator.MeterSpan;
 import app.nadel.meters.internal.ReadingValidator.Neighbours;
+import app.nadel.meters.internal.ReadingValidator.Violation;
 import app.nadel.meters.internal.ReadingValidator.Warning;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
@@ -31,10 +32,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import nadel.contract.model.MeterPoint;
 import nadel.contract.model.MeterReading;
 import nadel.contract.model.ReadingBatch;
 import nadel.contract.model.ReadingBatchResult;
+import nadel.contract.model.ReadingCheck;
 import nadel.contract.model.ReadingCorrection;
 import nadel.contract.model.ReadingEntry;
 import nadel.contract.model.ReadingRejection;
@@ -327,14 +331,7 @@ class ReadingCommands {
         }
         ReadingPhotoUploads.Prepared prepared = photo == null ? null : ReadingPhotoUploads.prepare(photo);
         MeterValue value = parse(input.getValue());
-        MeterRecord meter = meters.findByIdForUpdate(input.getMeterId())
-                .filter(found -> plotId.equals(found.getPlotId()))
-                .orElseThrow(() -> new ApiProblemException(HttpStatus.NOT_FOUND, ProblemCodes.NOT_FOUND,
-                        "The meter was not found.", List.of(new FieldProblem("meterId", ProblemCodes.NOT_FOUND))));
-        if (!meter.isActive()) {
-            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_REMOVED,
-                    "The meter is removed; it takes no more readings from members.");
-        }
+        MeterRecord meter = activeMeterOf(plotId, meters.findByIdForUpdate(input.getMeterId()));
         LocalDate date = input.getTakenOn() != null ? input.getTakenOn() : LocalDate.now(clock);
         MeterSpan span = MeterSpan.of(meter);
         List<Reading> counted = readingsOf(approved(meter));
@@ -368,6 +365,66 @@ class ReadingCommands {
         }
         return new ReadingSaved(ReadingDtoMapper.toDto(created, null, false, prepared != null),
                 pending.stream().map(MeterReadingRecord::getId).toList(), ReadingDtoMapper.toDto(warnings));
+    }
+
+    /**
+     * What {@link #submit} would answer for the reading, without saving, locking or auditing anything (feature 021
+     * follow-up, «Передати показ»): the counted point before its date, the newest pending reading of the meter, and
+     * either the rule it would break ({@link ReadingValidator#check}, as a row error with its parameters) or the
+     * interval it would close with its warnings ({@link ReadingValidator#warnings}). The same owner rule and answers
+     * as {@link #submit} (404 {@code PLOT_NOT_FOUND}, 404 {@code NOT_FOUND} on {@code meterId}, 409
+     * {@code METER_REMOVED}, 400 for a malformed value, 403 for the platform operator); the photo rule is not checked.
+     */
+    @Transactional(readOnly = true)
+    ReadingCheck check(UUID plotId, ReadingSubmission input, AccessProfile actor) {
+        access.requireCooperativeData(actor);
+        if (!access.ownsNow(actor, plotId)) {
+            throw MeterAccess.plotNotFound();
+        }
+        MeterValue value = parse(input.getValue());
+        MeterRecord meter = activeMeterOf(plotId, meters.findById(input.getMeterId()));
+        LocalDate today = LocalDate.now(clock);
+        LocalDate date = input.getTakenOn() != null ? input.getTakenOn() : today;
+        MeterSpan span = MeterSpan.of(meter);
+        List<Reading> counted = readingsOf(approved(meter));
+        ReadingCheck result = new ReadingCheck(meter.getId(), date, List.of());
+        Reading previous = ReadingValidator.neighbours(span, counted, date).previous();
+        if (previous != null) {
+            result.setPrevious(new MeterPoint(previous.takenOn(), previous.value().toString()));
+        }
+        List<MeterReadingRecord> pending = readings.findByMeterIdAndStatusOrderByTakenOn(meter.getId(),
+                Status.PENDING);
+        if (!pending.isEmpty()) {
+            MeterReadingRecord newest = pending.getLast();
+            result.setPending(new MeterPoint(newest.getTakenOn(), newest.getValue().toString()));
+        }
+        Optional<Violation> violation = ReadingValidator.check(span, counted, today, date, value);
+        if (violation.isPresent()) {
+            ReadingRowError problem = new ReadingRowError(violation.get().code());
+            problem.setField(violation.get().field());
+            problem.setParams(Map.copyOf(violation.get().params()));
+            result.setProblem(problem);
+            return result;
+        }
+        ReadingValidator.intervalEndingAt(span, counted, date, value)
+                .ifPresent(interval -> result.setInterval(ReadingDtoMapper.toDto(interval)));
+        result.setWarnings(ReadingDtoMapper.toDto(ReadingValidator.warnings(span, counted, date, value)));
+        return result;
+    }
+
+    /**
+     * The meter a member submits for: a meter of the plot (else 404 {@code NOT_FOUND} on {@code meterId}) that is not
+     * removed (else 409 {@code METER_REMOVED}).
+     */
+    private static MeterRecord activeMeterOf(UUID plotId, Optional<MeterRecord> found) {
+        MeterRecord meter = found.filter(candidate -> plotId.equals(candidate.getPlotId()))
+                .orElseThrow(() -> new ApiProblemException(HttpStatus.NOT_FOUND, ProblemCodes.NOT_FOUND,
+                        "The meter was not found.", List.of(new FieldProblem("meterId", ProblemCodes.NOT_FOUND))));
+        if (!meter.isActive()) {
+            throw new ApiProblemException(HttpStatus.CONFLICT, ProblemCodes.METER_REMOVED,
+                    "The meter is removed; it takes no more readings from members.");
+        }
+        return meter;
     }
 
     /**
