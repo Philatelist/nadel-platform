@@ -120,7 +120,7 @@ test.describe('the member phone journey', () => {
   }) => {
     const text = `E2E announcement ${randomUUID().slice(0, 8)}`;
     expectCreated(
-      await api(chairman, 'POST', '/announcements', { text, streets: [], channels: ['EMAIL'] }),
+      await api(chairman, 'POST', '/announcements?preview=false', { text, channels: ['EMAIL'] }),
       200,
     );
     const mine = expectCreated<{ id: string; text: string; unread: boolean }[]>(

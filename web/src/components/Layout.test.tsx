@@ -63,10 +63,11 @@ describe('Layout', () => {
     expect(screen.queryByRole('link', { name: 'Help' })).toBeNull();
     expect(document.querySelector('a[href="/help"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
-    // the name links to «My details» from the header (desktop) and from the menu (phone)
-    for (const link of screen.getAllByRole('link', { name: /Test User/ })) {
-      expect(link).toHaveAttribute('href', '/account/profile');
-    }
+    // the name opens the account from the desktop header (unchanged) and «My details» from the phone menu
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByRole('link', { name: /Test User/ })).toHaveAttribute('href', '/account');
+    const menu = within(document.getElementById('app-menu')!);
+    expect(menu.getByRole('link', { name: /Test User/ })).toHaveAttribute('href', '/account/profile');
   });
 
   it('puts the person, the language switch and Sign out into the menu for a phone', () => {

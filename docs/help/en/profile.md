@@ -32,7 +32,7 @@ Everyone who is signed in, and only their own data. The block with roles and rig
 
 ## Every element
 
-- The {{ui:account.details}} card: name, phones, e-mail, postal address, preferred channel for invoices, whether Telegram is connected, roles. Only the board can change the data: write or tell them.
+- The {{ui:account.details}} card: name, phones, e-mail, postal address, preferred channel for invoices, whether Telegram is connected. Only the board can change the data: write or tell them.
 - The {{ui:notifications.title}} block: in the "{{ui:notifications.channelLegend}}" field choose e-mail, Telegram or paper and press {{ui:notifications.save}}. Below, if the cooperative has a bot, the {{ui:telegramLink.connect}} button (step by step: [How to connect Telegram](help:member-telegram)) and the switch "{{ui:notifications.push.title}}" (more: [Notifications on your phone](help:member-push)).
 - The link "{{ui:pwa.howToInstall}}" under the notifications block leads to the [install instructions](help:member-install). It is not shown when Nadel already runs as an installed app.
 - For the board: the {{ui:account.roles}} block with the cooperative name ({{ui:account.cooperative}}) and the {{ui:account.permissions}} block with a short explanation of each right.

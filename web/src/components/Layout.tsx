@@ -58,14 +58,15 @@ export function Layout() {
           <Link
             to={landingPath(me)}
             title={title}
-            className="-my-2 min-w-0 flex-1 truncate py-2 font-serif text-xl font-semibold text-ink no-underline md:my-0 md:min-w-[8rem] md:flex-none md:py-0"
+            className="-my-2 min-w-0 max-w-full flex-1 truncate py-2 font-serif text-xl font-semibold text-ink no-underline md:my-0 md:min-w-[8rem] md:flex-none md:py-0"
           >
             {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
           </Link>
           {me.tenant?.name && <span className="hidden text-sm text-ink-muted md:inline">{t.app.name}</span>}
           <div className="ml-auto flex min-w-0 items-center gap-x-3">
             <div className="hidden min-w-0 flex-col text-sm leading-tight md:flex">
-              <Link to={PROFILE_PATH} className="truncate font-medium text-ink">
+              {/* desktop unchanged: the name opens the account, which links «My details»; the phone menu opens «My details» */}
+              <Link to="/account" className="truncate font-medium text-ink">
                 <UserContent>{me.fullName}</UserContent>
               </Link>
               <span className="truncate text-xs text-ink-muted">

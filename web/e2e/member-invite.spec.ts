@@ -201,7 +201,7 @@ test('inviting again after access was turned off: the old password is refused, t
   await page.getByRole('button', { name: t.setPassword.signIn }).click();
   await signInAtKeycloak(page, email, newPassword);
   await expect(page.getByRole('banner').getByRole('button', { name: t.auth.signOut })).toBeVisible();
-  await page.goto('/account');
+  await page.goto('/account/profile');
   await expect(page.getByRole('main').getByText(member.lastName).first()).toBeVisible();
   await expect(page.getByText(t.access.notLinkedTitle)).toHaveCount(0);
   await context.close();

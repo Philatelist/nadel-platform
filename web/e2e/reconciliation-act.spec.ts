@@ -65,13 +65,15 @@ test.describe('reconciliation act', () => {
       await expect(buttons.first()).toBeVisible();
       await expect(buttons).toHaveCount(own.length);
       await buttons.first().click();
-      await expect(main(member).getByLabel('To', { exact: true }).first()).toHaveValue(kyivDay(0));
-      await main(member).getByLabel('From', { exact: true }).first().fill(from);
+      // the act's own form: the charges panel above it has From and To fields of its own
+      const actForm = main(member)
+        .locator('form')
+        .filter({ has: member.getByRole('button', { name: 'Download the reconciliation act', exact: true }) })
+        .first();
+      await expect(actForm.getByLabel('To', { exact: true })).toHaveValue(kyivDay(0));
+      await actForm.getByLabel('From', { exact: true }).fill(from);
       const download = member.waitForEvent('download');
-      await main(member)
-        .getByRole('button', { name: 'Download the reconciliation act', exact: true })
-        .first()
-        .click();
+      await actForm.getByRole('button', { name: 'Download the reconciliation act', exact: true }).click();
       const file = await download;
       expect(file.suggestedFilename()).toBe(`reconciliation-act_${from}_${kyivDay(0)}.pdf`);
       const bytes = await readFile(await file.path());
@@ -79,12 +81,9 @@ test.describe('reconciliation act', () => {
       expect(bytes.length).toBeGreaterThan(1000);
 
       // a period that ends after today is refused on the form
-      await main(member).getByLabel('To', { exact: true }).first().fill(kyivDay(5));
-      await main(member)
-        .getByRole('button', { name: 'Download the reconciliation act', exact: true })
-        .first()
-        .click();
-      await expect(main(member).getByText('Invalid period').first()).toBeVisible();
+      await actForm.getByLabel('To', { exact: true }).fill(kyivDay(5));
+      await actForm.getByRole('button', { name: 'Download the reconciliation act', exact: true }).click();
+      await expect(actForm.getByText('Invalid period')).toBeVisible();
     } finally {
       await member.context().close();
       await chairman.context().close();
