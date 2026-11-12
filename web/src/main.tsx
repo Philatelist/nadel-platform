@@ -21,6 +21,7 @@ import { OIDC_AUTHORITY, OIDC_CLIENT_ID, oidcConfig } from './auth';
 import { I18nProvider } from './i18n';
 import './pwa/installPrompt';
 import { registerPwa } from './pwa/registerPwa';
+import { refreshOnResume } from './pwa/refreshOnResume';
 import { refetchOnReconnect } from './pwa/useOnline';
 import { ThemeProvider } from './themeContext';
 import './index.css';
@@ -50,6 +51,7 @@ const queryClient = new QueryClient({
 });
 
 refetchOnReconnect(queryClient);
+refreshOnResume(queryClient);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -29,10 +29,12 @@ You can submit a meter reading yourself, without waiting for the electrician. Yo
 
 1. Open your [account](help:account) and find the {{ui:readings.mine.title}} block.
 2. Next to the right meter press {{ui:readings.mine.submit}}. The button is not there for a meter that has been removed.
+2a. Above the fields you see "Previous reading" with its date (the last counted reading) and, if your earlier reading still waits for approval, a line "Awaiting approval". It makes a mistake easy to spot.
 3. Enter the date when you read the meter. Today is there by default.
 4. Enter the meter value as it is written on the meter. The value may have up to three decimals.
 5. If you wish, add a photo of the meter: press {{ui:readings.photo.add}}. On a phone the camera opens, on a computer a file picker. A HEIC photo from an iPhone is converted to JPEG only where the browser can open it (Safari on iPhone or Mac); in another browser the system says "{{ui:readings.photo.typeNotAllowed}}", so add a JPEG or PNG photo. You see a thumbnail above the button. The {{ui:readings.photo.replace}} button changes the photo and {{ui:readings.photo.remove}} removes it.
-6. Press {{ui:readings.mine.submit}}. The system answers: "{{ui:readings.mine.submitted}}".
+6. Press {{ui:readings.mine.submit}}. If the value is much higher than the usual consumption, the system warns you first: "{{ui:readings.warnings.UNUSUAL_CONSUMPTION}}". Correct the reading with "{{ui:readings.mine.correctValue}}" or, if it is right, press "{{ui:readings.mine.confirmAnyway}}". If the reading breaks a rule (for example it is lower than the previous one), an explanation appears under the field and the reading is not submitted.
+7. The system answers: "{{ui:readings.mine.submitted}}".
 
 Nothing else is needed.
 

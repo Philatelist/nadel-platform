@@ -100,7 +100,7 @@ class PushSender {
         byte[] payload;
         URI endpoint;
         try {
-            payload = PushPayload.of(code, params(code, job), target.language());
+            payload = PushPayload.of(code, params(code, job), job.ref(), target.language());
             endpoint = new URI(target.endpoint());
         } catch (IllegalArgumentException | URISyntaxException e) {
             return logged(code, target, job, "NOT_SENDABLE");

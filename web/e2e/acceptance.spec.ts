@@ -90,6 +90,9 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
     await accountLink(page).click();
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole('heading', { level: 1, name: 'My account' })).toBeVisible();
+    // personal data, roles and rights are on «My details», linked from the account
+    await page.getByRole('main').getByRole('link', { name: 'My details', exact: true }).click();
+    await expect(page).toHaveURL(/\/account\/profile$/);
     await expect(page.getByRole('main').getByText('Шевченко Ірина Володимирівна')).toBeVisible();
     await expect(page.getByRole('listitem').filter({ hasText: /^Treasurer$/ })).toBeVisible();
     for (const permission of ['View members', 'View plots', 'View audit log']) {
@@ -117,6 +120,7 @@ test.describe('§2.10 / §2.11 landing page and navigation', () => {
       [],
     );
     await accountLink(page).click();
+    await page.getByRole('main').getByRole('link', { name: 'My details', exact: true }).click();
     for (const permission of ALL_PERMISSIONS) {
       await expect(page.getByText(permission, { exact: true })).toBeVisible();
     }
@@ -129,7 +133,8 @@ test.describe('§2.5 what an ordinary member sees', () => {
   }) => {
     await loginAs(page, 'member@demo.local');
 
-    // own card: name, phones, email, postal address, channel; no edit buttons, no notes
+    // own card on «My details»: name, phones, email, postal address, channel; no edit buttons, no notes, no roles
+    await page.goto('/account/profile');
     await expect(page.getByRole('main').getByText('Бондаренко Андрій Миколайович')).toBeVisible();
     await expect(page.getByText('+380501110003')).toBeVisible();
     await expect(page.getByText('member@demo.local')).toBeVisible();
@@ -306,7 +311,7 @@ test.describe('§2.2 / §2.13 roles screen', () => {
 
       // the treasurer's own account and the members list show the new name
       const treasurerPage = await signedInPage(browser, 'treasurer@demo.local');
-      await treasurerPage.goto('/account'); // the treasurer lands on Plots; the roles are on My account
+      await treasurerPage.goto('/account/profile'); // the treasurer lands on Plots; the roles are on My details
       await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Bookkeeper$/ })).toBeVisible();
       await treasurerPage.goto('/members');
       await treasurerPage.getByRole('searchbox').fill('Шевченко');
@@ -758,8 +763,10 @@ test.describe('§2.4 / §2.12 other people', () => {
   }) => {
     await loginAs(page, 'member@other.local');
 
+    await page.goto('/account/profile');
     await expect(page.getByRole('main').getByText('Мельник Олена Степанівна')).toBeVisible();
-    await expect(page.getByRole('main').getByText('СТ «Світанок»')).toBeVisible();
+    // a plain member sees their cooperative in the header (the roles block with it is for the board only)
+    await expect(page.getByRole('banner').getByText('СТ «Світанок»')).toBeVisible();
     await page.goto(`/members/${CHAIRMAN_ID}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
     await expect(page.getByText('Коваленко')).toHaveCount(0);

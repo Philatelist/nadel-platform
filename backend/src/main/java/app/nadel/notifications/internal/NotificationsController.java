@@ -41,6 +41,7 @@ import nadel.contract.model.DeliveryTelegramSettings;
 import nadel.contract.model.DeliveryTestEmailHint;
 import nadel.contract.model.DeliveryTestEmailResult;
 import nadel.contract.model.DeliveryTestTelegramResult;
+import nadel.contract.model.MyAnnouncement;
 import nadel.contract.model.MyNotifications;
 import nadel.contract.model.MyNotificationsUpdate;
 import nadel.contract.model.PushConfig;
@@ -67,6 +68,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>Announcements: every one needs {@code ANNOUNCEMENTS_SEND} ({@link Announcements}).</li>
  *   <li>The member's own push devices ({@code /me/push}, feature 021): no permission, always the member behind the
  *       token ({@link PushDevices}); the platform operator gets 403. A device never carries its endpoint or keys.</li>
+ *   <li>The member's own announcements ({@code /me/announcements}, feature 021 follow-up): no permission, always the
+ *       member behind the token ({@link MemberAnnouncements}); the platform operator gets 403.</li>
  * </ul>
  */
 @RestController
@@ -81,10 +84,11 @@ class NotificationsController implements NotificationsApi {
     private final DeliveryRegister register;
     private final Announcements announcements;
     private final PushDevices pushDevices;
+    private final MemberAnnouncements myAnnouncements;
 
     NotificationsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks,
             MemberNotifications mine, DeliveryPlanner planner, DeliveryRegister register,
-            Announcements announcements, PushDevices pushDevices) {
+            Announcements announcements, PushDevices pushDevices, MemberAnnouncements myAnnouncements) {
         this.currentUser = currentUser;
         this.service = service;
         this.checks = checks;
@@ -93,6 +97,21 @@ class NotificationsController implements NotificationsApi {
         this.register = register;
         this.announcements = announcements;
         this.pushDevices = pushDevices;
+        this.myAnnouncements = myAnnouncements;
+    }
+
+    @Override
+    public ResponseEntity<List<MyAnnouncement>> listMyAnnouncements() {
+        return ResponseEntity.ok(myAnnouncements.list(currentUser.profile()).stream()
+                .map(received -> new MyAnnouncement(received.id(), received.sentAt().atOffset(ZoneOffset.UTC),
+                        received.text(), !received.read()))
+                .toList());
+    }
+
+    @Override
+    public ResponseEntity<Void> markMyAnnouncementRead(UUID id) {
+        myAnnouncements.markRead(currentUser.profile(), id);
+        return ResponseEntity.noContent().build();
     }
 
     @Override
@@ -139,7 +158,7 @@ class NotificationsController implements NotificationsApi {
                 currentUser.profile());
         var dto = new AnnouncementSendResult(new DeliveryCounts(plan.telegram(), plan.email(), plan.paper()),
                 plan.paperMembers().stream().map(member -> new AnnouncementPaperMember(member.memberId(),
-                        member.name())).toList());
+                        member.name())).toList(), plan.pushMembers());
         dto.setAnnouncementId(plan.announcementId());
         return ResponseEntity.ok(dto);
     }

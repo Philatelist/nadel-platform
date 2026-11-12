@@ -12,6 +12,7 @@ import nadel.contract.model.MeterReadingHistory;
 import nadel.contract.model.PendingReading;
 import nadel.contract.model.ReadingBatch;
 import nadel.contract.model.ReadingBatchResult;
+import nadel.contract.model.ReadingCheck;
 import nadel.contract.model.ReadingCorrection;
 import nadel.contract.model.ReadingEntry;
 import nadel.contract.model.ReadingRejection;
@@ -34,8 +35,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * The endpoints of tag {@code readings}. The round, entry (also one reading with a photo), correction and deletion
  * need {@code READINGS_ENTER}; the approvals list, approval and rejection need {@code READINGS_APPROVE}; the platform
- * operator has no permissions and gets 403. {@code GET /meters/{id}/readings}, {@code POST /plots/{id}/readings} (deprecated) and
- * {@code POST /plots/{id}/reading-submissions} are open to every member for the meters of the plots they own, so their
+ * operator has no permissions and gets 403. {@code GET /meters/{id}/readings}, {@code POST /plots/{id}/readings} (deprecated),
+ * {@code POST /plots/{id}/reading-submissions} and {@code POST /plots/{id}/reading-submissions/check} are open to every member for the meters of the plots they own, so their
  * checks are in {@link ReadingQueries} and {@link ReadingCommands}; {@code GET /readings/{id}/photo} is open to the
  * owners of the plot and to the holders of {@code READINGS_ENTER} or {@code READINGS_APPROVE} ({@link ReadingPhotos}).
  */
@@ -135,6 +136,15 @@ class ReadingsController implements ReadingsApi {
             @Nullable MultipartFile photo) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(commands.submit(id, reading, photo, currentUser.profile()));
+    }
+
+    /**
+     * No {@code @PreAuthorize}: a current owner of the plot checks a reading of its meter before submitting it, with the
+     * submission's access (see {@link ReadingCommands#check}); nothing is saved.
+     */
+    @Override
+    public ResponseEntity<ReadingCheck> checkPlotReading(UUID id, ReadingSubmission readingSubmission) {
+        return ResponseEntity.ok(commands.check(id, readingSubmission, currentUser.profile()));
     }
 
     /**

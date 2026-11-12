@@ -11,7 +11,7 @@ order: 70
 shots:
   - name: member-push-switch
     user: member
-    path: /account
+    path: /account/profile
     viewport: phone
     element: { heading: Notifications }
 ---
@@ -20,7 +20,7 @@ Notifications are short messages on the screen of a phone or computer, even when
 
 ## How to turn them on
 
-1. Open [My account](help:account), the {{ui:notifications.title}} block.
+1. Open [My details](help:profile), the {{ui:notifications.title}} block.
 2. Turn on the switch "{{ui:notifications.push.title}}". Below it is the hint: "{{ui:notifications.push.hint}}"
 3. The browser asks whether to allow notifications. Choose "Allow". The browser asks this itself, so there is no screenshot of it in this help.
 
@@ -60,7 +60,7 @@ If you once pressed "Block", the browser does not ask again, and the switch is o
 
 1. Open the site settings in the browser (the icon next to the address, or the app settings in the phone).
 2. Change the permission for notifications to "Allow".
-3. Go back to [My account](help:account) and turn the switch on again.
+3. Go back to [My details](help:profile) and turn the switch on again.
 
 ## iPhone
 

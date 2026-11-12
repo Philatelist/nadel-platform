@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Me, Permission } from '@nadel/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +63,23 @@ describe('Layout', () => {
     expect(screen.queryByRole('link', { name: 'Help' })).toBeNull();
     expect(document.querySelector('a[href="/help"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Test User' })).toHaveAttribute('href', '/account');
+    // the name opens the account from the desktop header (unchanged) and «My details» from the phone menu
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByRole('link', { name: /Test User/ })).toHaveAttribute('href', '/account');
+    const menu = within(document.getElementById('app-menu')!);
+    expect(menu.getByRole('link', { name: /Test User/ })).toHaveAttribute('href', '/account/profile');
+  });
+
+  it('puts the person, the language switch and Sign out into the menu for a phone', () => {
+    renderWithApp(<Layout />);
+    const menu = document.getElementById('app-menu')!;
+    const inMenu = within(menu);
+    expect(inMenu.getByRole('link', { name: /Test User/ })).toHaveAttribute('href', '/account/profile');
+    expect(inMenu.getByRole('group', { name: 'Language' })).toBeInTheDocument();
+    expect(inMenu.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    const menuButton = screen.getByRole('button', { name: 'Menu' });
+    expect(menuButton).toHaveAttribute('aria-controls', 'app-menu');
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('puts Plots first in the menu', () => {
@@ -192,7 +208,7 @@ describe('Layout', () => {
     const inHeader = groups.find((g) => g.closest('header'))!;
     const inMenu = groups.find((g) => g.closest('#app-menu'))!;
     expect(inHeader.parentElement).toHaveClass('hidden', 'md:flex');
-    expect(inMenu.parentElement).toHaveClass('md:hidden');
+    expect(inMenu.closest('.md\\:hidden')).not.toBeNull();
   });
 
   it('shows Meters in the menu only with METERS_VIEW', () => {

@@ -97,6 +97,8 @@ system with its one-time set-password link:
 | `GET /me/push/devices` | `listMyPushDevices` | signed-in member (itself) |
 | `POST /me/push/devices` | `registerMyPushDevice` | signed-in member (itself) |
 | `DELETE /me/push/devices/{id}` | `deleteMyPushDevice` | signed-in member (itself) |
+| `GET /me/announcements` | `listMyAnnouncements` | signed-in member (itself) |
+| `POST /me/announcements/{id}/read` | `markMyAnnouncementRead` | signed-in member (itself) |
 | `POST /billing-months/{month}/invoices/send?preview=` | `sendMonthInvoices` | `INVOICES_ISSUE` |
 | `POST /invoices/{id}/send` | `sendInvoice` | `INVOICES_ISSUE` |
 | `GET /deliveries?month&kind&status&channel&page&size` | `listDeliveries` | `INVOICES_ISSUE` |
@@ -343,7 +345,10 @@ transaction.
   prefers e-mail but whose only reachable chosen channel is Telegram gets Telegram. With both channels chosen this is
   the rule of invoices, except that a member who prefers e-mail but has none gets Telegram when linked.
 - **Preview** (`preview=true`): the counts per channel and the members on paper ("Last First", Ukrainian alphabetical
-  order) to inform in person; nothing is written.
+  order) to inform in person; nothing is written. The preview and the send also answer `pushMembers` (feature 021
+  follow-up): how many of the recipients (every channel, paper included, the same members `AnnouncementPushes` pushes
+  to) have at least one device made with the current VAPID key pair (`PushDevices.membersWithPush`, 0 while push is
+  off). Push is a signal, not a channel: the counts and the paper list do not change.
 - **Send:** one transaction saves the `announcement` row (the text as user content, not sealed; `audience`
   `{"streets": [...]}`; `channels` the chosen ones; `created_by` the caller) and one `delivery` row per member
   (`ANNOUNCEMENT`, no billing month): e-mail and Telegram `QUEUED`, paper **`TO_PRINT`** — the announcement keeps its
@@ -362,6 +367,25 @@ transaction.
 - **List and detail:** the list (newest first) has the date, the author ("Last First"), the streets, the channels and
   the counts now: `sent`, `failed`, `queued` (Telegram and e-mail rows by status) and `paper`; the detail adds the text
   and a page of its deliveries in the shape of `listDeliveries`. 404 `NOT_FOUND` for another cooperative's.
+
+## The member's announcements (`MemberAnnouncements`, `announcement_read`, V40, feature 021 follow-up)
+
+- **List** (`GET /me/announcements`): the announcements the signed-in member received (`AnnouncementReads`: a
+  `delivery` row of kind `ANNOUNCEMENT` to them exists, any channel, paper included: the same recipients as
+  `DeliveryRows.announcementRecipients` and the push), sent in the last 12 months (`ZonedDateTime.now(clock)` minus 12
+  months, Europe/Kyiv), newest first, each with its id, `sentAt`, the full text as entered and `unread`. An
+  announcement has no title. A member who received nothing gets an empty list.
+- **Opened** (`POST /me/announcements/{id}/read`, 204): one `announcement_read` row per cooperative, announcement and
+  member, written with `INSERT … ON CONFLICT DO NOTHING`, so a second call changes nothing and the first time is kept.
+  An announcement the member did not receive (another member's street, another cooperative's, an unknown id) is 404
+  `NOT_FOUND`; an older one the member did receive may still be marked (an old link). Not audited: the member's own
+  reading state, not an admin change. The platform operator gets 403 `PERMISSION_DENIED`.
+- **Table** `announcement_read` (V40): `tenant_id`, `announcement_id`, `member_id`, `read_at`; primary key
+  `(tenant_id, announcement_id, member_id)`, composite keys to `announcement` and `member` with `ON DELETE CASCADE`
+  (a mark is derived data, so the demo wipe of the announcements takes it along), an index on `tenant_id`, RLS with
+  the `tenant_isolation` policy; `nadel_app` keeps `SELECT` and `INSERT` only.
+- **The push** `ANNOUNCEMENT` opens `/account#announcement-<id>` (below), the account's list with that announcement in
+  view.
 
 ## Push on the member's devices (feature 021 §2.2, `internal.push`, ADR 0021)
 
@@ -409,6 +433,9 @@ the in-memory pattern of `ReadingMessages` (a push queued while the push service
 - **Payload** (`PushPayload`, `PushCode`): `{"v":1,"code":"INVOICES_ISSUED","params":{"month":"2026-10"},
   "url":"/account#my-invoices","lang":"uk"}`; the parameters are exactly those of the code, each of a known shape
   (`month` `YYYY-MM`), anything else is refused, so a message never carries an amount, a plot, a name or an address.
+  The `url` of a code about one thing is a template with `{ref}` (`PushCode.url(ref)`), filled with the job's
+  reference, which must then be a canonical lower-case UUID (anything else is refused, `NOT_SENDABLE`): an
+  announcement's id is not personal data.
   `lang` is the device's language (`uk`/`en`); the service worker writes the text from its catalogs. The codes, their
   parameters and the screen a tap opens:
 
@@ -417,7 +444,7 @@ the in-memory pattern of `ReadingMessages` (a push queued while the push service
   | `INVOICES_ISSUED` | `month` | `/account#my-invoices` | current owners of the plots with a new invoice version (`documents.InvoicesIssued`) |
   | `PAYMENT_RECORDED` | — | `/account#my-charges` | the payer of each payment, while `notify_payments` is on (`ledger.PaymentRecorded`) |
   | `READING_APPROVED`, `READING_REJECTED` | — | `/account#my-meters` | the member who submitted the reading (`meters.ReadingDecided`) |
-  | `ANNOUNCEMENT` | — | `/account` | members with a delivery row of the announcement, paper included (`AnnouncementSent`) |
+  | `ANNOUNCEMENT` | — | `/account#announcement-<id>` | members with a delivery row of the announcement, paper included (`AnnouncementSent`) |
   | `READINGS_TO_APPROVE` | — | `/readings/approvals` | active holders of `READINGS_APPROVE` (the chairman included), not the submitter; at most one per rolling hour; TTL 1 h; `Topic: readings-approvals` (`meters.ReadingSubmitted`) |
 
   A code may have its own time to live (`PushCode.ttl`, else `nadel.webpush.ttl`), which is both the `TTL` header and
@@ -556,7 +583,11 @@ this module's services, it writes only what is missing:
 - the deliveries of the cooperative's first billing month (the closed month whose invoices `DemoDocuments` builds),
   as a default send would plan them (invoices with something due, every current owner, the channel rule), written
   directly as `SENT` (one attempt) or `TO_PRINT`. Nothing is queued or sent, so a start never floods Mailpit or the
-  fake server.
+  fake server;
+- two announcements of the demo chairman (feature 021 follow-up), sent 20 and 2 days ago to every active member through
+  e-mail and Telegram by the announcement rule, their deliveries written directly as `SENT` or `TO_PRINT` (nothing sent,
+  no push); `member@demo.local` has opened the older one, so the account shows one new and one read announcement. Only
+  while the cooperative has no announcement at all.
 
 The second demo cooperative stays unconfigured. The demo ledger block of `R__demo_data.sql` deletes the demo
 cooperative's rows of all seven tables (deliveries first, they point at invoices and payments) whenever it re-runs, and
@@ -648,7 +679,13 @@ pushes nothing, an hour later a new value pushes again, the board's entry never;
 throttle once; an announcement reaches its e-mail and paper recipients, not an archived member; archive and disabled
 access delete every device of the member and nothing further arrives; a job queued before the member left sends
 nothing; redelivered events queue nothing; the logs carry no endpoint, key or name), `PushJobTests` (JobRunr's server on: the job a build queues delivers the push), and
-`PushTenantIsolationTests` (V39). `app.nadel.notifications.FakePushService` (test sources) is an in-JVM push service
+`PushTenantIsolationTests` (V39). Feature 021 follow-up: `MyAnnouncementsTests` (the member's received announcements
+newest first with the text and `unread`; opening is idempotent and keeps the first time; another street, another
+cooperative and an unknown id are 404 and not listed; older than 12 months not listed; the operator 403, anonymous
+401), `AnnouncementReadTenantIsolationTests` (V40: RLS, policy, tenant index, insert-only grants, composite keys),
+`PushEventsTests` (the announcement form's `pushMembers` counts the recipients with a device of the current key pair;
+the push opens `/account#announcement-<id>`), `PushOffTests` (`pushMembers` 0 while push is off), `PushPayloadTests`
+(the reference in a path is a UUID only) and `DemoNotificationsTests` (the two demo announcements, one opened). `app.nadel.notifications.FakePushService` (test sources) is an in-JVM push service
 on a random loopback port that every Spring test context allows as `nadel.webpush.extra-allowed-origins`
 (`IntegrationTest`, which also sets a random VAPID pair per JVM; `nadel.test.push-public-key=` turns push off); it keeps
 headers and raw bodies, answers 410 for a gone id and a given status a number of times.

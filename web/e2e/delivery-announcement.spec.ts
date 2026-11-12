@@ -80,6 +80,8 @@ test.describe('announcements', () => {
       await chairman.getByRole('button', { name: t.announcements.form.preview, exact: true }).click();
       await expect(chairman.getByRole('heading', { name: t.announcements.form.previewTitle })).toBeVisible();
       await expect(chairman.getByText('Telegram: 1, e-mail: 0, on paper: 1')).toBeVisible();
+      // the phone-notification line (feature 021): the count depends on the devices the demo members registered
+      await expect(chairman.getByText(/^Also a phone notification: \d+ (person|people)$/)).toBeVisible();
       await expect(chairman.getByRole('list').getByText(paper.name, { exact: true })).toBeVisible();
 
       // sent: the announcement page opens with the text; the linked owner has it in Telegram

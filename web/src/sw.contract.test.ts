@@ -49,7 +49,7 @@ describe('sw.ts contract', () => {
   it('keeps the API, Keycloak and files out of the navigation fallback', () => {
     expect(source).toContain('denylist');
     expect(source).toContain('/^\\/api\\//');
-    expect(source).toContain('/^\\/realms\\//');
+    expect(source).toContain('keycloakDenylist(keycloakPathPrefixes(__OIDC_AUTHORITY__');
     expect(source).toContain('/\\/[^/?]+\\.[^/]+$/');
   });
 

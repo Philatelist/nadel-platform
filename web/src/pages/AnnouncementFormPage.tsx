@@ -11,7 +11,7 @@ import { useDirtyGuard } from '../pwa/dirtyForms';
 import { Link, useNavigate } from 'react-router';
 import { UserContent } from '../components/UserContent';
 import { Button, Notice, PageHeader, Panel, RadioGroup, TextArea } from '../components/ui';
-import { useT } from '../i18n';
+import { useLocale, useT } from '../i18n';
 import { problemMessage } from '../problem';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -27,6 +27,7 @@ export function countCharacters(text: string): number {
 /** Compose an announcement; it can be sent only after a preview of exactly what is on the form. */
 export function AnnouncementFormPage() {
   const t = useT();
+  const { locale } = useLocale();
   const a = t.announcements;
   const f = a.form;
   useDocumentTitle(f.title);
@@ -178,6 +179,17 @@ export function AnnouncementFormPage() {
             <section className="flex flex-col gap-2 rounded-control border border-line p-3">
               <h2 className="font-semibold">{f.previewTitle}</h2>
               <p>{format(f.previewCounts, { ...preview.counts })}</p>
+              <p>
+                {format(
+                  f.previewPush[
+                    new Intl.PluralRules(locale).select(preview.pushMembers) as
+                      'one' | 'few' | 'many' | 'other'
+                  ],
+                  {
+                    count: preview.pushMembers,
+                  },
+                )}
+              </p>
               {preview.paperMembers.length === 0 ? (
                 <p className="text-ink-muted">{f.paperNone}</p>
               ) : (

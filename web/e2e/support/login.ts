@@ -45,5 +45,11 @@ export async function loginAs(page: Page, email: string, options: LoginOptions =
 
   await page.waitForURL('http://localhost:5173/**');
   if (!options.skipNavigationWait)
-    await expect(page.getByRole('banner').getByRole('button', { name: /^(Sign out|Вийти)$/ })).toBeVisible();
+    // desktop shows Sign out in the header; below md it is inside the menu and the header holds the Menu button
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('button', { name: /^(Sign out|Вийти)$/ })
+        .or(page.getByRole('banner').getByRole('button', { name: /^(Menu|Меню)$/ })),
+    ).toBeVisible();
 }

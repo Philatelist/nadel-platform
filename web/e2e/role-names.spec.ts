@@ -158,7 +158,7 @@ test.describe('Role names in Ukrainian', () => {
       // the treasurer's header and account page
       treasurerPage = await ukrainianPage(browser, 'treasurer@demo.local');
       await expect(treasurerPage.getByRole('banner')).toContainText('Бухгалтер');
-      await treasurerPage.goto('/account');
+      await treasurerPage.goto('/account/profile'); // the roles of a board user are on «My details»
       await expect(treasurerPage.getByRole('listitem').filter({ hasText: /^Бухгалтер$/ })).toBeVisible();
       await expect(treasurerPage.getByRole('main')).not.toContainText('Казначей');
 

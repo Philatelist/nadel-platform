@@ -53,6 +53,7 @@ export const uk: Messages = {
     iosTitle: 'Встановлення на iPhone',
     iosSteps: 'Поділитися → На початковий екран',
     dismiss: 'Не показувати',
+    howToInstall: 'Як встановити на телефон',
   },
   state: {
     loading: 'Завантаження…',
@@ -74,6 +75,7 @@ export const uk: Messages = {
     permissions: 'Що вам дозволено',
     noPermissions: 'Ваші ролі не дають додаткових дозволів. Ви бачите лише свої дані.',
     details: 'Мої дані',
+    backToAccount: 'До мого кабінету',
   },
   notifications: {
     title: 'Сповіщення',
@@ -1540,6 +1542,10 @@ export const uk: Messages = {
       submitText: 'Показ буде враховано після підтвердження правлінням.',
       submitted: 'Показ передано, він очікує підтвердження',
       meterOfPlot: 'Ділянка {number}',
+      previousReading: 'Попередній показ: {value} {unit} на {date} ({status})',
+      pendingReading: 'На підтвердженні: {value} {unit} на {date}',
+      confirmAnyway: 'Все одно передати',
+      correctValue: 'Виправити показ',
     },
     photo: {
       add: 'Додати фото лічильника',
@@ -2886,6 +2892,7 @@ export const uk: Messages = {
   announcements: {
     title: 'Оголошення',
     newAnnouncement: 'Нове оголошення',
+    my: { new: 'Нове', empty: 'Від правління поки немає оголошень.' },
     empty: 'Оголошень ще не було.',
     allMembers: 'Усі члени',
     columns: {
@@ -2914,6 +2921,12 @@ export const uk: Messages = {
       preview: 'Попередній перегляд',
       previewTitle: 'Кому піде оголошення',
       previewCounts: 'Telegram: {telegram}, електронна пошта: {email}, на папері: {paper}',
+      previewPush: {
+        one: 'Також сповіщення на телефон: {count} особа',
+        few: 'Також сповіщення на телефон: {count} особи',
+        many: 'Також сповіщення на телефон: {count} осіб',
+        other: 'Також сповіщення на телефон: {count} особи',
+      },
       paperTitle: 'На папері (повідомте особисто)',
       paperNone: 'Усі члени отримають оголошення в обраних каналах.',
       send: 'Надіслати',

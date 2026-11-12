@@ -1,17 +1,12 @@
-import { useGetMember, type Permission } from '@nadel/api-client';
+import { Link } from 'react-router';
 import { useLocale, useT } from '../i18n';
-import { QueryBoundary } from '../components/QueryBoundary';
+import { PageHeader } from '../components/ui';
 import { MyPlotsPanel } from '../components/ownership/MyPlotsPanel';
+import { MyAnnouncementsPanel } from '../components/announcements/MyAnnouncementsPanel';
 import { MyMetersPanel } from '../components/readings/MyMetersPanel';
 import { MyInvoices } from '../components/invoices/MyInvoices';
-import { NotificationsPanel } from '../components/account/NotificationsPanel';
 import { MyChargesPanel } from '../components/charges/MyChargesPanel';
 import { MyExpectedChargesPanel } from '../components/tariffs/MyExpectedChargesPanel';
-import { MemberDetails } from '../components/MemberDetails';
-import { Badge, PageHeader, Panel } from '../components/ui';
-import { useMe } from '../me';
-import { RoleName } from '../components/RoleName';
-import { UserContent } from '../components/UserContent';
 import { InstallCard } from '../pwa/InstallCard';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { useScrollToHash } from '../hooks/useScrollToHash';
@@ -21,10 +16,6 @@ export function AccountPage() {
   useDocumentTitle(t.account.title);
   useScrollToHash();
   const { locale } = useLocale();
-  const me = useMe();
-  // memberId is always present for a non-operator; the operator never reaches this page
-  const member = useGetMember(me.memberId ?? '', { query: { enabled: me.memberId !== undefined } });
-  const permissions: readonly Permission[] = me.permissions;
 
   return (
     <div className="flex flex-col gap-4 text-base" lang={locale}>
@@ -32,47 +23,20 @@ export function AccountPage() {
 
       <InstallCard />
 
-      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-        <section className="flex min-w-0 flex-col gap-3">
-          <QueryBoundary query={member}>
-            {(data) => <MemberDetails member={data} title={t.account.details} large />}
-          </QueryBoundary>
-        </section>
+      {/* What the member uses first: what is owed, then meters. Personal data lives on «My details». */}
+      <Link
+        to="/account/profile"
+        className="inline-flex min-h-11 items-center self-start text-[15px] text-accent underline"
+      >
+        {t.account.details}
+      </Link>
 
-        <Panel title={t.account.roles}>
-          <ul className="flex flex-wrap gap-2">
-            {me.roles.map((role) => (
-              <li key={role.id}>
-                <Badge tone="success">
-                  <RoleName role={role} />
-                </Badge>
-              </li>
-            ))}
-          </ul>
-          <h2 className="text-[17px] font-semibold text-ink">{t.account.cooperative}</h2>
-          <p>{me.tenant?.name && <UserContent>{me.tenant.name}</UserContent>}</p>
-          <h2 className="text-[17px] font-semibold text-ink">{t.account.permissions}</h2>
-          {permissions.length === 0 ? (
-            <p className="text-ink-muted">{t.account.noPermissions}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {permissions.map((p) => (
-                <li key={p} className="rounded-control border border-line bg-surface px-4 py-2">
-                  <div className="font-medium">{t.permission[p].name}</div>
-                  <div className="text-sm text-ink-muted">{t.permission[p].description}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
-
-      <MyPlotsPanel />
-      <MyMetersPanel />
-      <MyInvoices />
-      <NotificationsPanel />
       <MyChargesPanel />
+      <MyInvoices />
       <MyExpectedChargesPanel />
+      <MyMetersPanel />
+      <MyAnnouncementsPanel />
+      <MyPlotsPanel />
     </div>
   );
 }

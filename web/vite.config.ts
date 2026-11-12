@@ -2,13 +2,15 @@ import tailwindcss from '@tailwindcss/vite';
 import { palette } from '@nadel/ui-tokens';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { helpPlugin } from './help/vitePlugin.ts';
+import { keycloakAuthProxy } from './keycloakAuthProxy.ts';
 
 // The same API proxy serves `vite dev` and `vite preview` (the PWA e2e runs the production build on the preview server).
 const apiProxy = { '/api': 'http://localhost:8080' };
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
@@ -52,6 +54,10 @@ export default defineConfig({
   },
   define: {
     __BUILD_ID__: JSON.stringify(process.env.NADEL_BUILD_ID ?? 'dev'),
+    // the service worker keeps Keycloak's same-origin path (the stand serves it under /auth/) out of the app shell route
+    __OIDC_AUTHORITY__: JSON.stringify(
+      process.env.VITE_OIDC_AUTHORITY ?? loadEnv(mode, process.cwd(), 'VITE_').VITE_OIDC_AUTHORITY ?? '',
+    ),
   },
   server: {
     port: 5173,
@@ -61,6 +67,6 @@ export default defineConfig({
   preview: {
     port: 5173,
     strictPort: true,
-    proxy: apiProxy,
+    proxy: process.env.NADEL_E2E_KEYCLOAK_UNDER_AUTH ? { ...apiProxy, ...keycloakAuthProxy() } : apiProxy,
   },
-});
+}));

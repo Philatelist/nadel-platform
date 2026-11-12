@@ -163,10 +163,18 @@ async function reversePayments(chairman: Page, plotId: string): Promise<void> {
       );
 }
 
-/** The payload has no amount, plot number, name, address or free text: the only digits are a month and the version. */
+/**
+ * The payload has no amount, plot number, name, address or free text: the only digits are a month, the version and
+ * the id of an announcement in its link.
+ */
 function expectNothingPersonal(payload: Record<string, unknown>, forbidden: string[]): void {
   const json = JSON.stringify(payload);
-  expect(json.replace(/"v":\d+/, '').replace(/\d{4}-\d{2}/, '')).not.toMatch(/\d/);
+  expect(
+    json
+      .replace(/#announcement-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, '')
+      .replace(/"v":\d+/, '')
+      .replace(/\d{4}-\d{2}/, ''),
+  ).not.toMatch(/\d/);
   for (const word of forbidden) if (word.length > 0) expect(json).not.toContain(word);
 }
 
@@ -311,11 +319,13 @@ test.describe('the other pushes and removal on leaving', () => {
       channels: ['EMAIL'],
     });
     expect([200, 201]).toContain(sent.status);
+    const { announcementId } = JSON.parse(sent.body) as { announcementId: string };
 
     const [message] = await pushesOf(device, 1);
     const payload = decryptJson(message as FakeReceived, device.keys);
     expect(payload['code']).toBe('ANNOUNCEMENT');
-    expect(String(payload['url'])).toBe('/account');
+    // it opens the announcement in the member's account, by its id only
+    expect(String(payload['url'])).toBe(`/account#announcement-${announcementId}`);
     expectNothingPersonal(payload, [...memberNames, own.plot.number, street, text, 'Збори']);
   });
 

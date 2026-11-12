@@ -56,6 +56,9 @@ class PushEventsTests extends PushTestSupport {
     AnnouncementPushes announcementPushes;
 
     @Autowired
+    PushDevices pushDevices;
+
+    @Autowired
     RevokedAccessDevices revokedAccessDevices;
 
     @Autowired
@@ -318,10 +321,25 @@ class PushEventsTests extends PushTestSupport {
         register(borys, borysPhone, "en");
         register(archived, archivedPhone, "uk");
         ownerJdbc().update("update member set archived_at = now() where id = ?", archivedId);
+        // a member whose only device was made with another key pair receives nothing, so it is not counted
+        member("Віра");
+        ownerJdbc().update("insert into push_subscription (id, tenant_id, member_id, endpoint_enc, p256dh_enc, "
+                + "auth_enc, endpoint_index, server_key_id, language) values (gen_random_uuid(), ?, ?, '\\x01', "
+                + "'\\x02', '\\x03', sha256(?::bytea), '\\x0102030405060708', 'uk')", tenant, lastPerson,
+                lastPerson.toString().getBytes());
+
+        // the form says who also gets the push: Анна (e-mail) and Борис (paper), not a channel of its own
+        JsonNode preview = body(send(chairman, post("/api/v1/announcements?preview=true"), Map.of("text",
+                "Збори в неділю", "streets", List.of(), "channels", List.of("EMAIL"))).andExpect(status().isOk()));
+        assertThat(preview.get("pushMembers").asInt()).isEqualTo(2);
+        assertThat(pushDevices.membersWithPush(List.of())).isZero();
+        assertThat(preview.get("counts").get("email").asInt()).isEqualTo(1);
+        assertThat(preview.get("paperMembers")).hasSize(preview.get("counts").get("paper").asInt());
 
         JsonNode sent = body(send(chairman, post("/api/v1/announcements?preview=false"), Map.of("text",
                 "Збори в неділю", "streets", List.of(), "channels", List.of("EMAIL"))).andExpect(status().isOk()));
         UUID announcement = UUID.fromString(sent.get("announcementId").asString());
+        assertThat(sent.get("pushMembers").asInt()).isEqualTo(2);
 
         Map<UUID, String> channels = new LinkedHashMap<>();
         ownerJdbc().queryForList("select member_id, channel from delivery where tenant_id = ? and announcement_id = ?",
@@ -335,8 +353,10 @@ class PushEventsTests extends PushTestSupport {
             assertThat(job.ref()).isEqualTo(announcement.toString());
         });
         assertThat(runQueuedPushes()).containsOnly("DELIVERED").hasSize(2);
-        assertThat(annaPhone.decrypt(only(annaPhone).body())).isEqualTo(expected("ANNOUNCEMENT", "/account", "uk"));
-        assertThat(borysPhone.decrypt(only(borysPhone).body())).isEqualTo(expected("ANNOUNCEMENT", "/account", "en"));
+        // a tap opens that announcement in the member account
+        String opens = "/account#announcement-" + announcement;
+        assertThat(annaPhone.decrypt(only(annaPhone).body())).isEqualTo(expected("ANNOUNCEMENT", opens, "uk"));
+        assertThat(borysPhone.decrypt(only(borysPhone).body())).isEqualTo(expected("ANNOUNCEMENT", opens, "en"));
         assertThat(pushService.received(archivedPhone.id())).isEmpty();
 
         announcementPushes.queue(new AnnouncementSent(tenant, announcement));

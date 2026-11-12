@@ -21,4 +21,9 @@ export interface AnnouncementSendResult {
   counts: DeliveryCounts;
   /** The members no chosen channel reaches («на папері»), to inform in person */
   paperMembers: AnnouncementPaperMember[];
+  /**
+     * How many of the recipients (every channel, paper included) have at least one device with push on and so also get the push «Нове оголошення від правління»; 0 while push is off on the server. Not a channel: the counts and the paper list stay as they are
+     * @minimum 0
+     */
+  pushMembers: number;
 }

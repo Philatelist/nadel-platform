@@ -7,6 +7,7 @@ import app.nadel.problem.ProblemCodes;
 import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -107,6 +108,18 @@ public class PushDevices {
                 registration.language(), keys.serverKeyId());
         log.info("Push device saved for member {} of cooperative {}", memberId, me.tenantId());
         return toDevice(saved);
+    }
+
+    /**
+     * How many of the members would get a push now: those with at least one device made with the current key pair; 0
+     * while push is off. For the announcement form (feature 021 follow-up); runs in the caller's transaction of the
+     * bound cooperative.
+     */
+    public int membersWithPush(Collection<UUID> memberIds) {
+        if (!keys.enabled()) {
+            return 0;
+        }
+        return subscriptions.membersWithDevices(memberIds, keys.serverKeyId());
     }
 
     /** Deletes the member's device; 404 {@code NOT_FOUND} when the member has none with the id. */

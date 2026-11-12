@@ -325,7 +325,8 @@ test.describe('a reading with a photo', () => {
           buffer: Buffer.from('this is plain text, not a picture'),
         });
         const refused = member.waitForResponse(
-          (r) => r.url().includes('/reading-submissions') && r.request().method() === 'POST',
+          (r) =>
+            new URL(r.url()).pathname.endsWith('/reading-submissions') && r.request().method() === 'POST',
         );
         await dialog.getByRole('button', { name: t.readings.mine.submit, exact: true }).click();
         const response = await refused;

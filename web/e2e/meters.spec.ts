@@ -15,7 +15,10 @@ import {
   shortDay,
   type CreatedPlot,
 } from './support/api';
+import { messages } from '@nadel/shared';
 import { loginAs } from './support/login';
+
+const t = messages('en');
 
 const main = (page: Page) => page.getByRole('main');
 const menuLink = (page: Page, name: string) =>
@@ -217,6 +220,53 @@ test.describe('meters and readings', () => {
         200,
       );
       expect(history.readings.map((r) => r.status)).toEqual(['APPROVED']);
+    } finally {
+      await cleanup(page, fixture ? [fixture] : []);
+    }
+  });
+
+  test('the submit dialog shows the previous reading and warns about an unusual jump before submitting', async ({
+    page,
+    browser,
+  }) => {
+    const stamp = Date.now().toString(36);
+    let fixture: Fixture | undefined;
+    await loginAs(page, 'chairman@demo.local');
+    try {
+      fixture = await createFixture(page, `${stamp}j`, await memberIdOf(browser));
+      // a normal earlier interval (100 -> 110 kWh in 20 days) makes a jump to 12331 unusual
+      expectCreated(
+        await api(page, 'POST', '/readings', {
+          rows: [{ meterId: fixture.meterId, takenOn: kyivDay(-10), value: '110' }],
+        }),
+        200,
+      );
+      const member = await signedInPage(browser, 'member@demo.local');
+      try {
+        await member.goto('/account');
+        const meterCard = main(member)
+          .locator('section[aria-labelledby="my-meters"]')
+          .getByRole('listitem')
+          .filter({ hasText: fixture.serial })
+          .first();
+        await meterCard.getByRole('button', { name: 'Submit a reading', exact: true }).click();
+        const dialog = member.getByRole('dialog');
+        await expect(dialog).toContainText(`Previous reading: 110 kWh on ${shortDay(kyivDay(-10))}`);
+        await dialog.getByLabel('Reading, kWh', { exact: true }).fill('12331');
+        await dialog.getByRole('button', { name: 'Submit a reading', exact: true }).click();
+        await expect(dialog.getByText(t.readings.warnings.UNUSUAL_CONSUMPTION)).toBeVisible();
+        // nothing was submitted yet
+        const before = expectCreated<{ readings: unknown[] }>(
+          await api(page, 'GET', `/meters/${fixture.meterId}/readings`),
+          200,
+        );
+        expect(before.readings.filter((r) => (r as { status: string }).status === 'PENDING')).toHaveLength(0);
+        await dialog.getByRole('button', { name: t.readings.mine.confirmAnyway, exact: true }).click();
+        await expect(member.getByRole('dialog')).toHaveCount(0);
+        await expect(meterCard.getByText('pending', { exact: true })).toBeVisible();
+      } finally {
+        await member.context().close();
+      }
     } finally {
       await cleanup(page, fixture ? [fixture] : []);
     }

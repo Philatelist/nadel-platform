@@ -19,13 +19,14 @@ Open the address of the system given by the board and press {{ui:auth.signIn}}. 
 
 ## Your home page
 
-After signing in you land on "{{ui:nav.account}}". It is your home screen and the first menu item; the logo in the header always returns here. Everything a member needs is on this screen: your plots, charges and payments, meters, invoices and notifications. The list of all the cooperative's plots is not shown to members. You open the card of your plot from the account by pressing its number, and the "{{ui:plot.backToAccount}}" link returns. In detail: [My account](help:account).
+After signing in you land on "{{ui:nav.account}}". It is your home screen and the first menu item; the logo in the header always returns here. Everything a member needs is on this screen: your charges and payments, invoices, meters and plots. Your personal data, Telegram and notifications on the device are on the "{{ui:account.details}}" screen, opened by your name in the menu or by the link in the account ([My details](help:profile)). The list of all the cooperative's plots is not shown to members. You open the card of your plot from the account by pressing its number, and the "{{ui:plot.backToAccount}}" link returns. In detail: [My account](help:account).
 
 ## What you can do
 
 - Submit a meter reading: in the {{ui:readings.mine.title}} block press {{ui:readings.mine.submit}}. The board checks the reading. Step by step: [How to submit a meter reading](help:member-readings).
 - Get an invoice: in the {{ui:invoices.myTitle}} block press {{ui:invoices.download}}. How to read an invoice: [How to read my invoice](help:member-bill). The reconciliation act and other documents: [Documents for a member](help:member-documents).
-- Connect Telegram so that invoices arrive in the messenger: the {{ui:telegramLink.connect}} button in the account. Step by step: [How to connect Telegram](help:member-telegram).
+- Read the board's announcements: the "{{ui:announcements.title}}" block in the account, a new one has a "New" mark.
+- Connect Telegram so that invoices arrive in the messenger: the {{ui:telegramLink.connect}} button on the [My details](help:profile) screen. Step by step: [How to connect Telegram](help:member-telegram).
 - Install Nadel on your phone and get notifications on the device: [Install on your phone](help:member-install) and [Notifications on your phone](help:member-push).
 
 You see only your own data. The system does not show other people's plots, amounts or owners.

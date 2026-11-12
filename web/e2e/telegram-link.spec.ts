@@ -64,7 +64,7 @@ test.describe('linking Telegram', () => {
       const { closed } = await demoMonths(chairman);
 
       // «Connect Telegram» gives a personal link of the cooperative's bot
-      await member.goto('/account');
+      await member.goto('/account/profile');
       const panel = member.getByRole('region', { name: t.notifications.title });
       await expect(panel).toBeVisible();
       await expect(panel.getByText(t.telegramLink.connected, { exact: true })).toHaveCount(0);

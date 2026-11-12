@@ -103,10 +103,11 @@ e2e: infra infra/.env ## End-to-end specs: starts infra, backend jar and web, ru
 	pnpm --filter web test:e2e
 
 # Same stack as `e2e`, but the web is the production build served by `vite preview` on 5173 (service worker and manifest
-# exist only in a build). Runs web/playwright.pwa.config.ts (web/e2e/pwa). Needs JDK 25; ports 8080 and 5173 must be free. Not part of `check`.
+# exist only in a build). Keycloak is also served on :5173 under /auth/ (as on the stand), and the build points at it, so the
+# specs prove sign-in and sign-out with the service worker in control. Runs web/playwright.pwa.config.ts (web/e2e/pwa). Needs JDK 25; ports 8080 and 5173 must be free. Not part of `check`.
 e2e-pwa: infra infra/.env ## PWA end-to-end specs: backend jar + production web build on `vite preview`, runs Playwright (NADEL_DB_PORT=5433 for another DB port)
 	cd backend && ./mvnw -B -q -DskipTests package
-	pnpm --filter web exec vite build
+	VITE_OIDC_AUTHORITY=http://localhost:5173/auth/realms/nadel pnpm --filter web exec vite build
 	@set -e -m; mkdir -p backend/target; \
 	pids=""; \
 	psql_su() { docker compose -f infra/docker-compose.yml exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 "$$@"; }; \
@@ -128,13 +129,14 @@ e2e-pwa: infra infra/.env ## PWA end-to-end specs: backend jar + production web 
 	NADEL_INVITATIONS_RATE_LIMIT_MAX_REQUESTS=1000 \
 	NADEL_INVITATIONS_RATE_LIMIT_MAX_SENDS_PER_ADDRESS=1000 \
 	java -jar backend/target/nadel-backend-*-SNAPSHOT.jar > backend/target/e2e-backend.log 2>&1 & pids="$$pids $$!"; \
-	pnpm --filter web exec vite preview > backend/target/e2e-web.log 2>&1 & pids="$$pids $$!"; \
+	NADEL_E2E_KEYCLOAK_UNDER_AUTH=1 pnpm --filter web exec vite preview > backend/target/e2e-web.log 2>&1 & pids="$$pids $$!"; \
 	wait_for() { for i in $$(seq 1 90); do \
 	  curl -sf -o /dev/null "$$2" && return 0; sleep 2; done; \
 	  echo "timeout waiting for $$1 ($$2); see backend/target/e2e-*.log"; return 1; }; \
 	wait_for keycloak http://localhost:8180/realms/nadel/.well-known/openid-configuration; \
 	wait_for backend http://localhost:8080/actuator/health/readiness; \
 	wait_for web http://localhost:5173/; \
+	wait_for keycloak-under-auth http://localhost:5173/auth/realms/nadel/.well-known/openid-configuration; \
 	pnpm --filter web exec playwright test -c playwright.pwa.config.ts
 
 check: gen format-check lint test stand-test ## Everything CI runs: contract, format, lint, tests

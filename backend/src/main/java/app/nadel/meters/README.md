@@ -264,12 +264,13 @@ meter card is complete. A refused replacement writes nothing.
 
 ## The member flow (slice 4)
 
-Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `approve`, `reject`).
+Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `check`, `approve`, `reject`).
 
 | Endpoint | Operation | Who |
 |---|---|---|
 | `POST /plots/{id}/reading-submissions` (multipart: part `reading` JSON, optional part `photo`) | `submitPlotReadingWithPhoto` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
 | `POST /plots/{id}/readings` (JSON) | `submitPlotReading`, deprecated (feature 021), still served for installed apps that have not updated: the same submission without a photo | as above |
+| `POST /plots/{id}/reading-submissions/check` (JSON `ReadingSubmission`) | `checkPlotReading` (feature 021 follow-up): what the submission would meet, nothing saved | as `submitPlotReadingWithPhoto` |
 | `GET /readings/{id}/photo` | `getReadingPhoto`: see Photos of readings | a current owner of the plot of the reading's meter, `READINGS_ENTER` or `READINGS_APPROVE`; anyone else 404, the platform operator 403 |
 | `GET /readings?status=PENDING` | `listReadings` | `READINGS_APPROVE`; the meter's `note` only with `METERS_VIEW` |
 | `POST /readings/{id}/approve` | `approveReading` | `READINGS_APPROVE` |
@@ -283,6 +284,19 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   pending one, so a wrong photo is replaced by submitting again). A pending reading never supersedes a counted one and never reaches the
   calculation: intervals, the register's `lastReading`, the round and range consumption read approved readings only.
   201 with `ReadingSaved` (no interval, the warnings it would carry).
+- **Check before submitting** (`ReadingCommands.check`, «Передати показ», feature 021 follow-up): the same owner rule,
+  meter rule (404 `NOT_FOUND` on `meterId`, 409 `METER_REMOVED`) and value parsing (400 `METER_VALUE_INVALID`) as the
+  submission, in a read-only transaction without a lock, an audit entry or an event; the photo rule is not checked. 200
+  `ReadingCheck`: `previous` (the counted point before the date, `ReadingValidator.neighbours`), `pending` (the newest
+  `PENDING` reading of the meter), then either `problem` (the `ReadingValidator.check` violation as a `ReadingRowError`
+  with its field and parameters, what the submission would answer with 409) or `interval`
+  (`ReadingValidator.intervalEndingAt`) and `warnings` (`ReadingValidator.warnings`: the one `UNUSUAL_CONSUMPTION` rule,
+  never duplicated in a client). The previous counted reading is also the register's `lastReading`
+  (`listPlotMeters`) and the readings with their statuses are in `listMeterReadings`; the check adds what neither has:
+  the verdict on the value typed. The rule needs history: a jump right after the installation has nothing to compare
+  with and is not warned about. Tests: `ReadingCheckTests` (the member's sample 2553.9 → 12331 warned, as the
+  submission of the same value is; an ordinary value with the pending reading shown; the three rule problems with their
+  parameters; the submission's 404s, 403, 400 and 409; nothing saved or audited).
 - **Approval** locks the meter, takes only a `PENDING` reading (else 409 `READING_STATUS_INVALID`), checks it again
   against the counted readings as they are now (`READING_DATE_OUTSIDE_METER`, `READING_OUT_OF_ORDER`), asks the
   `ReadingUsage` ports about the span around its date (`READING_IN_USE`), then supersedes a counted reading of the same

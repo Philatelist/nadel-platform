@@ -11,7 +11,7 @@ order: 50
 shots:
   - name: member-telegram-panel
     user: member
-    path: /account
+    path: /account/profile
     element: { heading: Notifications }
 ---
 
@@ -19,15 +19,15 @@ Telegram lets invoices come to you straight in the messenger. A bot cannot write
 
 The connect button is there only when your cooperative has a bot set up. If it is missing, ask the board.
 
-![The "Notifications" block in the account](shot:member-telegram-panel)
+![The "Notifications" block on the My details screen](shot:member-telegram-panel)
 
-## Way 1. From the account
+## Way 1. From the My details screen
 
-1. Open your [account](help:account), the {{ui:notifications.title}} block, and below it the {{ui:telegramLink.title}} block.
+1. Open [My details](help:profile), the {{ui:notifications.title}} block, and below it the {{ui:telegramLink.title}} block.
 2. Press {{ui:telegramLink.connect}}.
 3. The cooperative's bot opens with a one-time code. {{ui:telegramLink.hint}}
 4. The bot greets you by name and shows menu buttons.
-5. Go back to the account. It now says "{{ui:telegramLink.connected}}" and has the {{ui:telegramLink.disconnect}} button.
+5. Go back to the My details screen. It now says "{{ui:telegramLink.connected}}" and has the {{ui:telegramLink.disconnect}} button.
 
 ## Way 2. From a paper invoice
 
@@ -66,7 +66,7 @@ If the bot is opened in a chat that is not connected yet, it shows only the help
 
 ## How to disconnect Telegram
 
-In the account press {{ui:telegramLink.disconnect}} and confirm in the "{{ui:telegramLink.disconnectTitle}}" window. {{ui:telegramLink.disconnectMessage}}
+On the [My details](help:profile) screen press {{ui:telegramLink.disconnect}} and confirm in the "{{ui:telegramLink.disconnectTitle}}" window. {{ui:telegramLink.disconnectMessage}}
 
 ## Which channel the invoice comes by
 

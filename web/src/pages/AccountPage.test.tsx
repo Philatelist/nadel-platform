@@ -19,14 +19,12 @@ vi.mock('../me', () => ({
 vi.mock('../roleName', () => ({ useRoleName: () => () => '' }));
 vi.mock('../components/ownership/MyPlotsPanel', () => ({ MyPlotsPanel: () => <p>my plots</p> }));
 vi.mock('../components/readings/MyMetersPanel', () => ({ MyMetersPanel: () => <p>my meters</p> }));
-vi.mock('../components/invoices/MyInvoices', () => ({ MyInvoices: () => <p>my invoices</p> }));
-vi.mock('../components/account/NotificationsPanel', () => ({
-  NotificationsPanel: () => <p>notifications</p>,
+vi.mock('../components/announcements/MyAnnouncementsPanel', () => ({
+  MyAnnouncementsPanel: () => <p>my announcements</p>,
 }));
-vi.mock('../components/MemberDetails', () => ({ MemberDetails: () => <p>details</p> }));
+vi.mock('../components/invoices/MyInvoices', () => ({ MyInvoices: () => <p>my invoices</p> }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
-  useGetMember: () => ok({ id: 'm1' }),
   useGetPlotTariffs: () => ok({ month: '2026-10', total: '0.00', items: [] }),
   useGetSettings: () => ok({ autoAllocatePrepayment: false }),
   useGetPlotAccount: () =>
@@ -76,6 +74,14 @@ describe('AccountPage', () => {
     expect(screen.getByRole('heading', { name: 'Expected charges' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Plot 7' })).toHaveLength(2);
     expect(screen.getByText('my meters')).toBeInTheDocument();
+  });
+
+  it('keeps personal data, roles and notifications off the account and links to «My details»', () => {
+    renderWithApp(<AccountPage />);
+    expect(screen.getByRole('link', { name: 'My details' })).toHaveAttribute('href', '/account/profile');
+    expect(screen.queryByText('details')).toBeNull();
+    expect(screen.queryByText('notifications')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What you can do' })).toBeNull();
   });
 
   it('shows the own payment with its receipt number, what it paid and the prepayment, without a card link', () => {

@@ -22,6 +22,8 @@ const itemClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-accent-soft font-semibold text-accent' : 'text-ink hover:bg-accent-soft'
   }`;
 
+const PROFILE_PATH = '/account/profile';
+
 export function Layout() {
   const me = useMe();
   const signOut = useSignOut();
@@ -51,21 +53,20 @@ export function Layout() {
       <div className="flex h-full flex-col">
         <OfflineBanner />
         <UpdateBar />
-        {/* Below md the visual order (name, Menu, label, controls) differs from the Tab order: Menu is reached after the header controls, right before #app-menu. Deliberate. */}
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3">
+        {/* Below md the header is one compact row: name, help, Menu. The person, language and sign-out live in the menu. */}
+        <header className="flex items-center gap-x-3 border-b border-line bg-surface px-4 py-2 md:flex-wrap md:gap-x-4 md:gap-y-2 md:py-3">
           <Link
             to={landingPath(me)}
             title={title}
-            className="order-1 md:order-none -my-2 min-w-[8rem] max-w-full flex-1 truncate py-2 font-serif text-xl font-semibold text-ink no-underline md:my-0 md:flex-none md:py-0"
+            className="-my-2 min-w-0 max-w-full flex-1 truncate py-2 font-serif text-xl font-semibold text-ink no-underline md:my-0 md:min-w-[8rem] md:flex-none md:py-0"
           >
             {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
           </Link>
-          {me.tenant?.name && (
-            <span className="order-3 text-sm text-ink-muted md:order-none">{t.app.name}</span>
-          )}
-          <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 flex-col text-sm leading-tight">
-              <Link to="/account" className="-my-3.5 truncate py-3.5 font-medium text-ink md:my-0 md:py-0">
+          {me.tenant?.name && <span className="hidden text-sm text-ink-muted md:inline">{t.app.name}</span>}
+          <div className="ml-auto flex min-w-0 items-center gap-x-3">
+            <div className="hidden min-w-0 flex-col text-sm leading-tight md:flex">
+              {/* desktop unchanged: the name opens the account, which links «My details»; the phone menu opens «My details» */}
+              <Link to="/account" className="truncate font-medium text-ink">
                 <UserContent>{me.fullName}</UserContent>
               </Link>
               <span className="truncate text-xs text-ink-muted">
@@ -73,32 +74,54 @@ export function Layout() {
               </span>
             </div>
             <HelpButton />
-            <LocaleSwitch />
+            <div className="hidden md:flex">
+              <LocaleSwitch />
+            </div>
             <div className="hidden md:flex">
               <ThemeSwitch />
             </div>
-            <Button variant="secondary" onClick={() => void signOut()}>
-              {t.auth.signOut}
+            {/* a wrapper, not a class on Button: its own inline-flex would override `hidden` */}
+            <div className="hidden md:flex">
+              <Button variant="secondary" onClick={() => void signOut()}>
+                {t.auth.signOut}
+              </Button>
+            </div>
+            <Button
+              ref={menuButton}
+              variant="secondary"
+              className="md:hidden"
+              aria-expanded={open}
+              aria-controls="app-menu"
+              onClick={() => setOpen((value) => !value)}
+            >
+              {t.nav.menu}
             </Button>
           </div>
-          <Button
-            ref={menuButton}
-            variant="secondary"
-            className="order-2 md:hidden"
-            aria-expanded={open}
-            aria-controls="app-menu"
-            onClick={() => setOpen((value) => !value)}
-          >
-            {t.nav.menu}
-          </Button>
         </header>
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <aside
             id="app-menu"
             className={`${open ? 'block' : 'hidden'} border-b border-line bg-surface p-3 md:block md:w-60 md:shrink-0 md:border-b-0 md:border-r`}
           >
-            <div className="mb-2 md:hidden">
-              <ThemeSwitch />
+            {/* On a phone the person, the language, the theme and sign-out are here, not in the header. */}
+            <div className="mb-2 flex flex-col gap-2 border-b border-line pb-2 md:hidden">
+              <NavLink to={PROFILE_PATH} className={itemClass} onClick={() => setOpen(false)}>
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate font-medium">
+                    <UserContent>{me.fullName}</UserContent>
+                  </span>
+                  <span className="truncate text-xs font-normal text-ink-muted">
+                    <RoleNameList roles={me.roles} />
+                  </span>
+                </span>
+              </NavLink>
+              <div className="flex flex-wrap items-center gap-2">
+                <LocaleSwitch />
+                <ThemeSwitch />
+                <Button variant="secondary" className="ml-auto" onClick={() => void signOut()}>
+                  {t.auth.signOut}
+                </Button>
+              </div>
             </div>
             <nav aria-label={t.nav.main} className="flex flex-col gap-1">
               {items.map((item) => (
