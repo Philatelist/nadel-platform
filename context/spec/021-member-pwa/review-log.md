@@ -70,3 +70,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `795652b..a1fb27b` | PASS | — | minor: qa-notes sign-out row should also name `pushDevice.test.ts` signOutCleanup (no e2e of sign-out with push on); acceptance test 2 does not assert the push URL `/account#my-invoices` |
+
+## Fix — full-suite JaCoCo floor (0.97646 < 0.977)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `a1fb27b..5bd77bc` | PASS | — | minor: a long Javadoc line in PushSender; `unsignableKeys()` mocks are coupled to VapidSigner internals |

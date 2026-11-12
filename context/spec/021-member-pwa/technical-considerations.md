@@ -1,7 +1,7 @@
 # Technical Specification: The member's phone — installable app, push, meter photo
 
 - **Functional Specification:** `context/spec/021-member-pwa/functional-spec.md`
-- **Status:** Draft
+- **Status:** Implemented — pending manual check
 - **Author(s):** Alex Usov (drafted in pipeline mode; every choice marked **Assumption** was not confirmed by the owner)
 
 ---

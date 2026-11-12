@@ -1,7 +1,7 @@
 # Pipeline log — 021 member PWA
 
 - Status: running
-- Phase: 3 (implement, slice 1)
+- Phase: 5 (publish)
 - Branch: 021-member-pwa · Base: main @ 3e39ab2 (origin/main; local main is behind at b324146 and is not moved)
 - Requirement: document docs/features/021-member-pwa.md (untracked in the working tree)
 - Autonomy: minimal (.claude/feature-pipeline.yml)
@@ -66,3 +66,7 @@
 - Slice 9 review r1 PASS. Slice 10: help pages member-install + member-push (uk/en), 7 pages updated, shots at 360×740 (+ phone-ios viewport), owner manual (VAPID, HTTPS, photo rule, Expo lines removed), roadmap wording, PDFs rebuilt; useScrollToHash malformed-hash fix (RED shown); web 1203, help e2e 23/23, completeness check green. Not shot (text only): OS install dialog, permission prompt, real notifications, approvals thumbnail, round-page photo, photo-required error (no demo photos).
 - Slice 10 review r2 PASS (r1 M1 bot/photo-rule help text fixed in 795652b). Slice 11: qa-notes.md traceability; new member-pwa-acceptance.spec.ts (RED x2); chromium 021 specs 29/29, phone 8/8, e2e-pwa 9/9, stand-test ok, web 1203.
 - Phase 4: make check failed only on the JaCoCo floor (0.97646 < 0.977; 4523 tests green). Regression fix: meaningful push tests + WebPushClient maps a server-side crypto IllegalStateException to RETRY (Slice 7 minor); clean verify 4553 green, coverage 0.97817. AUTO: crypto failure = retry within the TTL, not a refusal (a refusal would count against every device).
+- Fix review (coverage) r1 PASS. Full suite: `./mvnw clean verify` 4553 green + coverage floor met (0.97817); `make e2e` 238 passed; `make e2e-pwa` 9/9; `make stand-test` ok; clients typecheck/lint/1203 web tests; format OK. Baseline had no failures → no regressions.
+- Verify: 45/49 criteria [x] with evidence (qa-notes.md + screenshots docs/screenshots/021-member-pwa-*.png, git-ignored), 4 [?]: browser installability verdict over HTTPS, the browser's own install dialog, the iOS card on a real iPhone, pnpm audit/OSV verdict from CI. Status: Implemented — pending manual check.
+- Product docs to update (owner): /awos:architecture (meter photos in the DB, no S3 item; ADR range 0001–0021; nadel-mobile realm client; Web Push/PWA), /awos:product (PWA instead of iOS/Android apps; push; meter photo; pay in the bank).
+- Phase 4 finished. Next: Phase 5 (push, PR, checks).
