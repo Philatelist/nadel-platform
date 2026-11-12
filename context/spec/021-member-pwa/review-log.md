@@ -57,3 +57,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `d6c79f1..0e2154d` | PASS | — | minor: unused `cleanupPhoneFixtures`; the invoices phone test issues invoices for demo plots 7 and 15 (append-only); `[&>a:only-child]` in HelpContent also matches prose list items; a no-op `+ 0`; the header link's padded hit area overlaps the line below |
+
+## Slice 10 — Help pages, owner manual and screenshots
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `0e2154d..731537e` | MAJOR_ISSUES | M1 settings help (uk/en) says the bot is not affected by the photo rule; the bot refuses readings while it is on | minor: HEIC conversion wording (only where the browser decodes HEIC); push page could mention the hourly limit of the approvals push |

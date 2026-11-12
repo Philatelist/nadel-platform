@@ -46,7 +46,7 @@ When you sign out of the system, notifications on this device turn off by themse
 | A meter reading is rejected | "Meter reading rejected" |
 | The board publishes an announcement | "New announcement from the board" |
 
-The board and the electrician who review readings get one more: "New readings to review".
+The board and the electrician who review readings get one more: "New readings to review". It comes at most once an hour.
 
 Tap a notification and the matching Nadel screen opens.
 

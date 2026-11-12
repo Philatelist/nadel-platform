@@ -74,7 +74,7 @@ The {{ui:settings.threshold.save}} button. Errors: "{{ui:settings.threshold.amou
 
 ### The "{{ui:settings.readings.title}}" panel
 
-One switch: "{{ui:settings.readings.photoRequired}}". The hint under it: "{{ui:settings.readings.photoRequiredHint}}" When the rule is on, an owner cannot submit a reading from their account without a photo of the meter and sees the message "{{ui:problem.READING_PHOTO_REQUIRED}}". A reading in the Telegram bot is not changed by this rule. The electrician and the board add a photo if they wish. The {{ui:settings.readings.save}} button saves the choice. How the owner sees it: [How to submit a meter reading](help:member-readings).
+One switch: "{{ui:settings.readings.photoRequired}}". The hint under it: "{{ui:settings.readings.photoRequiredHint}}" When the rule is on, an owner cannot submit a reading from their account without a photo of the meter and sees the message "{{ui:problem.READING_PHOTO_REQUIRED}}". While the rule is on, the Telegram bot cannot accept a member's reading because it takes no photo, and it asks the member to submit the reading with a photo in the app. The electrician and the board add a photo if they wish. The {{ui:settings.readings.save}} button saves the choice. How the owner sees it: [How to submit a meter reading](help:member-readings).
 
 ![The "Meter readings" panel](shot:settings-readings)
 

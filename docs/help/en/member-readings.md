@@ -31,7 +31,7 @@ You can submit a meter reading yourself, without waiting for the electrician. Yo
 2. Next to the right meter press {{ui:readings.mine.submit}}. The button is not there for a meter that has been removed.
 3. Enter the date when you read the meter. Today is there by default.
 4. Enter the meter value as it is written on the meter. The value may have up to three decimals.
-5. If you wish, add a photo of the meter: press {{ui:readings.photo.add}}. On a phone the camera opens, on a computer a file picker. A HEIC photo from an iPhone is converted to an ordinary one by the system itself. You see a thumbnail above the button. The {{ui:readings.photo.replace}} button changes the photo and {{ui:readings.photo.remove}} removes it.
+5. If you wish, add a photo of the meter: press {{ui:readings.photo.add}}. On a phone the camera opens, on a computer a file picker. A HEIC photo from an iPhone is converted to JPEG only where the browser can open it (Safari on iPhone or Mac); in another browser the system says "{{ui:readings.photo.typeNotAllowed}}", so add a JPEG or PNG photo. You see a thumbnail above the button. The {{ui:readings.photo.replace}} button changes the photo and {{ui:readings.photo.remove}} removes it.
 6. Press {{ui:readings.mine.submit}}. The system answers: "{{ui:readings.mine.submitted}}".
 
 Nothing else is needed.
@@ -41,6 +41,8 @@ Nothing else is needed.
 A photo helps the board quickly make sure the number is right. Only photos (JPEG, PNG) up to 5 MB are allowed; otherwise the system says "{{ui:readings.photo.typeNotAllowed}}" or "{{ui:readings.photo.tooLarge}}". While the photo is being processed, the button says "{{ui:readings.photo.processing}}".
 
 If the board turned on the rule "{{ui:settings.readings.photoRequired}}" in the settings, the photo is required: without it the reading is not sent and the system says: "{{ui:problem.READING_PHOTO_REQUIRED}}" Add the photo and press {{ui:readings.mine.submit}} again. A submitted reading with a photo shows as a thumbnail in the meter history: press it to open the photo full screen. A photo cannot be deleted after submission, it stays with the reading.
+
+Note: while the photo rule is on, the Telegram bot does not accept a reading because it takes no photo. The bot asks you to submit the reading with a photo in the app.
 
 ## What happens next
 

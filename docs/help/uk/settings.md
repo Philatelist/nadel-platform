@@ -74,7 +74,7 @@ shots:
 
 ### Панель «{{ui:settings.readings.title}}»
 
-Один перемикач: «{{ui:settings.readings.photoRequired}}». Підказка під ним: «{{ui:settings.readings.photoRequiredHint}}» Коли правило ввімкнено, власник не може передати показ зі свого кабінету без фото лічильника і бачить повідомлення «{{ui:problem.READING_PHOTO_REQUIRED}}». Показ у боті Telegram цим правилом не змінюється. Електрик і правління додають фото за бажанням. Кнопка {{ui:settings.readings.save}} зберігає вибір. Як це бачить власник: [Як передати показ лічильника](help:member-readings).
+Один перемикач: «{{ui:settings.readings.photoRequired}}». Підказка під ним: «{{ui:settings.readings.photoRequiredHint}}» Коли правило ввімкнено, власник не може передати показ зі свого кабінету без фото лічильника і бачить повідомлення «{{ui:problem.READING_PHOTO_REQUIRED}}». Поки правило ввімкнено, бот Telegram не може прийняти показ члена, бо фото в боті не передається: він просить передати показ із фото в застосунку. Електрик і правління додають фото за бажанням. Кнопка {{ui:settings.readings.save}} зберігає вибір. Як це бачить власник: [Як передати показ лічильника](help:member-readings).
 
 ![Панель «Покази лічильників»](shot:settings-readings)
 
