@@ -201,8 +201,8 @@ jobs:
         run: kill $(lsof -t -iTCP:5173 -sTCP:LISTEN) || true
       - name: PWA end-to-end specs (production build on vite preview)
         run: |
-          pnpm --filter web exec vite build
-          nohup pnpm --filter web exec vite preview > web-preview.log 2>&1 &
+          VITE_OIDC_AUTHORITY=http://localhost:5173/auth/realms/nadel pnpm --filter web exec vite build
+          NADEL_E2E_KEYCLOAK_UNDER_AUTH=1 nohup pnpm --filter web exec vite preview > web-preview.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5173/ && break; sleep 2; done
           pnpm --filter web exec playwright test -c playwright.pwa.config.ts
       - name: Report, traces and logs
