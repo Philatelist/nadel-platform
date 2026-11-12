@@ -71,3 +71,4 @@
 - Product docs to update (owner): /awos:architecture (meter photos in the DB, no S3 item; ADR range 0001–0021; nadel-mobile realm client; Web Push/PWA), /awos:product (PWA instead of iOS/Android apps; push; meter photo; pay in the bank).
 - Phase 4 finished. Next: Phase 5 (push, PR, checks).
 - CI on ef20107: SAST red (2 blocking Semgrep findings in test code: raw ServerSocket in WebPushClientTests; GCM decipher without authTagLength in web/e2e/support/fakePush.ts); others green. CI fix: closed port via a briefly bound HttpServer; authTagLength 16. WebPushClientTests 10/10; push + push-events + member-pwa-acceptance 18/18; e2e tsc/lint/format OK.
+- CI on 6006e4a: SAST green; End-to-end red on pay-from-phone @smoke (strict-mode: both copy buttons show «Copied» for 2 s; on the CI runner the IBAN one was still visible). CI fix: each check scoped to its own button's status line. Local smoke 26/26, pay-from-phone ×3 6/6.

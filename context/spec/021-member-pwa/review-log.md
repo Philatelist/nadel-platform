@@ -76,3 +76,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a1fb27b..5bd77bc` | PASS | — | minor: a long Javadoc line in PushSender; `unsignableKeys()` mocks are coupled to VapidSigner internals |
+
+## Fix — CI SAST (Semgrep: unencrypted-socket, gcm-no-tag-length)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `ef20107..6006e4a` | PASS | — | — |

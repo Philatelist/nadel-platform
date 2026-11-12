@@ -90,12 +90,19 @@ test.describe('paying from the phone', () => {
     await expect(link).toHaveAttribute('rel', /noopener/);
 
     const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+    // each copy button has its own status line; both can say «Copied» for 2 s, so check the one next to the button
+    const statusOf = (name: string) =>
+      row
+        .first()
+        .locator('div', { has: page.getByRole('button', { name, exact: true }) })
+        .last()
+        .getByRole('status');
     await row.first().getByRole('button', { name: t.invoices.pay.copyIban, exact: true }).click();
-    await expect(row.first().getByText(t.invoices.pay.copied, { exact: true })).toBeVisible();
+    await expect(statusOf(t.invoices.pay.copyIban)).toHaveText(t.invoices.pay.copied);
     expect(await clipboard()).toBe(payment.iban);
 
     await row.first().getByRole('button', { name: t.invoices.pay.copyPurpose, exact: true }).click();
-    await expect(row.first().getByText(t.invoices.pay.copied, { exact: true })).toBeVisible();
+    await expect(statusOf(t.invoices.pay.copyPurpose)).toHaveText(t.invoices.pay.copied);
     expect(await clipboard()).toBe(payment.purpose);
 
     // a phone layout: no side scroll, buttons a finger can hit
