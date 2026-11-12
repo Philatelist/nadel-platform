@@ -6,7 +6,18 @@ import { UserContent } from './UserContent';
 import { Panel } from './ui';
 
 /** Read-only member card. Optional fields (notes, messengers) appear only when the response has them. */
-export function MemberDetails({ member, title, large }: { member: Member; title?: string; large?: boolean }) {
+export function MemberDetails({
+  member,
+  title,
+  large,
+  hideRoles,
+}: {
+  member: Member;
+  title?: string;
+  large?: boolean;
+  /** «My details» leaves the roles out: a plain member never sees them, the board sees them in their own panel. */
+  hideRoles?: boolean;
+}) {
   const t = useT();
   const f = t.member.fields;
   const fullName = [member.lastName, member.firstName, member.middleName].filter(Boolean).join(' ');
@@ -26,7 +37,8 @@ export function MemberDetails({ member, title, large }: { member: Member; title?
   ]);
   if (member.viberPhone) rows.push([f.viberPhone, userText(member.viberPhone)]);
   if (member.notes) rows.push([f.notes, userText(member.notes)]);
-  rows.push([f.roles, member.roles.length > 0 ? <RoleNameList roles={member.roles} /> : f.none]);
+  if (!hideRoles)
+    rows.push([f.roles, member.roles.length > 0 ? <RoleNameList roles={member.roles} /> : f.none]);
 
   return (
     <Panel {...(title ? { title } : {})}>

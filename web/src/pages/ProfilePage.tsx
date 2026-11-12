@@ -33,7 +33,9 @@ export function ProfilePage() {
 
       <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
         <section className="flex min-w-0 flex-col gap-3">
-          <QueryBoundary query={member}>{(data) => <MemberDetails member={data} large />}</QueryBoundary>
+          <QueryBoundary query={member}>
+            {(data) => <MemberDetails member={data} large hideRoles />}
+          </QueryBoundary>
         </section>
 
         {isBoardUser(permissions) && (

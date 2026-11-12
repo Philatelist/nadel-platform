@@ -25,4 +25,12 @@ describe('MemberDetails', () => {
     renderWithApp(<MemberDetails member={{ ...member, telegramLinked: false }} />);
     expect(screen.getByText('not connected')).toBeInTheDocument();
   });
+
+  it('lists the roles unless hideRoles is set', () => {
+    const { unmount } = renderWithApp(<MemberDetails member={member} />);
+    expect(screen.getByText('Roles', { selector: 'dt' })).toBeInTheDocument();
+    unmount();
+    renderWithApp(<MemberDetails member={member} hideRoles />);
+    expect(screen.queryByText('Roles', { selector: 'dt' })).toBeNull();
+  });
 });

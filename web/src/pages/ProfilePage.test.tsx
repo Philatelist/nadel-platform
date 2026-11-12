@@ -21,7 +21,11 @@ vi.mock('../components/account/NotificationsPanel', () => ({
   NotificationsPanel: () => <p>notifications</p>,
 }));
 vi.mock('../components/account/HowToInstallLink', () => ({ HowToInstallLink: () => <p>how to install</p> }));
-vi.mock('../components/MemberDetails', () => ({ MemberDetails: () => <p>details</p> }));
+vi.mock('../components/MemberDetails', () => ({
+  MemberDetails: ({ hideRoles }: { hideRoles?: boolean }) => (
+    <p>{hideRoles ? 'details' : 'details with roles'}</p>
+  ),
+}));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetMember: () => ok({ id: 'm1' }),

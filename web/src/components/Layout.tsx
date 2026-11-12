@@ -79,9 +79,12 @@ export function Layout() {
             <div className="hidden md:flex">
               <ThemeSwitch />
             </div>
-            <Button variant="secondary" className="hidden md:inline-flex" onClick={() => void signOut()}>
-              {t.auth.signOut}
-            </Button>
+            {/* a wrapper, not a class on Button: its own inline-flex would override `hidden` */}
+            <div className="hidden md:flex">
+              <Button variant="secondary" onClick={() => void signOut()}>
+                {t.auth.signOut}
+              </Button>
+            </div>
             <Button
               ref={menuButton}
               variant="secondary"
