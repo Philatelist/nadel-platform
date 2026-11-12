@@ -1,12 +1,12 @@
 # Pipeline log — 021 member PWA
 
-- Status: running
-- Phase: 5 (publish)
+- Status: finished
+- Phase: 6 (finished)
 - Branch: 021-member-pwa · Base: main @ 3e39ab2 (origin/main; local main is behind at b324146 and is not moved)
 - Requirement: document docs/features/021-member-pwa.md (untracked in the working tree)
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/74 · Checks: pending
-- Review run: on (not started yet; the 020 review run is still up and is stopped before Phase 6)
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/74 · Checks: green (5c68807)
+- Review run: running at http://localhost:5173 (API :8080, Mailpit :8025, Keycloak :8180, fake push :8092); PIDs in the scratchpad 021-review-run.pids
 
 ## Project facts
 - Build: `make check` (contract, format, lint, tests); backend `cd backend && ./mvnw verify`; one test class `cd backend && ./mvnw test -Dtest='<Class>'`; module `-Dtest='app.nadel.<module>.**'`; clients `pnpm -r typecheck && pnpm -r lint && pnpm -r test`; e2e `make e2e`, one spec `pnpm --filter web exec playwright test <name>`, smoke `--grep @smoke`.
@@ -72,3 +72,7 @@
 - Phase 4 finished. Next: Phase 5 (push, PR, checks).
 - CI on ef20107: SAST red (2 blocking Semgrep findings in test code: raw ServerSocket in WebPushClientTests; GCM decipher without authTagLength in web/e2e/support/fakePush.ts); others green. CI fix: closed port via a briefly bound HttpServer; authTagLength 16. WebPushClientTests 10/10; push + push-events + member-pwa-acceptance 18/18; e2e tsc/lint/format OK.
 - CI on 6006e4a: SAST green; End-to-end red on pay-from-phone @smoke (strict-mode: both copy buttons show «Copied» for 2 s; on the CI runner the IBAN one was still visible). CI fix: each check scoped to its own button's status line. Local smoke 26/26, pay-from-phone ×3 6/6.
+- CI on 5c68807: all 6 checks green (CI fixes: SAST 6006e4a, e2e 5c68807; both fix reviews PASS).
+- Phase 6: make up from 021-member-pwa (no realm change → no down -v); smoke: health 200, web 200, realm 200, Mailpit 200, fake push ok, /members 401, /me/push 401. PIDs in the scratchpad 021-review-run.pids. Run finished.
+- Owner decisions on PR #74: (1) help screenshots out of the precache, cached at runtime when first shown (cache-first, size limit), alt text offline for unseen ones; (2) glob and deepmerge accepted as build-time only, reasons say when to revisit; (3) deletion of mobile/CLAUDE.md and mobile/.claude/settings.json confirmed; (4) bot refusal under the photo rule confirmed.
+- Owner fix: precache now app shell + help text (219 entries, 3946.5 KiB, was 31.5 MiB); `nadel-help-shots-v1` CacheFirst for `/help/img/<lang>/<id>.png` (200 image answers only, 60 entries, 30 days, kept at sign-out); HelpShot shows the alt text when an image fails; help bundle query `networkMode: 'always'` (found by the new test: a direct load of a help page offline paused on the local chunk). Checks: web unit 1205 green, typecheck/lint/format OK, `make e2e-pwa` 11/11, help spec 23/23, smoke 26/26.

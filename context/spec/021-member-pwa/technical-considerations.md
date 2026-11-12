@@ -9,8 +9,9 @@
 ## 1. High-Level Technical Approach
 
 - **Web (PWA):** `vite-plugin-pwa` (MIT, pinned exactly) with the `injectManifest` strategy and a hand-written
-  `web/src/sw.ts` that precaches only the build output (shell, JS, CSS, fonts, icons, help pages and images) and has
-  no runtime caching at all. Registration in `prompt` mode with an update bar and a dirty-form guard; an offline banner;
+  `web/src/sw.ts` that precaches only the build output (shell, JS, CSS, fonts, icons, help text) and has
+  one runtime cache, for the public help screenshots only (owner decision on PR #74: cache-first when first shown,
+  size-limited; the precache stays about 4 MiB instead of 31.5 MiB). Registration in `prompt` mode with an update bar and a dirty-form guard; an offline banner;
   install offers; sign-out clean-up. A separate Playwright config tests the production build.
 - **Push:** a new subpackage `notifications.internal.push`. VAPID (RFC 8292, ES256) and payload encryption (RFC 8291,
   aes128gcm) are built with **JDK crypto only** (no new backend dependency). Subscriptions are stored per member and
@@ -41,7 +42,7 @@ Migration: `V38__member_pwa.sql`. ADR: `docs/adr/0021-phone-access-as-a-pwa.md`.
 | Plugin | `vite-plugin-pwa` 2.0.0, exact pin, devDependency; brings Workbox. Fallback if its peer range rejects Vite 8: a small local Vite plugin around `workbox-build` (same contract). |
 | Strategy | `injectManifest`, `srcDir: 'src'`, `filename: 'sw.ts'`; separate `web/tsconfig.sw.json` (`lib: ["WebWorker"]`) included in `typecheck`; ESLint SW globals. |
 | `sw.ts` contents | `precacheAndRoute(self.__WB_MANIFEST)`, `cleanupOutdatedCaches()`, one `NavigationRoute` to `/index.html` with a denylist (`/api/`, `/realms/`, files with an extension), `push`, `notificationclick`, `message` (`SKIP_WAITING`). Nothing else. |
-| Precache | `**/*.{js,css,html,svg,woff2,png,webmanifest}` plus the help pages and images under `help/**`; the MapLibre chunk is excluded if over the size limit (**Assumption**: measured at the first build). |
+| Precache | `**/*.{js,css,html,svg,woff2,png,webmanifest}` plus the static help shells; the help screenshots `help/img/**` are excluded (owner decision on PR #74) and cached at runtime by a `CacheFirst` route with `ExpirationPlugin` (60 entries, 30 days, `purgeOnQuotaError`), cache `nadel-help-shots-v1`, kept at sign-out; the MapLibre chunk is excluded if over the size limit (**Assumption**: measured at the first build). |
 | No personal data on the device | Three layers: no runtime routes in `sw.ts`; navigation denylist; a vitest contract test reading `sw.ts` that forbids `runtimeCaching`, extra `registerRoute(` and `caches.open(`. The server already sends `no-store` on PDFs and photos. |
 | Registration | `web/src/pwa/registerPwa.ts`, called from `main.tsx` only in production builds; `registerType: 'prompt'`; state through `useSyncExternalStore`. No SW in `vite dev` (`devOptions` off) so the dev e2e stays as today. |
 | Update bar | `UpdateBar.tsx` in `Layout.tsx`: «Доступна нова версія» + «Оновити». `pwa/dirtyForms.ts` with `useDirtyGuard(isDirty)`; while any form is dirty the button is disabled with a hint. The SW only activates on `SKIP_WAITING`; the single reload happens after the user presses «Оновити»; never while an OIDC `code`/`state` is in the URL. Forms that register: reading submit dialog, readings round, new payment, expense form, settings sections, announcement composer. |
@@ -211,7 +212,7 @@ No `SECURITY DEFINER` function, no new JobRunr tables.
 
 | Risk | Mitigation |
 |---|---|
-| Personal data cached on a shared phone | No runtime caching (three layers + PWA e2e that inspects `caches` after a member session); `no-store` on PDFs and photos. |
+| Personal data cached on a shared phone | No runtime caching of anything but the public help screenshots (three layers + PWA e2e that inspects `caches` after a member session); `no-store` on PDFs and photos. |
 | Stale app after a deploy | `prompt` update flow; Caddy `no-cache` for `sw.js`, manifest, `index.html`. |
 | SSRF through the push endpoint | Host allowlist at subscribe and before each send; https only; no redirects; private addresses refused; dev origins only by config. |
 | Invalid-curve key, crypto bugs | On-curve check; RFC 8291 vector; round-trip tests; e2e decrypts with independent Node code. |

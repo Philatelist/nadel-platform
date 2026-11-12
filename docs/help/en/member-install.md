@@ -60,7 +60,7 @@ If a form with unsaved changes is open, the button does not act and the bar says
 
 ## Without internet
 
-When there is no connection, a bar appears at the top: "{{ui:pwa.offline}}" The app itself opens, but it does not show your data without internet: invoices, amounts and readings are not stored on the device, so that nobody else can see them. When the connection is back, the bar disappears and the data appears by itself. Nothing you enter without a connection is sent: repeat the action when the internet is back.
+When there is no connection, a bar appears at the top: "{{ui:pwa.offline}}" The app itself opens, but it does not show your data without internet: invoices, amounts and readings are not stored on the device, so that nobody else can see them. When the connection is back, the bar disappears and the data appears by itself. Nothing you enter without a connection is sent: repeat the action when the internet is back. The help opens without a connection too; a screenshot you have not looked at before shows only its caption until the connection is back.
 
 ## Related pages
 

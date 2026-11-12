@@ -1,4 +1,4 @@
-# 0021. Phone access as a PWA: the web app installable with a service worker (vite-plugin-pwa, injectManifest, no runtime caching), Web Push on JDK-only crypto, subscriptions encrypted at rest, meter photos stored like ADR 0019, the Expo app removed
+# 0021. Phone access as a PWA: the web app installable with a service worker (vite-plugin-pwa, injectManifest, one runtime cache for the public help screenshots only), Web Push on JDK-only crypto, subscriptions encrypted at rest, meter photos stored like ADR 0019, the Expo app removed
 
 **Status:** accepted (2026-11); introduced in phase 5 by spec 021 (`context/spec/021-member-pwa/`). Supersedes the mobile
 part of ADR 0005; the web part and the shared packages of ADR 0005 stand.
@@ -19,9 +19,13 @@ a phone layout.
   native app, no store listing and no `mobile/` workspace; Expo is removed from the repository, the lockfile and the
   accepted-advisory lists.
 - The service worker is built by `vite-plugin-pwa` in `injectManifest` mode: our own `sw.ts` is the only source of
-  behaviour (push, notification click, update), the plugin only injects the precache list of the build's static files.
-  **No runtime caching**: no API response, PDF, photo or other personal data is ever put in a cache by the worker, so a
-  shared or lost phone holds no cooperative data after sign-out. Updates use the `prompt` flow (the user applies them,
+  behaviour (push, notification click, update), the plugin only injects the precache list of the build's static files
+  (app shell and help text; about 4 MiB).
+  **One runtime cache, for public files only**: the help screenshots (about 27 MiB in all) are not precached; each one
+  is cached the first time it is shown (cache-first, same origin, `/help/img/<lang>/<id>.png` only, 200 image answers
+  only, at most 60 entries and 30 days). Offline, a screenshot not yet seen shows its alt text. No API response, PDF,
+  photo or other personal data is ever put in a cache by the worker, so a shared or lost phone holds no cooperative data
+  after sign-out. Updates use the `prompt` flow (the user applies them,
   never during an OIDC redirect); Caddy serves `sw.js`, the manifest and `index.html` with `no-cache`.
 
 ### Web Push without a library

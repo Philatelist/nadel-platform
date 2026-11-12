@@ -45,11 +45,12 @@ bank app without typing the IBAN; the chairman approves readings by looking at t
     - [x] When the member opens the installed app with a working connection, then they see the same screens and data as
       in the browser. (Evidence: the installed app is the same SPA; `pwa/pwa.spec.ts` online flow and every `*.phone.spec.ts`; the standalone window itself is a real-phone check.)
 - **Personal data is never kept on the phone.** The app keeps only its own screens, styles, fonts, icons and the help
-  pages on the phone, so it opens fast and the help works offline. It never keeps a member's data, an invoice PDF or a
-  photo on the phone after use, because a phone can be shared.
+  text on the phone, so it opens fast and the help works offline. A help screenshot is kept once it has been shown;
+  offline, a screenshot not yet seen shows its caption (owner decision on PR #74, to keep the first install small). It
+  never keeps a member's data, an invoice PDF or a photo on the phone after use, because a phone can be shared.
   - **Acceptance Criteria:**
     - [x] Given a member used the app (opened the account, downloaded an invoice PDF, viewed a meter photo), when the
-      phone's app storage is inspected afterwards, then it holds no member data, no PDF and no photo. (Evidence: `pwa/pwa.spec.ts` "after a member used the app the browser caches hold only static files" (only precache, no /api, no PDF, no photo); `sw.contract.test.ts`.)
+      phone's app storage is inspected afterwards, then it holds no member data, no PDF and no photo. (Evidence: `pwa/pwa.spec.ts` "after a member used the app the browser caches hold only static files" (only the precache and the help screenshots, no /api, no PDF, no photo); `sw.contract.test.ts`; help screenshots: `pwa/pwa.spec.ts` "help screenshots".)
 - **Without a connection** the app says so instead of failing, and the help still opens.
   - **Acceptance Criteria:**
     - [x] Given the app was opened once, when the member opens it with no connection, then they see «Немає з'єднання з

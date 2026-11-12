@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deleteUserCaches, isPrecacheName, signOutCleanly } from './useSignOut';
+import { HELP_SHOTS_CACHE } from './cacheNames';
+import { deleteUserCaches, isPrecacheName, isPublicCacheName, signOutCleanly } from './useSignOut';
 
 describe('deleteUserCaches', () => {
-  it('keeps the Workbox precache and deletes every other cache', async () => {
-    const names = ['workbox-precache-v2-https://app.example/', 'api-cache', 'pdfs'];
+  it('keeps the Workbox precache and the help screenshots and deletes every other cache', async () => {
+    const names = ['workbox-precache-v2-https://app.example/', HELP_SHOTS_CACHE, 'api-cache', 'pdfs'];
     const deleted: string[] = [];
     await deleteUserCaches({
       keys: async () => names,
@@ -14,6 +15,8 @@ describe('deleteUserCaches', () => {
     });
     expect(deleted).toEqual(['api-cache', 'pdfs']);
     expect(isPrecacheName(names[0]!)).toBe(true);
+    expect(isPublicCacheName(HELP_SHOTS_CACHE)).toBe(true);
+    expect(isPublicCacheName('nadel-help-shots-v0')).toBe(false);
   });
 });
 

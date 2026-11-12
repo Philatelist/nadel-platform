@@ -17,5 +17,8 @@ export function useHelpBundle(): UseQueryResult<HelpBundle> {
     queryKey: ['help', 'bundle', locale],
     queryFn: () => loadHelpBundle(locale),
     staleTime: Infinity,
+    // A bundled chunk (precached by the service worker), not a server call: load it offline too, so the help opens
+    // without a connection instead of waiting for one.
+    networkMode: 'always',
   });
 }

@@ -6,9 +6,9 @@
 // (`make e2e-pwa`; the service worker and the manifest exist only in a build): the manifest and its icons, an active
 // worker with scope «/», nothing but static files in the browser caches after a member used the app, the offline
 // banner with no member data, the help that opens offline, the data that comes back with the connection, the update
-// bar that waits for a dirty form, and the install offer (a synthetic `beforeinstallprompt` and Safari on iPhone).
+// bar that waits for a dirty form, the help screenshots cached only once shown, and the install offer (a synthetic `beforeinstallprompt` and Safari on iPhone).
 // The worker's own script is served with one more comment line to simulate «a new version was published».
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { messages } from '@nadel/shared';
@@ -42,6 +42,9 @@ function pngSize(bytes: Buffer): { width: number; height: number } {
   expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG');
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
+
+/** The runtime cache of help screenshots (src/pwa/cacheNames.ts). */
+const HELP_SHOTS_CACHE = 'nadel-help-shots-v1';
 
 const STATIC_ALLOWED =
   /^\/(index\.html|manifest\.webmanifest|favicon\.svg|apple-touch-icon\.png|icon-[a-z0-9-]+\.png|assets\/[^?]+|help\/.+)$/;
@@ -130,7 +133,13 @@ test.describe('the installable app', () => {
     const caches = await cachedPaths(page);
     const names = Object.keys(caches);
     expect(names.length).toBeGreaterThan(0);
-    for (const name of names) expect(name, 'only the Workbox precache exists').toContain('-precache-');
+    for (const name of names)
+      expect(
+        name.includes('-precache-') || name === HELP_SHOTS_CACHE,
+        `${name}: only the precache and the help screenshots`,
+      ).toBe(true);
+    for (const path of caches[HELP_SHOTS_CACHE] ?? [])
+      expect(path).toMatch(/^\/help\/img\/(uk|en)\/[a-z0-9-]+\.png$/);
     const paths = Object.values(caches).flat();
     expect(paths.length).toBeGreaterThan(10);
     for (const path of paths) {
@@ -190,6 +199,57 @@ test.describe('the installable app', () => {
     await first.click();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByText(t.state.error)).toHaveCount(0);
+    await context.setOffline(false);
+  });
+});
+
+test.describe('help screenshots', () => {
+  test('the first install precaches the app and the help text, not the help screenshots', () => {
+    const dist = resolve(process.cwd(), 'dist');
+    const urls = [...readFileSync(resolve(dist, 'sw.js'), 'utf8').matchAll(/"url":"([^"]+)"/g)].map(
+      (m) => m[1]!,
+    );
+    expect(urls).toContain('index.html');
+    expect(urls.some((url) => url.startsWith('help/') && url.endsWith('/index.html'))).toBe(true);
+    expect(urls.filter((url) => url.startsWith('help/img/'))).toEqual([]);
+    const bytes = urls.reduce((sum, url) => sum + statSync(resolve(dist, url)).size, 0);
+    expect(bytes, 'first-install download').toBeLessThan(8 * 1024 * 1024);
+  });
+
+  test('a screenshot is cached when first shown; offline, one not yet seen shows its alt text', async ({
+    page,
+    context,
+  }) => {
+    // the public help: it opens offline from the precached app (a signed-in full reload offline shows the offline screen)
+    await page.addInitScript(() => window.localStorage.setItem('nadel.locale', 'en'));
+    await page.goto('/help');
+    await activeScope(page);
+    await page.reload(); // the worker now handles the requests of this tab
+
+    await page.goto('/help/member-install');
+    const seen = page.getByRole('main').locator('img').first();
+    await seen.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => seen.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    const seenPath = new URL((await seen.getAttribute('src'))!, page.url()).pathname;
+    await expect.poll(async () => (await cachedPaths(page))[HELP_SHOTS_CACHE] ?? []).toContain(seenPath);
+
+    await context.setOffline(true);
+    await page.goto('/help/member-install');
+    const again = page.getByRole('main').locator('img').first();
+    await again.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => again.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+
+    await page.goto('/help/account');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // lazy images load (and fail) as they come near the viewport
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const missing = page.locator('[data-help-shot-missing]').first();
+    await expect(missing).toBeVisible();
+    await expect(missing).not.toHaveText('');
     await context.setOffline(false);
   });
 });

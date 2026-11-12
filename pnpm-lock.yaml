@@ -171,10 +171,16 @@ importers:
       workbox-build:
         specifier: 7.4.1
         version: 7.4.1
+      workbox-expiration:
+        specifier: 7.4.1
+        version: 7.4.1
       workbox-precaching:
         specifier: 7.4.1
         version: 7.4.1
       workbox-routing:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-strategies:
         specifier: 7.4.1
         version: 7.4.1
       workbox-window:
@@ -5290,7 +5296,7 @@ snapshots:
 
   babel-plugin-react-compiler@1.0.0:
     dependencies:
-      '@babel/types': 7.29.8
+      '@babel/types': 7.29.14
     optional: true
 
   balanced-match@1.0.2: {}

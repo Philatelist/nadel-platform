@@ -82,3 +82,9 @@
 | Round | Commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `ef20107..6006e4a` | PASS | — | — |
+
+## Fix — CI End-to-end (pay-from-phone «Copied» strict mode)
+
+| Round | Commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `6006e4a..5c68807` | PASS | — | minor: `statusOf` depends on the CopyButton DOM shape (a data-testid later) |

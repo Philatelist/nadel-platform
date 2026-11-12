@@ -37,8 +37,10 @@ export default defineConfig({
         ],
       },
       injectManifest: {
-        // Build output, fonts, icons and the help pages with their images (docs/help is public by design).
-        globPatterns: ['**/*.{js,css,html,svg,woff2,png,webmanifest}', 'help/**/*'],
+        // Build output, fonts, icons and the help text (compiled into the JS, plus the static help shells). The help
+        // screenshots are left out (about 27 MiB): sw.ts caches each one at runtime the first time it is shown.
+        globPatterns: ['**/*.{js,css,html,svg,woff2,png,webmanifest}'],
+        globIgnores: ['help/img/**'],
       },
       devOptions: { enabled: false },
     }),

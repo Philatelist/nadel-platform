@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { deleteMyPushDevice } from '@nadel/api-client';
 import { useAuth } from 'react-oidc-context';
+import { HELP_SHOTS_CACHE } from './cacheNames';
 import { signOutCleanup } from './pushDevice';
 
 const CLEANUP_CAP_MS = 3000;
@@ -10,13 +11,20 @@ export function isPrecacheName(name: string): boolean {
   return name.includes('-precache-');
 }
 
-/** Deletes every cache except the Workbox precache (static files only). */
+/** Caches of public static files that may outlive a user: the precache and the help screenshots. */
+export function isPublicCacheName(name: string): boolean {
+  return isPrecacheName(name) || name === HELP_SHOTS_CACHE;
+}
+
+/** Deletes every cache except the precache and the help screenshots (public static files only). */
 export async function deleteUserCaches(
   storage: Pick<CacheStorage, 'keys' | 'delete'> | undefined,
 ): Promise<void> {
   if (!storage) return;
   const names = await storage.keys();
-  await Promise.allSettled(names.filter((name) => !isPrecacheName(name)).map((name) => storage.delete(name)));
+  await Promise.allSettled(
+    names.filter((name) => !isPublicCacheName(name)).map((name) => storage.delete(name)),
+  );
 }
 
 export interface SignOutSteps {
