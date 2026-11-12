@@ -63,3 +63,4 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `0e2154d..731537e` | MAJOR_ISSUES | M1 settings help (uk/en) says the bot is not affected by the photo rule; the bot refuses readings while it is on | minor: HEIC conversion wording (only where the browser decodes HEIC); push page could mention the hourly limit of the approvals push |
+| 2 | + `795652b` | PASS | M1 resolved | minor: the generic typeNotAllowed message for HEIC |
