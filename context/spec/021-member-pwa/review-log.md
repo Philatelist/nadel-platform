@@ -45,3 +45,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `3d5c872..963bebc` | PASS | — | minor: `IllegalStateException` from the crypto escapes `WebPushClient.send` (JobRunr default retry); a failed reschedule drops the push with a WARN; V39 already holds `push_throttle` (Slice 8); `buildPushView` codes of Slice 8 untested until then |
+
+## Slice 8 — The other pushes and removal on leaving
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `963bebc..d6c79f1` | PASS | — | minor: `useScrollToHash` `decodeURIComponent` throws on a malformed hash (`#%`) inside an effect; throttle claimed before enqueue (an enqueue failure spends the hour); no bot-path test for ReadingSubmitted (shared code); a redundant `memberId != null` guard |

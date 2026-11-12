@@ -62,7 +62,10 @@ export function PendingReadingCard({ item }: { item: PendingReading }) {
   return (
     <li className="flex flex-col gap-3 rounded-panel border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Link to={`/meters/${meter.id}`} className="font-semibold text-accent underline">
+        <Link
+          to={`/meters/${meter.id}`}
+          className="inline-flex min-h-11 items-center sm:min-h-0 font-semibold text-accent underline"
+        >
           {title}
         </Link>
         <span className="text-sm text-ink-muted">

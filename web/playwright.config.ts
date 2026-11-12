@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: './e2e',
   // the production-build specs run through playwright.pwa.config.ts (`make e2e-pwa`)
   testIgnore: ['**/e2e/pwa/**'],
+  // `*.phone.spec.ts` run only in the `phone` project (360x740 touch); the desktop project skips them
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
@@ -14,5 +15,21 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/e2e/pwa/**', '**/*.phone.spec.ts'],
+    },
+    {
+      name: 'phone',
+      testMatch: '**/*.phone.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 360, height: 740 },
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+  ],
 });

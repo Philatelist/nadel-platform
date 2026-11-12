@@ -56,7 +56,7 @@ export function Layout() {
           <Link
             to={landingPath(me)}
             title={title}
-            className="order-1 md:order-none min-w-[8rem] max-w-full flex-1 truncate font-serif text-xl font-semibold text-ink no-underline md:flex-none"
+            className="order-1 md:order-none -my-2 min-w-[8rem] max-w-full flex-1 truncate py-2 font-serif text-xl font-semibold text-ink no-underline md:my-0 md:flex-none md:py-0"
           >
             {me.tenant?.name ? <UserContent>{title}</UserContent> : title}
           </Link>
@@ -65,7 +65,7 @@ export function Layout() {
           )}
           <div className="order-4 ml-auto flex min-w-0 flex-wrap md:order-none items-center gap-x-3 gap-y-2">
             <div className="flex min-w-0 flex-col text-sm leading-tight">
-              <Link to="/account" className="truncate font-medium text-ink">
+              <Link to="/account" className="-my-3.5 truncate py-3.5 font-medium text-ink md:my-0 md:py-0">
                 <UserContent>{me.fullName}</UserContent>
               </Link>
               <span className="truncate text-xs text-ink-muted">

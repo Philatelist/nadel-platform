@@ -173,7 +173,10 @@ export function RoundRow({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold break-words">
             <ResourceIcon resource={meter.resource} />
             {meter.plot && (
-              <Link to={`/meters/${meter.id}`} className="text-accent underline">
+              <Link
+                to={`/meters/${meter.id}`}
+                className="inline-flex min-h-11 items-center sm:min-h-0 text-accent underline"
+              >
                 <UserContent>{meter.serial}</UserContent>
               </Link>
             )}

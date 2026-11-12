@@ -122,7 +122,10 @@ function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visibl
       );
     case 'li':
       return (
-        <li key={key} className="my-1 [&>img]:mt-2">
+        <li
+          key={key}
+          className="my-1 [&>a:only-child]:inline-flex [&>a:only-child]:min-h-11 [&>a:only-child]:items-center sm:[&>a:only-child]:min-h-0 [&>img]:mt-2"
+        >
           {renderNodes(node.children, locale, visible)}
         </li>
       );
