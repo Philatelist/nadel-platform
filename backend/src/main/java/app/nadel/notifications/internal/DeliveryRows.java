@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
  * transaction of the bound cooperative (RLS); only the sending state of a row ever changes (the table's guard).
  */
 @Component
-class DeliveryRows {
+public class DeliveryRows {
 
     /** The statuses. */
     static final String QUEUED = "QUEUED";
@@ -148,6 +148,15 @@ class DeliveryRows {
                 + "next_attempt_at, created_at) values (?, 'ANNOUNCEMENT', ?, ?, ?, ?, ?, ?, ?) on conflict do nothing",
                 tenantId, announcementId, memberId, channel.name(), note, paper ? TO_PRINT : QUEUED,
                 paper ? null : utc(now), utc(now)) == 1;
+    }
+
+    /**
+     * The members with a delivery row of the announcement, every channel (paper included), each once in id order: the
+     * recipients of its push (feature 021, {@code internal.push}). None for an unknown announcement.
+     */
+    public List<UUID> announcementRecipients(UUID announcementId) {
+        return jdbc.queryForList("select distinct member_id from delivery where kind = 'ANNOUNCEMENT' "
+                + "and announcement_id = ? order by member_id", UUID.class, announcementId);
     }
 
     /** The counts of each given announcement's deliveries; an announcement without any is absent. */

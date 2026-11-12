@@ -29,8 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       the device;</li>
  *   <li>retry (429, 5xx, no answer): the next attempt scheduled as a new job after the next of
  *       {@code nadel.webpush.retry-delays} (the last one repeating), or later when the service's {@code Retry-After}
- *       asks for more, while the time to live ({@code nadel.webpush.ttl}, 3 days from the first attempt) lasts; after
- *       it the message is dropped.</li>
+ *       asks for more, while the time to live ({@link PushCode#ttl} of the code, else {@code nadel.webpush.ttl}, 3 days
+ *       from the first attempt) lasts; after it the message is dropped.</li>
  * </ul>
  * A device made with another VAPID key pair (after a rotation) can no longer receive anything and is deleted; a device
  * deleted meanwhile is skipped. While push is off nothing is sent. Logs carry the cooperative, the member, the code
@@ -81,7 +81,8 @@ class PushSender {
 
     private String attempt(SendPush job, PushCode code) {
         Instant now = clock.instant();
-        Instant deadline = job.queuedAt().plus(properties.ttl());
+        Duration ttl = code.ttl() != null ? code.ttl() : properties.ttl();
+        Instant deadline = job.queuedAt().plus(ttl);
         if (!now.isBefore(deadline)) {
             log.info("Push {} for cooperative {}: EXPIRED", code, job.tenantId());
             return "EXPIRED";
@@ -105,7 +106,7 @@ class PushSender {
             return logged(code, target, job, "NOT_SENDABLE");
         }
         PushOutcome outcome = client.send(endpoint, target.p256dh(), target.auth(), payload,
-                Duration.between(now, deadline));
+                Duration.between(now, deadline), code.topic());
         String result = switch (outcome.kind()) {
             case DELIVERED -> {
                 transaction.executeWithoutResult(status -> subscriptions.delivered(target.id(), clock.instant()));
@@ -121,7 +122,7 @@ class PushSender {
             }
             case RETRY -> {
                 Optional<Instant> next = nextAttempt(job.attempt(), job.queuedAt(), clock.instant(),
-                        outcome.retryAfter(), properties.retryDelays(), properties.ttl());
+                        outcome.retryAfter(), properties.retryDelays(), ttl);
                 if (next.isEmpty()) {
                     yield "RETRY_EXPIRED";
                 }

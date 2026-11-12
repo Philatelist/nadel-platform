@@ -12,6 +12,7 @@ import app.nadel.meters.PlotMeterPointsChanged;
 import app.nadel.meters.PlotMeterPointsChanged.Cause;
 import app.nadel.meters.ReadingDecided;
 import app.nadel.meters.ReadingStatus;
+import app.nadel.meters.ReadingSubmitted;
 import app.nadel.meters.ReadingUsage;
 import app.nadel.meters.internal.MeterReadingRecord.Status;
 import app.nadel.meters.internal.ReadingValidator.MeterSpan;
@@ -307,6 +308,9 @@ class ReadingCommands {
      * While the cooperative's setting {@link CooperativeSettings#readingPhotoRequired()} is on, a submission without a
      * photo is 400 {@code READING_PHOTO_REQUIRED} on {@code photo}, checked after the owner rule and before anything
      * else, so nothing is saved (feature 021 §2.3). The board's entries never need a photo.
+     * <p>
+     * A saved submission publishes {@link ReadingSubmitted} in this transaction (feature 021 §2.2: the approvers are
+     * told); the same value again changes nothing and publishes nothing.
      *
      * @param photo the uploaded photo; null without one (the deprecated JSON operation and the Telegram bot)
      */
@@ -359,6 +363,9 @@ class ReadingCommands {
                 new FieldChange("value", replaced == null ? null : replaced.getValue().toString(), value.toString()),
                 new FieldChange("photo", replaced == null ? null : Boolean.toString(photos.has(replaced.getId())),
                         Boolean.toString(prepared != null))));
+        if (actor.memberId() != null) {
+            events.publishEvent(new ReadingSubmitted(meter.getTenantId(), created.getId(), plotId, actor.memberId()));
+        }
         return new ReadingSaved(ReadingDtoMapper.toDto(created, null, false, prepared != null),
                 pending.stream().map(MeterReadingRecord::getId).toList(), ReadingDtoMapper.toDto(warnings));
     }

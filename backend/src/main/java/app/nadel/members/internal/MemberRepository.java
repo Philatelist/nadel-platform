@@ -121,6 +121,17 @@ interface MemberRepository extends JpaRepository<Member, UUID> {
             + "where m.archivedAt is null and r.baseCode = :baseCode")
     List<Member> findActiveHoldersOf(@Param("baseCode") String baseCode);
 
+    /**
+     * Ids of the active members holding the permission through a role that stores it or through the Chairman base role
+     * (every permission, {@link PermissionUnion}); feature 021, {@code RoleHolders#activeWithPermission}.
+     */
+    @Query("select distinct m.id from Member m join MemberRole mr on mr.memberId = m.id "
+            + "join Role r on r.id = mr.roleId "
+            + "where m.archivedAt is null and (r.baseCode = :chairman or exists (select rp from RolePermission rp "
+            + "where rp.roleId = r.id and rp.permission = :permission))")
+    List<UUID> findActiveIdsWithPermission(@Param("permission") String permission,
+            @Param("chairman") String chairman);
+
     /** Ids of the active members holding the Chairman base role in a cooperative. */
     @Query("select distinct m.id from Member m join MemberRole mr on mr.memberId = m.id "
             + "join Role r on r.id = mr.roleId "

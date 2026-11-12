@@ -1,10 +1,12 @@
 package app.nadel.members.internal;
 
+import app.nadel.identity.Permission;
 import app.nadel.members.MemberRef;
 import app.nadel.members.RoleHolders;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,15 @@ class JpaRoleHolders implements RoleHolders {
                 .map(member -> new MemberRef(member.getId(), member.getLastName(), member.getFirstName(),
                         member.getMiddleName(), member.isArchived()))
                 .sorted(NAME_ORDER)
+                .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<UUID> activeWithPermission(Permission permission) {
+        Objects.requireNonNull(permission, "permission");
+        return members.findActiveIdsWithPermission(permission.name(), PermissionUnion.CHAIRMAN).stream()
+                .sorted()
                 .toList();
     }
 }

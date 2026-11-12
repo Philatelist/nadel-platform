@@ -200,6 +200,11 @@ class PushSubscriptions {
                 MAX_CONSECUTIVE_FAILURES) == 1;
     }
 
+    /** Deletes every device of the member (access switched off); how many there were. */
+    int deleteAllOf(UUID memberId) {
+        return jdbc.update("delete from push_subscription where member_id = ?", memberId);
+    }
+
     /** Deletes the device (gone at the push service, or made with another key pair). */
     void delete(UUID id) {
         jdbc.update("delete from push_subscription where id = ?", id);

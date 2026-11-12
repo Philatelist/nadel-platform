@@ -14,10 +14,12 @@ import { RoleName } from '../components/RoleName';
 import { UserContent } from '../components/UserContent';
 import { InstallCard } from '../pwa/InstallCard';
 import { useDocumentTitle } from '../useDocumentTitle';
+import { useScrollToHash } from '../hooks/useScrollToHash';
 
 export function AccountPage() {
   const t = useT();
   useDocumentTitle(t.account.title);
+  useScrollToHash();
   const { locale } = useLocale();
   const me = useMe();
   // memberId is always present for a non-operator; the operator never reaches this page

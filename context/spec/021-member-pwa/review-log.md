@@ -39,3 +39,9 @@
 | Round | Range / commits | Verdict | Major issues | Notes |
 |---|---|---|---|---|
 | 1 | `a4d349f..3d5c872` | PASS | — | minor: hourly update-check interval never cleared (single registration); `promptInstall` drops the event before `prompt()`; the SW contract test is source-text based; import order of `useDirtyGuard` |
+
+## Slice 7 — Push on a device and the first push
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `3d5c872..963bebc` | PASS | — | minor: `IllegalStateException` from the crypto escapes `WebPushClient.send` (JobRunr default retry); a failed reschedule drops the push with a WARN; V39 already holds `push_throttle` (Slice 8); `buildPushView` codes of Slice 8 untested until then |

@@ -50,7 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * <b>The text</b> is user content: stored as entered (surrounding spaces removed) and sent as is, never in the audit
  * log, the outbox or a log. The send is audited as {@code ANNOUNCEMENT_SENT} (entity type {@code ANNOUNCEMENT}, the
- * announcement's id, label {@code announcement}) with the audience, the channels and the counts per channel.
+ * announcement's id, label {@code announcement}) with the audience, the channels and the counts per channel, and
+ * publishes {@link AnnouncementSent} (ids only) for the push to its recipients (feature 021).
  */
 @Service
 class Announcements {
@@ -140,6 +141,7 @@ class Announcements {
                         entry.getValue().note(), now);
             }
             audit(tenantId, actor, announcementId, streets, chosen, counts);
+            events.publishEvent(new AnnouncementSent(tenantId, announcementId));
             for (Channel channel : List.of(Channel.EMAIL, Channel.TELEGRAM)) {
                 if (counts.getOrDefault(channel, 0) > 0) {
                     queue.wakeAfterCommit(tenantId, channel);

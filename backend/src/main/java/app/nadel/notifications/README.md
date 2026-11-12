@@ -15,12 +15,14 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used:
 
 - `members`: `MemberDirectory` (names, contacts and channels; `activeIds` for an announcement to every member),
-  `MemberChannels` (the member's own channel choice); the SPIs `TelegramLinkStatus` and `InvitationDelivery`
+  `MemberChannels` (the member's own channel choice), `RoleHolders.activeWithPermission` (the approvers told of a
+  submitted reading, feature 021), the event `MemberAccessRevoked` (the member's push devices are deleted); the SPIs `TelegramLinkStatus` and `InvitationDelivery`
   (feature 020) are implemented here by `TelegramLinkStatusProvider` and `InvitationLetters`.
 - `documents`: `DocumentsFacade` (`latestInvoices`, `invoiceSummary`, `invoicePdf`, `invoiceForDay` for the bot's
   «Рахунок», `receiptPdf` for the cash receipt), `DocumentFormats` for the texts; the SPI `PaperRecipients` is
   implemented here by `PaperCopiesProvider`; the event `InvoicesIssued` (feature 021, the push «Новий рахунок»).
-- `meters`: `MemberReadings` (the bot's «Показання») and the event `ReadingDecided`.
+- `meters`: `MemberReadings` (the bot's «Показання») and the events `ReadingDecided` and `ReadingSubmitted` (feature
+  021).
 - `ledger`: the events `PaymentRecorded` and `PaymentReversed`; `LedgerReadModel` (`paymentsByIds` and `debtsAsOf` for
   the payment messages and the bot's «Борг»; `firstBillingMonth` for the demo).
 - `tariffs`: `ChargeTypeCatalog` (the charge type names of «Борг»).
@@ -35,8 +37,12 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 
 - **Events it listens to** (ADR 0007 pattern: `@Async @TransactionalEventListener`, `TenantContext.runAs(tenantId)`,
   then a `TransactionTemplate`; idempotent): `ledger.PaymentRecorded`, `ledger.PaymentReversed` (`PaymentMessages`),
-  `meters.ReadingDecided` (`ReadingMessages`), `documents.InvoicesIssued` (`push.InvoicePushes`, feature 021). It
-  publishes no domain event of its own.
+  `meters.ReadingDecided` (`ReadingMessages`); for push (feature 021) `documents.InvoicesIssued`
+  (`push.InvoicePushes`), `ledger.PaymentRecorded` (`push.PaymentPushes`), `meters.ReadingDecided` and
+  `meters.ReadingSubmitted` (`push.ReadingPushes`), `members.MemberAccessRevoked` (`push.RevokedAccessDevices`) and
+  its own internal `AnnouncementSent` (`push.AnnouncementPushes`). It publishes no domain event for other modules;
+  `AnnouncementSent(tenantId, announcementId)` (ids only) stays inside the module (public in `internal` only so the
+  `push` package hears it).
 - **Audit actions it publishes** (`audit.AuditEvent`): `DELIVERY_SETTINGS_CHANGED`, `TELEGRAM_LINKED`,
   `TELEGRAM_UNLINKED`, `INVOICES_SENT`, `ANNOUNCEMENT_SENT`. Never a secret, a chat id or an announcement's text.
 - **SPIs it implements:** `members.TelegramLinkStatus` (`TelegramLinkStatusProvider`), `documents.PaperRecipients`
@@ -346,6 +352,8 @@ transaction.
   woken after the commit. The send publishes `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`, the announcement's id,
   label `announcement`; fields `audience` `ALL`/`STREETS`, `streets` for `STREETS` joined by ", ", `channels`,
   `telegram`, `email`, `paper`) — **never the text**, so it is not in the audit log or the outbox; no log carries it.
+  It also publishes the internal `AnnouncementSent(tenantId, announcementId)` for the push to its recipients (feature
+  021, below).
 - **The message** (`AnnouncementMessages`, at send time): Telegram `sendMessage` with the text exactly as entered (no
   `parse_mode`, so nothing is read as formatting); e-mail with the subject «Оголошення правління {cooperative}»
   (`announcement.email.subject`), the text as the plain part and, HTML-escaped with its line breaks as `<br>`, as the
@@ -399,13 +407,50 @@ the in-memory pattern of `ReadingMessages` (a push queued while the push service
 - **Payload** (`PushPayload`, `PushCode`): `{"v":1,"code":"INVOICES_ISSUED","params":{"month":"2026-10"},
   "url":"/account#my-invoices","lang":"uk"}`; the parameters are exactly those of the code, each of a known shape
   (`month` `YYYY-MM`), anything else is refused, so a message never carries an amount, a plot, a name or an address.
-  `lang` is the device's language (`uk`/`en`); the service worker writes the text from its catalogs.
+  `lang` is the device's language (`uk`/`en`); the service worker writes the text from its catalogs. The codes, their
+  parameters and the screen a tap opens:
+
+  | Code | Params | `url` | Recipients (source event) |
+  |---|---|---|---|
+  | `INVOICES_ISSUED` | `month` | `/account#my-invoices` | current owners of the plots with a new invoice version (`documents.InvoicesIssued`) |
+  | `PAYMENT_RECORDED` | — | `/account#my-charges` | the payer of each payment, while `notify_payments` is on (`ledger.PaymentRecorded`) |
+  | `READING_APPROVED`, `READING_REJECTED` | — | `/account#my-meters` | the member who submitted the reading (`meters.ReadingDecided`) |
+  | `ANNOUNCEMENT` | — | `/account` | members with a delivery row of the announcement, paper included (`AnnouncementSent`) |
+  | `READINGS_TO_APPROVE` | — | `/readings/approvals` | active holders of `READINGS_APPROVE` (the chairman included), not the submitter; at most one per rolling hour; TTL 1 h; `Topic: readings-approvals` (`meters.ReadingSubmitted`) |
+
+  A code may have its own time to live (`PushCode.ttl`, else `nadel.webpush.ttl`), which is both the `TTL` header and
+  the end of its retries, and a `Topic` header (RFC 8030: the push service keeps only the newest message of the topic
+  for an offline device).
 - **«Новий рахунок за {місяць}»** (`InvoicePushes`): `@Async @TransactionalEventListener` on `documents.InvoicesIssued`
   (a month build's plots with a new version, or one invoice issued on request); binds the cooperative, reads the
   plots' current owners (`PlotOwners.currentOwnerIds`) and their devices in one short transaction, and queues one
   `SendPush` per device with code `INVOICES_ISSUED`, the build as `ref` and the month: one push per member and device
-  however many of the plots they own. An unchanged rebuild publishes no event, so nothing is sent. The other events
-  (payments, readings, announcements, approvals, leaving the cooperative) come in a later slice.
+  however many of the plots they own. An unchanged rebuild publishes no event, so nothing is sent.
+- **Fan-out** (`PushFanOut`, used by every push listener): nothing while push is off; otherwise it binds the event's
+  cooperative (`TenantContext.runAs`) and in one short transaction asks the listener for the pushes (member, code,
+  reference, month; the listener reads the recipients there through the public APIs), reads the recipients' devices,
+  deletes the devices of another key pair and claims the throttle of a throttled code for the recipients with a device;
+  the jobs are queued after the commit. A member gets one push per code and reference, and one at most of a throttled
+  code. The transaction is not read-only because of the key-pair clean-up and the throttle.
+- **«Платіж зараховано»** (`PaymentPushes`, on `ledger.PaymentRecorded`): only while the cooperative sends payment
+  notices (`DeliverySettingsService.notifyPayments`, the same switch as the payment messages); each payment's payer
+  (`LedgerReadModel.paymentsByIds` → `payerMemberId`), one push per payer and event however many payments name them
+  (the reference is the payer's first payment id); a payment without a payer pushes to nobody (the plot's owners are
+  not told by push).
+- **«Показ лічильника прийнято / відхилено»** (`ReadingPushes`, on `meters.ReadingDecided`): the submitter, the
+  reading as the reference.
+- **«Нове оголошення від правління»** (`AnnouncementPushes`, on `AnnouncementSent`, published by `Announcements` in
+  the send's transaction, never for a preview): every member with a delivery row of the announcement
+  (`DeliveryRows.announcementRecipients`, every channel, paper included), the announcement as the reference.
+- **«Нові покази на перевірку»** (`ReadingPushes`, on `meters.ReadingSubmitted`, a member's own submission only):
+  `RoleHolders.activeWithPermission(READINGS_APPROVE)` without the submitter, each through the throttle
+  (`PushThrottle`, table `push_throttle`, V39): one statement `INSERT … SELECT unnest(members) ON CONFLICT DO UPDATE
+  SET last_sent_at = now WHERE last_sent_at <= now - 1 h RETURNING member_id` claims the push for the members whose last
+  one is at least an hour old (or who have none); the row lock makes it atomic across instances, so three submissions
+  in an hour push once per approver, the next hour again. The reading of the first claim is the reference.
+- **Leaving the cooperative** (`RevokedAccessDevices`, on `members.MemberAccessRevoked`, published by the disable
+  endpoint and the archive): every device of the member is deleted (also while push is off); a job already queued for
+  one finds no device (`NO_DEVICE`) and sends nothing. Idempotent.
 - **Devices** (`PushSubscriptions`, table `push_subscription`, V39): the endpoint, `p256dh` and `auth` sealed with the
   cooperative's data key at `FieldRef("push_subscription", "endpoint_enc" | "ua_public_enc" | "auth_enc", id)` (the
   column `p256dh_enc` has the place name `ua_public_enc`: place names have no digits), the endpoint's blind index
@@ -533,6 +578,11 @@ this runner writes them again on the next start.
   the push service took the message (before the outcome is written) is run again by JobRunr and can repeat the push.
 - Push: an invoice issued on request through the bot's «Рахунок» is a new version like any other, so its plot's
   owners also get «Новий рахунок» on their devices. A month build queues one job per device one by one.
+- Push: the throttle of «Нові покази на перевірку» is claimed before the jobs are queued; a crash between the commit
+  and the queueing loses that hour's push for those approvers (the next submission after the hour pushes again).
+  `MemberAccessRevoked` deletes the devices whatever happens next: a member restored and invited again registers their
+  devices anew. A payment push goes even when the payment was reversed before the listener ran (as the payment message
+  does).
 
 ## Tests
 
@@ -587,7 +637,15 @@ and delete work, an invoice build queues nothing), `InvoicePushTests` (the owner
 one push per device that decrypts to the code and the month, nobody else; an unchanged rebuild sends nothing; an
 invoice on request; 410 deletes; 503 then 500 rescheduled with `Retry-After` and the next delay, then delivered; a
 redelivered event sends once; five refusals delete, a delivery clears them; another key pair dropped; the logs carry
-no endpoint, key or token), `PushJobTests` (JobRunr's server on: the job a build queues delivers the push), and
+no endpoint, key or token), `PushEventsTests` (a payment pushes its payer only, once per device, not a co-owner;
+nothing while `notify_payments` is off or without a payer; two payments of one payer in one event are one push; the
+submitter told of the approval and the rejection, not a co-owner; three submissions in an hour push once to each
+approver (the chairman without a stored `READINGS_APPROVE` row, a custom role) and never to the submitter, an archived
+approver, the treasurer or a plain member, with `Topic: readings-approvals` and a TTL of an hour, the same value again
+pushes nothing, an hour later a new value pushes again, the board's entry never; four concurrent submissions claim the
+throttle once; an announcement reaches its e-mail and paper recipients, not an archived member; archive and disabled
+access delete every device of the member and nothing further arrives; a job queued before the member left sends
+nothing; redelivered events queue nothing; the logs carry no endpoint, key or name), `PushJobTests` (JobRunr's server on: the job a build queues delivers the push), and
 `PushTenantIsolationTests` (V39). `app.nadel.notifications.FakePushService` (test sources) is an in-JVM push service
 on a random loopback port that every Spring test context allows as `nadel.webpush.extra-allowed-origins`
 (`IntegrationTest`, which also sets a random VAPID pair per JVM; `nadel.test.push-public-key=` turns push off); it keeps

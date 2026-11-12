@@ -9,12 +9,14 @@
  * JDK-only RFC 8291/8292 crypto, the device table {@code push_subscription}, the JobRunr job {@code SendPush}).
  * <p>
  * It has no public API: other modules never call it. It reads other modules only through their public APIs
- * ({@code members.MemberDirectory}, {@code members.MemberChannels}, {@code identity.OwnedPlotsSource},
+ * ({@code members.MemberDirectory}, {@code members.MemberChannels}, {@code members.RoleHolders},
+ * {@code identity.OwnedPlotsSource},
  * {@code tenancy.TenantDirectory}, {@code documents.DocumentsFacade}, {@code plots.PlotOwners},
  * {@code ledger.LedgerReadModel}, {@code tariffs.ChargeTypeCatalog}, {@code meters.MemberReadings}), implements their
  * SPIs ({@code members.TelegramLinkStatus}, {@code documents.PaperRecipients}) and listens to their events (the
- * ledger's {@code PaymentRecorded} and {@code PaymentReversed}, the meters' {@code ReadingDecided}, the documents'
- * {@code InvoicesIssued}). Everything is internal: the endpoints of tag
+ * ledger's {@code PaymentRecorded} and {@code PaymentReversed}, the meters' {@code ReadingDecided} and
+ * {@code ReadingSubmitted}, the documents' {@code InvoicesIssued}, the members' {@code MemberAccessRevoked}), and to
+ * its own internal {@code AnnouncementSent}. Everything is internal: the endpoints of tag
  * {@code notifications} ({@code NotificationsController}),
  * {@code DeliverySettingsService}, {@code DeliveryChecks}, {@code MemberNotifications}, {@code LinkCodes},
  * {@code TelegramLinks}, the bot ({@code BotSupervisor}, {@code BotWorker}, {@code BotConversation},

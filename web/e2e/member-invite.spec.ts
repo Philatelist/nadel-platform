@@ -167,7 +167,7 @@ test('turning access off shows the status and blocks the sign-in', async ({ brow
   const password = await setPassword(browser, await letterLink((await waitForLetterTo(email)).id));
   await admin.getByRole('button', { name: t.memberAccess.disable }).click();
   await admin.getByRole('dialog').getByRole('button', { name: t.memberAccess.disable }).click();
-  await expect(admin.getByText(t.memberAccess.status.DISABLED)).toBeVisible();
+  await expect(admin.getByText(t.memberAccess.status.DISABLED, { exact: true })).toBeVisible();
   await expectCannotSignIn(browser, email, password);
   await admin.context().close();
 });
@@ -180,7 +180,7 @@ test('inviting again after access was turned off: the old password is refused, t
   await admin.reload();
   await admin.getByRole('button', { name: t.memberAccess.disable }).click();
   await admin.getByRole('dialog').getByRole('button', { name: t.memberAccess.disable }).click();
-  await expect(admin.getByText(t.memberAccess.status.DISABLED)).toBeVisible();
+  await expect(admin.getByText(t.memberAccess.status.DISABLED, { exact: true })).toBeVisible();
 
   await admin.getByRole('button', { name: t.memberAccess.invite }).click();
   await expect(admin.getByText(/waiting for a password/)).toBeVisible();
@@ -224,6 +224,6 @@ test('archiving a member with access turns it off and restoring does not bring i
   await admin.getByRole('dialog').getByRole('button', { name: 'Restore' }).click();
   await expect(admin.getByRole('button', { name: 'Archive' })).toBeVisible();
   await admin.goto(`/members/${member.id}`);
-  await expect(admin.getByText(t.memberAccess.status.DISABLED)).toBeVisible();
+  await expect(admin.getByText(t.memberAccess.status.DISABLED, { exact: true })).toBeVisible();
   await admin.context().close();
 });

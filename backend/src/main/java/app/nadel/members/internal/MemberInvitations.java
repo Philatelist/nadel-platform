@@ -8,6 +8,7 @@ import app.nadel.identity.SignInAccountChange;
 import app.nadel.identity.SignInAccountMissingException;
 import app.nadel.identity.SignInAccounts;
 import app.nadel.members.InvitationDeliveryResult;
+import app.nadel.members.MemberAccessRevoked;
 import app.nadel.members.internal.MemberAccessState.Row;
 import app.nadel.members.internal.MemberAccessState.State;
 import app.nadel.members.internal.MemberInvitationRows.Invitation;

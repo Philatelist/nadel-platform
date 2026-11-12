@@ -78,7 +78,7 @@ class WebPushClientTests {
     private PushOutcome send(TestPushDevice device, String endpoint) {
         return client.send(URI.create(endpoint), Base64.getUrlDecoder().decode(device.p256dh()),
                 Base64.getUrlDecoder().decode(device.auth()), "{\"v\":1}".getBytes(StandardCharsets.UTF_8),
-                Duration.ofHours(72));
+                Duration.ofHours(72), null);
     }
 
     @Test
@@ -132,7 +132,7 @@ class WebPushClientTests {
 
         PushOutcome outcome = toClosed.send(URI.create("http://127.0.0.1:" + closed + "/push/1"),
                 Base64.getUrlDecoder().decode(device.p256dh()), Base64.getUrlDecoder().decode(device.auth()),
-                new byte[] {1}, Duration.ofMinutes(1));
+                new byte[] {1}, Duration.ofMinutes(1), null);
 
         assertThat(outcome.kind()).isEqualTo(Kind.RETRY);
         assertThat(outcome.status()).isZero();

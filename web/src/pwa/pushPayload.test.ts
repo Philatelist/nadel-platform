@@ -33,6 +33,46 @@ describe('buildPushView', () => {
   });
 });
 
+describe('buildPushView for every code', () => {
+  const cases = [
+    ['INVOICES_ISSUED', '/account#my-invoices', 'Новий рахунок за листопад', 'New invoice for November'],
+    ['PAYMENT_RECORDED', '/account#my-charges', 'Платіж зараховано', 'Payment recorded'],
+    ['READING_APPROVED', '/account#my-meters', 'Показ лічильника прийнято', 'Meter reading accepted'],
+    ['READING_REJECTED', '/account#my-meters', 'Показ лічильника відхилено', 'Meter reading rejected'],
+    ['ANNOUNCEMENT', '/account', 'Нове оголошення від правління', 'New announcement from the board'],
+    ['READINGS_TO_APPROVE', '/readings/approvals', 'Нові покази на перевірку', 'New readings to review'],
+  ] as const;
+
+  it.each(cases)('%s in uk and en', (code, url, uk, en) => {
+    const params = { month: '2026-11' };
+    const u = buildPushView(msg({ code, params, url, lang: 'uk' }));
+    expect(u).toMatchObject({ title: 'Наділ', body: uk, url, tag: code });
+    const e = buildPushView(msg({ code, params, url, lang: 'en' }));
+    expect(e).toMatchObject({ title: 'Nadel', body: en, url, tag: code });
+  });
+
+  it('passes the url through safeUrl', () => {
+    expect(buildPushView(msg({ code: 'ANNOUNCEMENT', url: 'https://evil.example' })).url).toBe('/');
+  });
+
+  it('never leaks extra params into the text', () => {
+    const view = buildPushView(
+      msg({
+        code: 'PAYMENT_RECORDED',
+        params: { amount: '1250.50', plot: '17', name: 'Іваненко' },
+        lang: 'uk',
+      }),
+    );
+    expect(view.body).toBe('Платіж зараховано');
+    expect(JSON.stringify(view)).not.toMatch(/1250|Іваненко|17/);
+  });
+
+  it('formats the month in both languages', () => {
+    expect(monthName('2026-03', 'uk')).toBe('березень');
+    expect(monthName('2026-03', 'en')).toBe('March');
+  });
+});
+
 describe('safeUrl', () => {
   it('accepts only paths of this app', () => {
     expect(safeUrl('/invoices?x=1')).toBe('/invoices?x=1');
