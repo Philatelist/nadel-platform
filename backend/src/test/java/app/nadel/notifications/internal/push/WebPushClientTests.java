@@ -10,7 +10,6 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
@@ -129,10 +128,10 @@ class WebPushClientTests {
 
     @Test
     void noAnswerIsTriedAgain() throws IOException {
-        int closed;
-        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            closed = socket.getLocalPort();
-        }
+        // a port that was free a moment ago and is closed now: bind a server, read its port, stop it
+        HttpServer probe = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        int closed = probe.getAddress().getPort();
+        probe.stop(0);
         WebPushProperties properties = WebPushProperties.withoutKeys()
                 .withExtraOrigins(List.of("http://127.0.0.1:" + closed));
         WebPushClient toClosed = new WebPushClient(properties, new PushEndpointPolicy(properties),

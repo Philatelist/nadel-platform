@@ -82,7 +82,7 @@ export function decrypt(body: Buffer, uaPrivateKey: string, uaPublicKey: string,
   const cek = Buffer.from(hkdfSync('sha256', ikm, salt, text('Content-Encoding: aes128gcm\0'), 16));
   const nonce = Buffer.from(hkdfSync('sha256', ikm, salt, text('Content-Encoding: nonce\0'), 12));
 
-  const decipher = createDecipheriv('aes-128-gcm', cek, nonce);
+  const decipher = createDecipheriv('aes-128-gcm', cek, nonce, { authTagLength: 16 });
   decipher.setAuthTag(ciphertext.subarray(ciphertext.length - 16));
   const record = Buffer.concat([
     decipher.update(ciphertext.subarray(0, ciphertext.length - 16)),

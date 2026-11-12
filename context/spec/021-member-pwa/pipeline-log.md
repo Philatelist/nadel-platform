@@ -5,7 +5,7 @@
 - Branch: 021-member-pwa · Base: main @ 3e39ab2 (origin/main; local main is behind at b324146 and is not moved)
 - Requirement: document docs/features/021-member-pwa.md (untracked in the working tree)
 - Autonomy: minimal (.claude/feature-pipeline.yml)
-- Publish: pr+checks · PR: — · Checks: —
+- Publish: pr+checks · PR: https://github.com/Philatelist/nadel-platform/pull/74 · Checks: pending
 - Review run: on (not started yet; the 020 review run is still up and is stopped before Phase 6)
 
 ## Project facts
@@ -70,3 +70,4 @@
 - Verify: 45/49 criteria [x] with evidence (qa-notes.md + screenshots docs/screenshots/021-member-pwa-*.png, git-ignored), 4 [?]: browser installability verdict over HTTPS, the browser's own install dialog, the iOS card on a real iPhone, pnpm audit/OSV verdict from CI. Status: Implemented — pending manual check.
 - Product docs to update (owner): /awos:architecture (meter photos in the DB, no S3 item; ADR range 0001–0021; nadel-mobile realm client; Web Push/PWA), /awos:product (PWA instead of iOS/Android apps; push; meter photo; pay in the bank).
 - Phase 4 finished. Next: Phase 5 (push, PR, checks).
+- CI on ef20107: SAST red (2 blocking Semgrep findings in test code: raw ServerSocket in WebPushClientTests; GCM decipher without authTagLength in web/e2e/support/fakePush.ts); others green. CI fix: closed port via a briefly bound HttpServer; authTagLength 16. WebPushClientTests 10/10; push + push-events + member-pwa-acceptance 18/18; e2e tsc/lint/format OK.
