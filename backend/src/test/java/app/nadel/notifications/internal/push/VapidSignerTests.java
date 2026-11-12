@@ -1,6 +1,7 @@
 package app.nadel.notifications.internal.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -77,6 +78,16 @@ class VapidSignerTests {
         assertThat(VapidSigner.origin(URI.create("http://localhost:80/push/a"))).isEqualTo("http://localhost");
         assertThat(VapidSigner.origin(URI.create("https://web.push.apple.com/abc"))).isEqualTo(
                 "https://web.push.apple.com");
+    }
+
+    @Test
+    void aKeyThatCannotSignFailsWithoutAnyDetailOfTheKey() {
+        VapidSigner failing = new VapidSigner(WebPushClientTests.unsignableKeys(), clock);
+
+        assertThatThrownBy(() -> failing.authorization(URI.create("https://fcm.googleapis.com/fcm/send/one")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The VAPID token could not be signed")
+                .hasNoCause();
     }
 
     /** A clock the test moves. */

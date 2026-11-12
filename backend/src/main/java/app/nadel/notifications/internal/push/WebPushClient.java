@@ -18,7 +18,9 @@ import org.springframework.stereotype.Component;
  * posted with {@code TTL}, {@code Content-Encoding: aes128gcm}, {@code Urgency: normal} and the code's {@code Topic}
  * when it has one. The answer becomes a
  * {@link PushOutcome}. Blocks: the caller runs it outside any transaction. Logs nothing: an endpoint is a capability
- * and the exception of a failed connection may name it, so a failure is only the outcome {@code RETRY}.
+ * and the exception of a failed connection may name it, so a failure is only the outcome {@code RETRY}. A failure of
+ * the server's own encryption or signing is a {@code RETRY} too, never a refusal counted against the device, and never
+ * an exception that would leave the job to JobRunr's own retries (which know nothing of the time to live).
  */
 @Component
 class WebPushClient {
@@ -85,6 +87,10 @@ class WebPushClient {
         } catch (IllegalArgumentException e) {
             // a key that is not a point of the curve, or a URI the client does not take
             return PushOutcome.notAllowed();
+        } catch (IllegalStateException e) {
+            // the server's own encryption or signing failed (a GeneralSecurityException of the JDK): not the device's
+            // fault, so no refusal is counted against it (five would delete it); tried again within the time to live
+            return PushOutcome.unreachable();
         }
         try {
             HttpResponse<Void> response = http.send(request, HttpResponse.BodyHandlers.discarding());

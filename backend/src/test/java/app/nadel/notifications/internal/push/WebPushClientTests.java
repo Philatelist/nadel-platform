@@ -1,6 +1,8 @@
 package app.nadel.notifications.internal.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import app.nadel.notifications.TestPushDevice;
 import app.nadel.notifications.internal.push.PushOutcome.Kind;
@@ -10,8 +12,12 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.time.Clock;
@@ -28,6 +34,9 @@ import org.junit.jupiter.api.Test;
 /**
  * The push request against a local push service: the headers of RFC 8030/8291/8292 and a body the device decrypts;
  * the outcome of each kind of answer; a redirect is not followed; an endpoint that is not allowed is never contacted.
+ * What cannot be sent never reaches the service: a device key off the curve is refused, a host that does not resolve
+ * now and a failure of the server's own encryption or signing are tried again (a refusal would count against the
+ * device and five would delete it, though the fault is not the device's).
  */
 class WebPushClientTests {
 
@@ -146,5 +155,101 @@ class WebPushClientTests {
 
         assertThat(outcome.kind()).isEqualTo(Kind.REJECTED);
         assertThat(paths).isEmpty();
+    }
+
+    @Test
+    void aDeviceKeyOffTheCurveIsRefusedWithoutContactingTheService() {
+        TestPushDevice device = new TestPushDevice();
+        byte[] offCurve = Base64.getUrlDecoder().decode(device.p256dh());
+        offCurve[64] ^= 1;
+
+        PushOutcome outcome = client.send(URI.create(origin + "/push/201"), offCurve,
+                Base64.getUrlDecoder().decode(device.auth()), new byte[] {1}, Duration.ofMinutes(1), null);
+
+        assertThat(outcome.kind()).isEqualTo(Kind.REJECTED);
+        assertThat(paths).isEmpty();
+    }
+
+    @Test
+    void aHostThatDoesNotResolveNowIsTriedAgain() {
+        WebPushProperties properties = WebPushProperties.withoutKeys();
+        WebPushClient unresolved = new WebPushClient(properties, new PushEndpointPolicy(properties, host -> {
+            throw new UnknownHostException(host);
+        }), new WebPushEncryptor(), new VapidSigner(keys, Clock.systemUTC()), Clock.systemUTC());
+        TestPushDevice device = new TestPushDevice();
+
+        PushOutcome outcome = unresolved.send(URI.create("https://fcm.googleapis.com/fcm/send/abc"),
+                Base64.getUrlDecoder().decode(device.p256dh()), Base64.getUrlDecoder().decode(device.auth()),
+                new byte[] {1}, Duration.ofMinutes(1), null);
+
+        assertThat(outcome.kind()).isEqualTo(Kind.RETRY);
+        assertThat(outcome.status()).isZero();
+    }
+
+    @Test
+    void anInterruptedSendIsTriedAgainAndKeepsTheInterrupt() {
+        TestPushDevice device = new TestPushDevice();
+        Thread.currentThread().interrupt();
+        PushOutcome outcome;
+        boolean stillInterrupted;
+        try {
+            outcome = send(device, origin + "/push/201");
+        } finally {
+            stillInterrupted = Thread.interrupted();
+        }
+
+        assertThat(outcome.kind()).isEqualTo(Kind.RETRY);
+        assertThat(outcome.status()).isZero();
+        assertThat(stillInterrupted).isTrue();
+    }
+
+    @Test
+    void aFailureOfTheServersOwnEncryptionIsTriedAgainWithoutContactingTheService() throws Exception {
+        KeyPair valid = P256.generate();
+        KeyPair broken = new KeyPair(valid.getPublic(), rsaPrivateKey()); // ECDH refuses the key
+        WebPushProperties properties = WebPushProperties.withoutKeys().withExtraOrigins(List.of(origin));
+        WebPushClient failing = new WebPushClient(properties, new PushEndpointPolicy(properties),
+                new WebPushEncryptor(() -> broken, () -> new byte[16]), new VapidSigner(keys, Clock.systemUTC()),
+                Clock.systemUTC());
+
+        PushOutcome outcome = sendWith(failing, new TestPushDevice());
+
+        assertThat(outcome.kind()).isEqualTo(Kind.RETRY);
+        assertThat(outcome.status()).isZero();
+        assertThat(paths).isEmpty();
+    }
+
+    @Test
+    void aFailureOfTheServersOwnSigningIsTriedAgainWithoutContactingTheService() {
+        WebPushProperties properties = WebPushProperties.withoutKeys().withExtraOrigins(List.of(origin));
+        WebPushClient failing = new WebPushClient(properties, new PushEndpointPolicy(properties),
+                new WebPushEncryptor(), new VapidSigner(unsignableKeys(), Clock.systemUTC()), Clock.systemUTC());
+
+        PushOutcome outcome = sendWith(failing, new TestPushDevice());
+
+        assertThat(outcome.kind()).isEqualTo(Kind.RETRY);
+        assertThat(outcome.status()).isZero();
+        assertThat(paths).isEmpty();
+    }
+
+    private PushOutcome sendWith(WebPushClient sender, TestPushDevice device) {
+        return sender.send(URI.create(origin + "/push/201"), Base64.getUrlDecoder().decode(device.p256dh()),
+                Base64.getUrlDecoder().decode(device.auth()), new byte[] {1}, Duration.ofMinutes(1), null);
+    }
+
+    private static PrivateKey rsaPrivateKey() throws NoSuchAlgorithmException {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair().getPrivate();
+    }
+
+    /** Keys whose private key no signature provider takes: signing ends in a {@code GeneralSecurityException}. */
+    static VapidKeys unsignableKeys() {
+        ECPrivateKey unusable = mock(ECPrivateKey.class);
+        when(unusable.getAlgorithm()).thenReturn("RSA");
+        VapidKeys keys = mock(VapidKeys.class);
+        when(keys.subject()).thenReturn("mailto:push@nadel.test");
+        when(keys.privateKey()).thenReturn(unusable);
+        return keys;
     }
 }

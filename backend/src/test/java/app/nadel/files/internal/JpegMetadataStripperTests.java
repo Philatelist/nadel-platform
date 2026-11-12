@@ -106,6 +106,18 @@ class JpegMetadataStripperTests {
     }
 
     @Test
+    void aStandaloneMarkerBetweenSegmentsIsKeptAndHasNoLength() {
+        byte[] plain = TestImages.jpeg(false);
+        int app0End = 4 + (((plain[4] & 0xFF) << 8) | (plain[5] & 0xFF));
+        // TEM and a restart marker have no length: read as a segment, the next bytes would be taken for one
+        byte[] withMarkers = TestImages.concat(Arrays.copyOfRange(plain, 0, app0End),
+                new byte[] {(byte) 0xFF, 0x01, (byte) 0xFF, (byte) 0xD3}, Arrays.copyOfRange(plain, app0End,
+                        plain.length));
+
+        assertThat(JpegMetadataStripper.strip(withMarkers)).isEqualTo(withMarkers);
+    }
+
+    @Test
     void anExifWithoutAUsableOrientationLeavesNoExifAtAll() {
         byte[] plain = TestImages.jpeg(false);
         int app0End = 4 + (((plain[4] & 0xFF) << 8) | (plain[5] & 0xFF));

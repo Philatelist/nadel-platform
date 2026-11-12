@@ -1,6 +1,7 @@
 package app.nadel.notifications.internal.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.nadel.notifications.TestPushDevice;
 import java.security.KeyPair;
@@ -43,6 +44,40 @@ class VapidKeysTests {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(Base64.getUrlDecoder().decode(pair[0]));
         assertThat(keys.serverKeyId()).hasSize(8).isEqualTo(Arrays.copyOf(digest, 8));
         assertThat(new VapidKeys(pair[0], pair[1], "https://nadel.example/contact").enabled()).isTrue();
+    }
+
+    @Test
+    void theKeysOfAPairThatIsOnAreTheConfiguredOnesAndItsTextNamesNoKey() {
+        KeyPair pair = P256.generate();
+        String publicText = P256.base64Url(P256.encode((ECPublicKey) pair.getPublic()));
+        String privateText = P256.base64Url(P256.encode((ECPrivateKey) pair.getPrivate()));
+
+        VapidKeys keys = new VapidKeys(publicText, privateText, "  " + SUBJECT + " ");
+
+        assertThat(P256.encode(keys.publicKey())).isEqualTo(P256.encode((ECPublicKey) pair.getPublic()));
+        assertThat(keys.privateKey().getS()).isEqualTo(((ECPrivateKey) pair.getPrivate()).getS());
+        assertThat(keys.subject()).isEqualTo(SUBJECT);
+        assertThat(keys.toString()).isEqualTo("VapidKeys[on]").doesNotContain(publicText).doesNotContain(privateText);
+    }
+
+    @Test
+    void whilePushIsOffNoKeyIsHandedOut() {
+        VapidKeys off = new VapidKeys(null, null, null);
+
+        assertThat(off.toString()).isEqualTo("VapidKeys[off MISSING]");
+        assertThatThrownBy(off::publicKey).isInstanceOf(NullPointerException.class).hasMessage("push is off");
+        assertThatThrownBy(off::privateKey).isInstanceOf(NullPointerException.class).hasMessage("push is off");
+        assertThatThrownBy(off::publicKeyText).isInstanceOf(NullPointerException.class).hasMessage("push is off");
+        assertThatThrownBy(off::subject).isInstanceOf(NullPointerException.class).hasMessage("push is off");
+        assertThatThrownBy(off::serverKeyId).isInstanceOf(NullPointerException.class).hasMessage("push is off");
+    }
+
+    @Test
+    void aSubjectThatIsOnlyTheSchemeTurnsPushOff() {
+        String[] pair = pair();
+
+        assertThat(new VapidKeys(pair[0], pair[1], "mailto:").offReason()).contains(VapidKeys.Reason.MALFORMED);
+        assertThat(new VapidKeys(pair[0], pair[1], "https://").offReason()).contains(VapidKeys.Reason.MALFORMED);
     }
 
     @Test

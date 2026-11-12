@@ -394,7 +394,9 @@ the in-memory pattern of `ReadingMessages` (a push queued while the push service
   `POST` with `TTL` (what is left of the 3 days), `Content-Encoding: aes128gcm`, `Urgency: normal` and the VAPID
   header. Outcomes (`PushOutcome`): 2xx delivered (`last_sent_at`, the refusals cleared); 404 and 410 gone (the device
   deleted); 429, 5xx and no answer (I/O, timeout, a host that does not resolve now) tried again; any other answer (or
-  an endpoint no longer allowed) refused: `consecutive_failures + 1`, the device deleted at 5.
+  an endpoint no longer allowed, or a device key off the curve) refused: `consecutive_failures + 1`, the device
+  deleted at 5. A failure of the server's own encryption or VAPID signing is tried again like no answer: it is not the
+  device's fault, so it never counts as a refusal, and it never escapes the job to JobRunr's own retries.
 - **Jobs** (`SendPush`, `SendPushHandler`, `PushSender`, `PushQueue`): one JobRunr job per device and message. Its id is
   the name-based UUID of `push:{tenant}:{device}:{code}:{ref}:{attempt}`, so an event delivered twice queues nothing
   new (JobRunr skips an id it has) and each retry is one job. The body binds the cooperative (`TenantContext.runAs`),

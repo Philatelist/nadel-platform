@@ -27,8 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>gone (404, 410): the device deleted, never tried again;</li>
  *   <li>refused (another 4xx, or an endpoint that is no longer allowed): one more refusal; the fifth in a row deletes
  *       the device;</li>
- *   <li>retry (429, 5xx, no answer): the next attempt scheduled as a new job after the next of
- *       {@code nadel.webpush.retry-delays} (the last one repeating), or later when the service's {@code Retry-After}
+ *   <li>retry (429, 5xx, no answer, a failure of the server's own encryption or signing): the next attempt
+ *       scheduled as a new job after the next of {@code nadel.webpush.retry-delays} (the last one repeating), or later when the service's {@code Retry-After}
  *       asks for more, while the time to live ({@link PushCode#ttl} of the code, else {@code nadel.webpush.ttl}, 3 days
  *       from the first attempt) lasts; after it the message is dropped.</li>
  * </ul>

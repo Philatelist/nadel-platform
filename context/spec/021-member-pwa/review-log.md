@@ -64,3 +64,9 @@
 |---|---|---|---|---|
 | 1 | `0e2154d..731537e` | MAJOR_ISSUES | M1 settings help (uk/en) says the bot is not affected by the photo rule; the bot refuses readings while it is on | minor: HEIC conversion wording (only where the browser decodes HEIC); push page could mention the hourly limit of the approvals push |
 | 2 | + `795652b` | PASS | M1 resolved | minor: the generic typeNotAllowed message for HEIC |
+
+## Slice 11 — Feature Testing & Regression
+
+| Round | Range / commits | Verdict | Major issues | Notes |
+|---|---|---|---|---|
+| 1 | `795652b..a1fb27b` | PASS | — | minor: qa-notes sign-out row should also name `pushDevice.test.ts` signOutCleanup (no e2e of sign-out with push on); acceptance test 2 does not assert the push URL `/account#my-invoices` |
