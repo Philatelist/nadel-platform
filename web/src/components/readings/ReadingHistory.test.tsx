@@ -19,6 +19,7 @@ const reading: MeterReading = {
   status: 'APPROVED',
   source: 'ENTERED',
   changeable: true,
+  hasPhoto: false,
 };
 
 vi.mock('../charges/chargeInvalidation', () => ({
@@ -28,6 +29,7 @@ vi.mock('../../me', () => ({ useCan: () => true, useOptionalMe: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useListMeterReadings: () => queryResult({ meterId: 'm1', intervals: [], readings: shown }),
+  getReadingPhoto: () => Promise.resolve(new Blob(['j'], { type: 'image/jpeg' })),
   useDeleteReading: (o: typeof deleteOptions) => {
     deleteOptions = o;
     return { mutate, isPending: false };
@@ -60,5 +62,16 @@ describe('ReadingHistory', () => {
     renderWithApp(withQueries(<ReadingHistory meter={plotMeter as Meter} />));
     expect(screen.getAllByRole('button', { name: 'Correct' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Delete reading' })).toHaveLength(1);
+  });
+
+  it('shows a photo thumbnail only for a reading that has one', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:test/1');
+    URL.revokeObjectURL = vi.fn();
+    shown = [
+      { ...reading, id: 'with', hasPhoto: true },
+      { ...reading, id: 'without', takenOn: '2026-10-06' },
+    ];
+    renderWithApp(withQueries(<ReadingHistory meter={plotMeter as Meter} />));
+    expect(await screen.findAllByRole('button', { name: 'Open the photo of the meter' })).toHaveLength(1);
   });
 });

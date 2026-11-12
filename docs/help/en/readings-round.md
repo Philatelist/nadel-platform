@@ -50,6 +50,8 @@ Each card is a plot with its meters ("{{ui:readings.plotNumber}}") or a single n
 - the field "{{ui:readings.rowDate}}";
 - the button "{{ui:readings.save}}" saves this row's reading; it says "{{ui:readings.saving}}" while saving.
 
+Next to the date field there is the {{ui:readings.photo.addRow}} button: it adds a photo of the meter to this reading (on a phone the camera opens). A thumbnail shows above the button, {{ui:readings.photo.replace}} changes the photo, {{ui:readings.photo.remove}} removes it. The rule "{{ui:settings.readings.photoRequired}}" applies to members only, so the electrician and the board add a photo if they wish.
+
 After saving, the consumption for the interval appears at once: "{{ui:readings.interval}}". The Enter key in a saved row moves the cursor to the next card.
 
 ### Warnings and errors

@@ -29,7 +29,9 @@
  * ЄДРПОУ), {@code identity} ({@code CurrentUser}, {@code OwnedPlotsSource}, {@code Permission}), {@code privacy}
  * ({@code PersonalDataCipher}: the sealed names and the content hash), {@code treasury} ({@code CashCountActs}: the
  * act of a cash count, {@code GET /cash-counts/{id}/act.pdf}, drawn by {@code CashCountActDocuments} and
- * {@code CashCountActLayout}; feature 018), {@code money} and {@code problem}; no module depends on it.
+ * {@code CashCountActLayout}; feature 018), {@code money} and {@code problem}. The notifications module uses its public
+ * API ({@code DocumentsFacade}, {@code DocumentFormats}, the SPI {@code PaperRecipients}) and listens to its event
+ * {@code InvoicesIssued} (feature 021: new invoice versions, for the push to the plots' owners).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Documents")
 package app.nadel.documents;

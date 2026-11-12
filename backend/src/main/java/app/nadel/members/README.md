@@ -43,6 +43,15 @@ Telegram account details.
 archived) members who hold the base role with the code (`CHAIRMAN`, `TREASURER`, `MEMBER`) as `MemberRef`, in name
 order (last, first, middle name, then id); a custom role never counts. It runs in the caller's transaction
 (`MANDATORY`, RLS). The invoice prints the chairman's and the treasurer's names with it (sealed in its snapshot).
+`activeWithPermission(permission)` (feature 021) returns the ids of the active members who hold the permission now
+through any role of theirs: a role whose stored permissions include it (base or custom) and always the `CHAIRMAN` base
+role, which holds every permission whatever rows are stored (`PermissionUnion`); each member once, in id order, ids
+only. Same transaction rule. `notifications` tells the holders of `READINGS_APPROVE` that readings wait.
+
+`MemberAccessRevoked(tenantId, memberId)` (feature 020; public since feature 021) is the event that a member's access
+was switched off: published by `MemberAccessRevocation` in the transaction that stored `DISABLED` (the disable endpoint
+and the archive, below). Ids only. `MemberAccessListener` here turns the Keycloak account off; `notifications` deletes
+the member's push devices (feature 021).
 
 `MemberImport` (feature 008) is what the Excel import may ask of this module: `plan(tenantId, importId, rows)` (the
 transaction is mandatory, nothing is saved) returns one `MemberImportItem` per `MemberImportRow` in the same order:
@@ -152,8 +161,9 @@ the application may set only those three times and deletes nothing; one open sen
   (`ImportMemberLoginTests`). A change to the matching that let a row change an e-mail must route it through
   `MemberLoginGuard` and `MemberLoginChanged` as `MemberCommands.update` does.
 - **`MemberAccessListener`** (ADR 0007: `@Async @TransactionalEventListener`, `TenantContext.runAs`, a read-only
-  `TransactionTemplate` that re-reads the member, Keycloak calls outside any transaction). The events are internal to
-  the module and carry ids only (never the e-mail or a link). `MemberAccessRevoked`: only while the access is still
+  `TransactionTemplate` that re-reads the member, Keycloak calls outside any transaction). The events carry ids only
+  (never the e-mail or a link); `MemberLoginChanged` is internal to the module, `MemberAccessRevoked` is public (the
+  module root, also heard by `notifications`). `MemberAccessRevoked`: only while the access is still
   `DISABLED`, the account is turned off (`enabled: false`) and logged out; a missing account needs nothing.
   `MemberLoginChanged`: only while still `INVITED`, the account's user name and e-mail become the current e-mail with
   `emailVerified: false` and `enabled: false`, its credentials are removed and its sessions end (a password of the old

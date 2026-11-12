@@ -7,7 +7,11 @@
  * report ({@code reports}), and the SPI {@link app.nadel.members.MemberArchiveGuard}, a veto other modules implement
  * to refuse archiving a member ({@code plots} refuses a current owner), and {@link app.nadel.members.MemberImport},
  * which plans the member rows of an Excel import ({@code imports}), {@link app.nadel.members.MemberChannels}, the
- * member's own choice of channel ({@code notifications}), and the SPI {@link app.nadel.members.TelegramLinkStatus},
+ * member's own choice of channel ({@code notifications}), {@link app.nadel.members.RoleHolders}, the holders of a base
+ * role (the names on an invoice) and of a permission (feature 021: who approves readings), the event
+ * {@link app.nadel.members.MemberAccessRevoked} (a member's access was switched off: the disable endpoint and the
+ * archive; ids only; {@code notifications} deletes the member's push devices), and the SPI
+ * {@link app.nadel.members.TelegramLinkStatus},
  * whether a member's Telegram is linked, implemented by {@code notifications}, and the SPI
  * {@link app.nadel.members.InvitationDelivery} with {@link app.nadel.members.InvitationDeliveryResult}, which sends the
  * invitation into the system with its one-time link (feature 020), implemented by {@code notifications}. The module

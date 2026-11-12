@@ -42,7 +42,7 @@ export function MyInvoices() {
               </ul>
               {older.length > 0 && (
                 <details>
-                  <summary className="cursor-pointer text-ink-muted">{i.myOlder}</summary>
+                  <summary className="min-h-11 cursor-pointer py-2.5 text-ink-muted">{i.myOlder}</summary>
                   <ul aria-label={i.myOlder} className="divide-y divide-line-subtle">
                     {older.map((row) => (
                       <InvoiceItem

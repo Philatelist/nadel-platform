@@ -36,4 +36,10 @@ public interface CooperativeSettings {
      * money is taken back from its charges (feature 015 §2.7); {@code true} when never saved.
      */
     boolean autoAllocatePrepayment();
+
+    /**
+     * Whether a member's reading needs a photo of the meter (feature 021 §2.3): a member's submission without one is
+     * refused; the board's entries never need one. {@code false} when never saved.
+     */
+    boolean readingPhotoRequired();
 }

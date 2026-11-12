@@ -55,7 +55,19 @@ export default tseslint.config(
     },
   },
   {
-    files: ['e2e/**/*.ts', 'playwright.config.ts', 'help/**/*.ts', 'vite.config.ts'],
+    files: [
+      'e2e/**/*.ts',
+      'playwright.config.ts',
+      'playwright.pwa.config.ts',
+      'help/**/*.ts',
+      'vite.config.ts',
+      'scripts/**/*.mjs',
+    ],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // the service worker runs in a worker scope: no window or document
+    files: ['src/sw.ts'],
+    languageOptions: { globals: { ...globals.serviceworker } },
   },
 );

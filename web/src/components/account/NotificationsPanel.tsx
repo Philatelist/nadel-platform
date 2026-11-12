@@ -16,6 +16,7 @@ import { problemMessage } from '../../problem';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { QueryBoundary } from '../QueryBoundary';
 import { Button, Notice, RadioGroup } from '../ui';
+import { PushDeviceSwitch } from './PushDeviceSwitch';
 
 /** "Notifications" on the account page: the member's invoice channel and the Telegram link (feature 017 §2.2, §2.3). */
 export function NotificationsPanel() {
@@ -136,6 +137,8 @@ function NotificationsBody({ data }: { data: MyNotifications }) {
           )}
         </div>
       )}
+
+      <PushDeviceSwitch />
 
       {confirming && (
         <ConfirmDialog

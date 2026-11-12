@@ -3,7 +3,10 @@
 # The imported demo realm has public passwords (`nadel`, see CLAUDE.md) and localhost redirect URIs; this script
 # sets a new password for the demo board users, points the web client at the stand's domain and disables the
 # users the board does not need. It also rotates the secret of the backend's Keycloak service account
-# (`nadel-backend-admin`) into .env and sets the realm password policy. Safe to run again.
+# (`nadel-backend-admin`) into .env and sets the realm password policy. It also generates the Web Push (VAPID) key
+# pair once (only when either key in .env is empty; never rotated, a rotation drops every push subscription).
+# Safe to run again. Tunables (seconds/tries): KC_HEALTH_TRIES (60), KC_HEALTH_INTERVAL (5), KC_LOGIN_TIMEOUT (120),
+# KC_LOGIN_INTERVAL (5).
 set -euo pipefail
 cd "$(dirname "$0")"
 set -a
@@ -17,18 +20,44 @@ fi
 
 kc() { docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
 
+health_tries=${KC_HEALTH_TRIES:-60}
+health_interval=${KC_HEALTH_INTERVAL:-5}
+login_timeout=${KC_LOGIN_TIMEOUT:-120}
+login_interval=${KC_LOGIN_INTERVAL:-5}
+
 echo "Waiting for Keycloak to become healthy..."
-for _ in $(seq 1 60); do
+status=
+for _ in $(seq 1 "$health_tries"); do
   status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q keycloak)" 2>/dev/null || true)
   [ "$status" = healthy ] && break
-  sleep 5
+  sleep "$health_interval"
 done
-if [ "${status:-}" != healthy ]; then
-  echo "Keycloak is not healthy after 5 minutes; see: docker compose logs keycloak" >&2
+if [ "$status" != healthy ]; then
+  echo "Keycloak is not healthy after $((health_tries * health_interval)) seconds; see: docker compose logs keycloak" >&2
   exit 1
 fi
 
-kc config credentials --server http://localhost:8080/auth --realm master --user admin --password "$KC_ADMIN_PASSWORD"
+# Healthy does not mean the admin endpoint already answers (a fresh realm import may still be running): retry the login.
+# kcadm output goes to /dev/null so neither the password nor server messages reach the terminal.
+if [ "$login_interval" -gt 0 ]; then
+  login_attempts=$((login_timeout / login_interval))
+else
+  login_attempts=$login_timeout
+fi
+[ "$login_attempts" -ge 1 ] || login_attempts=1
+logged_in=false
+for attempt in $(seq 1 "$login_attempts"); do
+  if kc config credentials --server http://localhost:8080/auth --realm master --user admin \
+    --password "$KC_ADMIN_PASSWORD" >/dev/null 2>&1; then
+    logged_in=true
+    break
+  fi
+  [ "$attempt" -lt "$login_attempts" ] && sleep "$login_interval"
+done
+if [ "$logged_in" != true ]; then
+  echo "Could not log in to the Keycloak admin API after $login_attempts attempts; check KC_ADMIN_PASSWORD in .env and: docker compose logs keycloak" >&2
+  exit 1
+fi
 
 # Realm password policy: minimum length 8, so a board user password that is too short is rejected
 kc update realms/nadel -s 'passwordPolicy=length(8)'
@@ -57,15 +86,36 @@ if [ -z "$admin_client_id" ]; then
 fi
 admin_secret=$(openssl rand -hex 32)
 kc update "clients/$admin_client_id" -r nadel -s "secret=$admin_secret"
-touch .env && chmod 600 .env
-if grep -q '^NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=' .env; then
+
+# Upsert KEY=value in .env (mode 600, atomic replace)
+env_set() {
+  local key=$1 value=$2 tmp
+  touch .env && chmod 600 .env
   tmp=$(mktemp ./.env.XXXXXX)
-  grep -v '^NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=' .env > "$tmp" || true
-  echo "NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=$admin_secret" >> "$tmp"
+  grep -v "^${key}=" .env > "$tmp" || true
+  echo "${key}=${value}" >> "$tmp"
   chmod 600 "$tmp"
   mv "$tmp" .env
-else
-  echo "NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET=$admin_secret" >> .env
+}
+
+env_set NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET "$admin_secret"
+
+# Web Push (VAPID) P-256 key pair, generated once: a new pair would invalidate every stored push subscription.
+# Public key = uncompressed point (65 bytes), private key = scalar (32 bytes), both base64url without padding
+# (87 and 43 characters). Parsed from `openssl ec -text` rather than DER offsets. Never printed.
+if [ -z "${NADEL_WEBPUSH_PUBLIC_KEY:-}" ] || [ -z "${NADEL_WEBPUSH_PRIVATE_KEY:-}" ]; then
+  b64url() { sed 's/../\\x&/g' | { read -r esc; printf "$esc"; } | base64 | tr '+/' '-_' | tr -d '=\n'; }
+  key_text=$(openssl ecparam -name prime256v1 -genkey -noout | openssl ec -text -noout 2>/dev/null)
+  priv_hex=$(printf '%s\n' "$key_text" | awk '/^priv:/{f=1;next} /^pub:/{f=0} f' | tr -d ' :\n' | tail -c 64)
+  pub_hex=$(printf '%s\n' "$key_text" | awk '/^pub:/{f=1;next} /^ASN1 OID|^NIST CURVE/{f=0} f' | tr -d ' :\n')
+  if [ "${#priv_hex}" -ne 64 ] || [ "${#pub_hex}" -ne 130 ] || [ "${pub_hex:0:2}" != 04 ]; then
+    echo "Could not generate the Web Push key pair with openssl" >&2
+    exit 1
+  fi
+  env_set NADEL_WEBPUSH_PUBLIC_KEY "$(printf '%s' "$pub_hex" | b64url)"
+  env_set NADEL_WEBPUSH_PRIVATE_KEY "$(printf '%s' "$priv_hex" | b64url)"
+  unset key_text priv_hex pub_hex
+  echo "Generated the Web Push (VAPID) key pair into .env (kept on later runs)."
 fi
 
 echo "Keycloak prepared for https://$NADEL_DOMAIN: demo board users have the new password, other users disabled."

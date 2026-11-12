@@ -15,4 +15,6 @@ paths = [
 regexes = [
   '''abcDEF123_-xyz''',
   '''tgLINK123_-abc''',
+  # The auth secret of the public example in RFC 8291 section 5 (Web Push encryption test vector, feature 021), not a secret.
+  '''BTBZMqHH6r4Tts7J_aSIgg''',
 ]

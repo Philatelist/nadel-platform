@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,7 +30,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * The bot's «Показання» (feature 017 §2.5): the plot (asked only when there are several), the meter, the value; the
  * reading waits for the board's approval dated today, exactly as from the account (the same refusals, in plain words,
  * and the member types again); the board's approval or rejection reaches the member's chat; another member's plot or
- * meter is never reachable. «Скасувати» ends the dialogue, and so does a plot or meter that is gone by the next step.
+ * meter is never reachable. While the cooperative requires a photo with a member's reading, the bot (which takes no
+ * photo) refuses and sends the member to the app. «Скасувати» ends the dialogue, and so does a plot or meter that is gone by the next step.
  */
 class BotReadingTests extends BotCommandsTestSupport {
 
@@ -109,6 +111,33 @@ class BotReadingTests extends BotCommandsTestSupport {
         assertThat(accepted.text()).isEqualTo("Показання 12" + NBSP + "345,5 по лічильнику ЕЛ-9/2 передано на "
                 + "перевірку");
         assertThat(readingsOf(meter)).hasSize(2);
+    }
+
+    @Test
+    void whileTheCooperativeRequiresAPhotoTheBotSendsTheMemberToTheAppAndSavesNothing() throws Exception {
+        startBot();
+        Member owner = member("Мельник");
+        UUID plot = plot("9", owner.id());
+        UUID meter = meter(plot, "ЕЛ-9/2", "ELECTRICITY");
+        entered(meter, today().minusDays(1), "12000");
+        long chat = link(owner.id());
+        send(chairman, put("/api/v1/settings"), Map.of("readingPhotoRequired", true)).andExpect(status().isOk());
+        say(chat, "Показання", 1);
+        say(chat, "⚡ ЕЛ-9/2", 2);
+
+        Sent refused = lastReply(chat, "12345", 3);
+
+        assertThat(refused.text()).isEqualTo("Правління просить фото лічильника до кожного показу. Передайте, будь "
+                + "ласка, показання з фото в застосунку «Наділ» (розділ «Мій кабінет»).");
+        // typing again cannot help: the dialogue ends with the menu
+        assertThat(refused.buttons()).containsExactly(MENU_ROW_1, MENU_ROW_2);
+        assertThat(readingsOf(meter)).noneMatch(row -> "PENDING".equals(row.get("status")));
+        assertThat(lastReply(chat, "12345", 4).text()).startsWith("Це бот кооперативу");
+        assertThat(readingsOf(meter)).hasSize(1);
+        // the account refuses the same reading with the same code
+        send(owner.bearer(), post("/api/v1/plots/" + plot + "/readings"), Map.of("meterId", meter.toString(),
+                "value", "12345")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("READING_PHOTO_REQUIRED"));
     }
 
     @Test

@@ -37,7 +37,7 @@ never skips a shot or writes a placeholder image (the help build fails on a miss
   `steps` texts (button, tab and field names) are in the language of the page.
 - Output: `web/public/help/img/<lang>/<name>.png`, served by the application and used by the PDF.
   The retired HTML board guide and its shots (`docs/guide/img/`) are gone; the owner manual uses no screenshots.
-- Shots are taken with the demo users, in the light theme, at 1280×860 (`viewport: phone` gives 390×844).
+- Shots are taken with the demo users, in the light theme, at 1280×860 (`viewport: phone` gives 360×740, `phone-ios` the same with the Safari on iPhone user agent).
 - Demo guard: before the first shot the script signs in as the chairman and reads `GET /api/me`. If the cooperative is
   not the demo cooperative of `backend/src/main/resources/db/demo/R__demo_data.sql`
   (`11111111-1111-1111-1111-111111111111`), it takes nothing and exits with 1, so real data can never end up in a guide.

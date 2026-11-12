@@ -7,6 +7,7 @@ import {
 } from '@nadel/api-client';
 import { format } from '@nadel/shared';
 import { useState } from 'react';
+import { useDirtyGuard } from '../pwa/dirtyForms';
 import { Link, useNavigate } from 'react-router';
 import { UserContent } from '../components/UserContent';
 import { Button, Notice, PageHeader, Panel, RadioGroup, TextArea } from '../components/ui';
@@ -37,6 +38,7 @@ export function AnnouncementFormPage() {
   const [email, setEmail] = useState(true);
   const [previewed, setPreviewed] = useState<{ key: string; result: AnnouncementSendResult }>();
   const [error, setError] = useState<unknown>();
+  useDirtyGuard(text !== '');
   const streetList = useListPlotStreets();
   const send = useSendAnnouncement();
 

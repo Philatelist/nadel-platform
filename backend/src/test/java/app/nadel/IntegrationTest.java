@@ -1,11 +1,19 @@
 package app.nadel;
 
 import app.nadel.notifications.FakeBotApi;
+import app.nadel.notifications.FakePushService;
+import app.nadel.notifications.TestPushDevice;
 import app.nadel.privacy.FieldRef;
 import app.nadel.privacy.IndexKind;
 import app.nadel.privacy.PersonalDataCipher;
 import app.nadel.tenancy.TenantContext;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -54,6 +62,12 @@ public abstract class IntegrationTest {
     /** The personal data master key of this JVM's contexts: random per run, never written anywhere. */
     protected static final String MASTER_KEY = randomMasterKey();
 
+    /**
+     * The VAPID key pair of this JVM's contexts (feature 021): random per run, so the tests never use the dev pair;
+     * {@code [public, private]} in base64url.
+     */
+    protected static final String[] PUSH_KEYS = randomPushKeys();
+
     /** The owner connections of {@link #ownerJdbc()}: pooled, a new connection costs a backend start and SCRAM. */
     private static final OwnerDataSource OWNER;
 
@@ -87,6 +101,12 @@ public abstract class IntegrationTest {
         // No bot is polled on a schedule in tests: the bot tests drive the supervisor themselves, with short polls
         registry.add("nadel.telegram.bot-enabled", () -> "false");
         registry.add("nadel.telegram.poll-timeout", () -> "1s");
+        // Feature 021: push is on with the test key pair, and the only push service it may reach is the in-JVM fake; a
+        // test class that wants push off sets nadel.test.push-public-key to nothing (PushOffTests)
+        registry.add("nadel.webpush.public-key", () -> "${nadel.test.push-public-key:" + PUSH_KEYS[0] + "}");
+        registry.add("nadel.webpush.private-key", () -> PUSH_KEYS[1]);
+        registry.add("nadel.webpush.subject", () -> "mailto:push@nadel.test");
+        registry.add("nadel.webpush.extra-allowed-origins", () -> FakePushService.shared().origin());
         // No JobRunr background job server: the delivery tests run the dispatcher themselves, and enqueued jobs only
         // stay in jobrunr_jobs. A test class that wants the server sets nadel.test.job-server=true (JobRunrTests).
         registry.add("jobrunr.background-job-server.enabled", () -> "${nadel.test.job-server:false}");
@@ -96,6 +116,23 @@ public abstract class IntegrationTest {
         registry.add("nadel.invitations.rate-limit.max-requests", () -> "${nadel.test.invitation-rate-limit:100000}");
         registry.add("nadel.invitations.rate-limit.max-sends-per-address",
                 () -> "${nadel.test.invitation-rate-limit:100000}");
+    }
+
+    private static String[] randomPushKeys() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+            generator.initialize(new ECGenParameterSpec("secp256r1"));
+            KeyPair pair = generator.generateKeyPair();
+            byte[] scalar = new byte[32];
+            byte[] s = ((ECPrivateKey) pair.getPrivate()).getS().toByteArray();
+            int start = Math.max(0, s.length - 32);
+            System.arraycopy(s, start, scalar, 32 - (s.length - start), s.length - start);
+            Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+            return new String[] {encoder.encodeToString(TestPushDevice.point((ECPublicKey) pair.getPublic())),
+                    encoder.encodeToString(scalar)};
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static String randomMasterKey() {

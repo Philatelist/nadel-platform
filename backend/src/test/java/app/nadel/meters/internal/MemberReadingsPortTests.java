@@ -140,11 +140,13 @@ class MemberReadingsPortTests extends MeterTestSupport {
             send(chairman(), post(READINGS + "/" + rejected + "/reject"), Map.of("reason", "Фото нечітке"))
                     .andExpect(status().isOk());
 
+            // one publication per listener (the bot's message and the push): the same event, counted once
             await().atMost(Duration.ofSeconds(10)).until(() -> ownerJdbc().queryForObject(
-                    "select count(*) from " + table + " where event_type like '%ReadingDecided'", Integer.class) == 2);
-            List<String> events = ownerJdbc().queryForList("select serialized_event from " + table
-                    + " where event_type like '%ReadingDecided' order by serialized_event like '%APPROVED%' desc",
-                    String.class);
+                    "select count(distinct serialized_event) from " + table + " where event_type like '%ReadingDecided'",
+                    Integer.class) == 2);
+            List<String> events = ownerJdbc().query("select distinct serialized_event, serialized_event like "
+                    + "'%APPROVED%' as approved from " + table + " where event_type like '%ReadingDecided' "
+                    + "order by approved desc", (rs, n) -> rs.getString(1));
             assertThat(events.get(0)).contains(approved.toString(), plot.toString(), owner.id().toString(),
                     DEMO_TENANT.toString(), "APPROVED");
             assertThat(events.get(1)).contains(rejected.toString(), "REJECTED");

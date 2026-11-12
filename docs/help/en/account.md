@@ -49,6 +49,10 @@ If you have no plot, the parts about plots do not appear. Then you see only your
 
 The screen is made of separate blocks, one under another, in this order.
 
+### Installing the app
+
+At the top of the account there may be a card "{{ui:pwa.installTitle}}" with the button {{ui:pwa.install}}, and on an iPhone in Safari a card "{{ui:pwa.iosTitle}}" saying "{{ui:pwa.iosSteps}}". It offers to add Nadel to the home screen. The button "{{ui:pwa.dismiss}}" hides the card on this device. When Nadel is already installed, the card is not shown. Step by step: [Install on your phone](help:member-install).
+
 ### My data, roles and rights
 
 - The {{ui:account.details}} block shows your contacts, your preferred channel for invoices, whether Telegram is connected, and your roles. Only the board can change the data: write or tell them.
@@ -77,11 +81,15 @@ The {{ui:readings.mine.submit}} button is next to a working meter. How to use it
 
 The {{ui:invoices.myTitle}} block first shows the latest invoice of each of your plots. For each one you see the month, the number, the version, the "{{ui:invoices.due}}" amount and the date it was made. The {{ui:invoices.download}} button downloads the PDF. Older months are hidden under "{{ui:invoices.myOlder}}". If there are no invoices yet, the system says "{{ui:invoices.myEmpty}}". How to read an invoice: [How to read my invoice](help:member-bill).
 
+Under an invoice that has an amount to pay there are buttons: {{ui:invoices.pay.payInBank}} opens the transfer in the banking app, {{ui:invoices.pay.copyIban}} and {{ui:invoices.pay.copyPurpose}} copy those values so that you can paste them into the bank. After a press the button says "{{ui:invoices.pay.copied}}" for a moment. If copying fails, the system says "{{ui:invoices.pay.copyFailed}}" and you can select and copy the value by hand. There are no buttons when there is nothing to pay.
+
 ### Notifications and Telegram
 
 In the {{ui:notifications.title}} block you choose, in the "{{ui:notifications.channelLegend}}" field, one way: e-mail, Telegram or paper. Only the ways available to you are shown. The {{ui:notifications.save}} button saves the choice and the system answers "{{ui:notifications.saved}}".
 
 Below, if your cooperative has a bot, is the {{ui:telegramLink.title}} block. The {{ui:telegramLink.connect}} button opens the bot; after that the block says "{{ui:telegramLink.connected}}" and has the {{ui:telegramLink.disconnect}} button. Step by step: [How to connect Telegram](help:member-telegram).
+
+The same block has the switch "{{ui:notifications.push.title}}": it turns on short notifications on this phone or computer and applies to this device only. If notifications are not set up in the system, there is no switch. If they are blocked in the browser, on an iPhone the page is not opened in the installed app, or the browser cannot show them, an explanation stands in place of the switch. More: [Notifications on your phone](help:member-push).
 
 ### My charges and payments
 
@@ -118,6 +126,8 @@ Olena owns plot 9. She opens her account after the board has closed October.
 - [How to submit a meter reading](help:member-readings)
 - [Documents for a member](help:member-documents)
 - [How to connect Telegram](help:member-telegram)
+- [Install on your phone](help:member-install)
+- [Notifications on your phone](help:member-push)
 - [Plot card](help:plot-card)
 - [Getting started as a member](help:member-getting-started)
 - [Getting started](help:getting-started)

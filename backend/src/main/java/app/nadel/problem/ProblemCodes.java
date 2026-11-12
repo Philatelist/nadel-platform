@@ -159,6 +159,11 @@ public final class ProblemCodes {
     public static final String TELEGRAM_NOT_CONFIGURED = "TELEGRAM_NOT_CONFIGURED";
     /** 409: a paper delivery, or one that is still queued, is sent again (feature 017 §2.4). */
     public static final String DELIVERY_NOT_RETRYABLE = "DELIVERY_NOT_RETRYABLE";
+    /**
+     * 409: a device is registered for push notifications while the server has no valid VAPID key pair, so push is off
+     * for everyone (feature 021 §2.2).
+     */
+    public static final String PUSH_DISABLED = "PUSH_DISABLED";
     /** 409: a member without an e-mail is invited; the e-mail is the login (feature 020 §2.1). */
     public static final String MEMBER_EMAIL_MISSING = "MEMBER_EMAIL_MISSING";
     /** 409: a member who is already invited is invited again; the invitation is sent again instead (feature 020). */
@@ -261,6 +266,11 @@ public final class ProblemCodes {
      * (feature 018 §2.3); also the code of the field {@code files[i]} in {@code errors[]}.
      */
     public static final String FILE_TYPE_NOT_ALLOWED = "FILE_TYPE_NOT_ALLOWED";
+    /**
+     * 400: a member's meter reading comes without a photo while the cooperative's setting {@code readingPhotoRequired}
+     * is on (feature 021 §2.3); also the code of the field {@code photo} in {@code errors[]}.
+     */
+    public static final String READING_PHOTO_REQUIRED = "READING_PHOTO_REQUIRED";
     /**
      * 400: more files come with an expense than it takes (five, reused ones included; feature 018 §2.3); also the code
      * of the field {@code files} in {@code errors[]}.

@@ -22,7 +22,7 @@
   - Each top-level package `app.nadel.*` is a module.
   - Modules talk only through their public root package or through domain events. `internal` subpackages are closed.
   - A module never reads another module's tables.
-  - Modules in code: `tenancy`, `identity`, `plots`, `members`, `audit`, `problem`, `settings` (cooperative settings, since spec 007), `imports` (Excel import, since spec 008), `xlsx` (the workbook safety guard `WorkbookGuard` shared by the Excel import and report templates; no dependencies, since spec 013), `money` (`Money` and `Rate` value objects, since spec 009, ADR 0013), `tariffs` (charge types, tariffs with versions, scopes and the expected amount; since spec 009), `meters` (meters, the electricity meter tree, readings and consumption; since spec 010, ADR 0014), `ledger` (charges,
+  - Modules in code: `tenancy`, `identity`, `plots`, `members`, `audit`, `problem`, `settings` (cooperative settings, since spec 007), `imports` (Excel import, since spec 008), `xlsx` (the workbook safety guard `WorkbookGuard` shared by the Excel import and report templates; no dependencies, since spec 013), `files` (the type check by first bytes, metadata stripping of JPEG/PNG and the 5 MiB upload limit shared by expense receipts and meter photos; no tables, no dependencies, since spec 021), `money` (`Money` and `Rate` value objects, since spec 009, ADR 0013), `tariffs` (charge types, tariffs with versions, scopes and the expected amount; since spec 009), `meters` (meters, the electricity meter tree, readings and consumption; since spec 010, ADR 0014), `ledger` (charges,
     billing months, the month run, charges by readings, losses and common consumer runs, the "not charged" queue,
     reversals, opening balances and the plot account; since spec 011), `reports` (built-in reports and report templates; since spec 013, ADR 0015), `privacy` (encryption of personal data at rest: `PersonalDataCipher`, blind indexes, per-cooperative keys in `tenant_data_key` wrapped by the master key `NADEL_PD_MASTER_KEY`, the start-up key-check and master key rotation as a Flyway callback, `OwnerKeyring` for owner-side Flyway work; depends on `tenancy` and `problem`; since spec 014, ADR 0016). Each has a README next to its `package-info.java` (`backend/src/main/java/app/nadel/<module>/README.md`).
   - Dependencies between modules (feature 007): `plots` -> `members` (`MemberDirectory`, names and row locks; and it implements `members.MemberArchiveGuard`), `plots` -> `settings` (`CooperativeSettings`), `plots` -> `identity` (it implements `identity.OwnedPlotsSource`, so `identity` never depends on `plots`), `members`/`plots`/`settings` -> `audit` (events) and `problem`. Ownership lives inside `plots`; vetoes and reads across modules are synchronous SPIs, see ADR 0011.
@@ -152,18 +152,16 @@
 - **In-app help** **[in code, feature 019]**: Markdown pages in `docs/help/<lang>/` compiled at build time by `web/help/` into virtual modules (no backend, API or database). The «?» button and the `/help` section show them per role; `/help` is also readable without signing in. The app is `noindex`, the pre-rendered help pages are indexable, the stand flag `NADEL_NOINDEX` overrides this with a header. The board guide PDF is built from the same pages.
 - **One app for both audiences:** the member account and the admin screens live in one app, and the role decides what is shown.
 
-### Mobile client
+### Phones
 
-- **Expo 58 and React Native 0.88** **[in code]**: `mobile/package.json`, `mobile/app.json`. The scheme is `nadel` and the bundle id is `app.nadel.mobile`. See ADR 0005.
-- **Expo Router** **[planned, phase 5]**: not installed yet (see 7.1).
-- **EAS Build and EAS Update (OTA)** **[planned]**: there is no `eas.json` yet.
+- **Installable web app (PWA)** **[feature 021, ADR 0021]**: phones use the web app, installed to the home screen, with a service worker built by `vite-plugin-pwa` (`injectManifest`, no runtime caching) and Web Push. There is no native app and no store listing; ADR 0021 supersedes the mobile part of ADR 0005 and says what would bring native apps back.
 
 ### Shared TypeScript packages
 
-- **pnpm monorepo** **[in code]**: pnpm 10.18 and Node ≥ 22. Workspaces are `web`, `mobile` and `packages/*` (`pnpm-workspace.yaml`).
+- **pnpm monorepo** **[in code]**: pnpm 10.18 and Node ≥ 22. Workspaces are `web` and `packages/*` (`pnpm-workspace.yaml`).
 - **`@nadel/api-client`**: generated code; never edit it by hand.
 - **`@nadel/shared`**: money formatting, dates, plot statuses, and i18n catalogs (`uk` is the default, `en` is optional) in `packages/shared/src/i18n`.
-- **`@nadel/ui-tokens`**: design tokens shared by web and mobile. UI components themselves are not shared.
+- **`@nadel/ui-tokens`**: design tokens for the web app.
 
 ---
 
@@ -222,12 +220,11 @@
 - **Identity provider:** Keycloak 26 (currently 26.8.1), realm `nadel` **[in code]**. See ADR 0003, `infra/keycloak/nadel-realm.json`.
   - Clients:
     - `nadel-web`: public, standard flow only, PKCE S256.
-    - `nadel-mobile`: public, PKCE S256, redirects `nadel://*` and `exp://*`.
+    - `nadel-mobile`: public, PKCE S256, redirects `nadel://*` and `exp://*`; left in the realm file, unused since ADR 0021 **[to remove with the realm owner's review]**.
   - Realm roles: only `PLATFORM_OPERATOR` **[in code]** (`identity/Roles.PLATFORM_OPERATOR`). Cooperative roles live in the database (see Authorization). Test users keep email, `emailVerified: true` and `tenant_id`; after a realm change the local stack is recreated with `docker compose down -v` (`infra/README.md`).
   - Compose has a Keycloak healthcheck (management port, `/health/ready`), so `make infra` returns only when Keycloak is ready.
   - The user attribute `tenant_id` is mapped into the access token by an `oidc-usermodel-attribute-mapper` on both clients.
   - Later: Keycloak Organizations for people in several cooperatives, with cooperative selection at sign-in **[planned, separate ADR]**.
-- **Mobile OIDC library:** not chosen yet **[assumption: `expo-auth-session` with PKCE]**. It is not in `mobile/package.json`.
 - **Authentication flow** **[in code, since spec 002]** (`identity/internal/MemberAuthenticationConverter`, see the `identity` README):
   1. A token with the realm role `PLATFORM_OPERATOR` becomes the operator, with no database access and no permissions (ADR 0008).
   2. Otherwise the `tenant_id` claim is bound with `TenantContext.runAs` and the active member of that cooperative is looked up: by Keycloak subject; on first sign-in, by email (case-insensitive) only when `email_verified` is true and the member is not yet linked, and the subject is then stored on the member. A member linked to another subject is never relinked; archived members are never found.
@@ -249,7 +246,7 @@
 
 - **Email:** each cooperative's own mailbox over SMTP (often a free mailbox with an app password), not a transactional provider **[in code, feature 017, ADR 0018]**: members see the cooperative as the sender. Jakarta Mail through `spring-boot-starter-mail`, one `JavaMailSenderImpl` per cooperative; no application-wide mail server. The sending rate per mailbox is the cooperative's `email_rate_per_second` (1–10). Locally Mailpit (`infra/docker-compose.yml`, SMTP :1025, web UI :8025).
 - **Messaging:** the Telegram Bot API through each cooperative's own bot (created with @BotFather), called with the JDK `HttpClient` and polled with long polling (`getUpdates`) under a lease in `bot_poll_state`, no webhooks **[in code, feature 017, ADR 0018]**. The base URL is `NADEL_TELEGRAM_API_URL` (default `https://api.telegram.org`; the `dev` profile defaults to the fake Bot API of `infra/fake-telegram` on :8091). Viber Bot API **[later]**: Viber charges for business messages, so its terms must be checked before committing; a Viber member gets paper with a note until then.
-- **Push notifications:** Expo Push Service, which delivers to APNs and FCM **[planned, phase 5]**.
+- **Push notifications:** Web Push (RFC 8030, 8291, 8292) from the backend to the push service of the member's browser, with JDK-only crypto and no third-party gateway **[feature 021, ADR 0021]**.
 - **Delivery pattern:** every channel sits behind the `notifications` module **[in code, feature 017]**. Other modules trigger delivery through domain events and the outbox (`ledger.PaymentRecorded`, `ledger.PaymentReversed`, `meters.ReadingDecided` → `notifications`), never through direct calls; the board's sends (the month's invoices, announcements) are requests to `notifications` itself. Each message is a row of the delivery register (`delivery`), sent by a worker per cooperative and channel; the bot's own replies (and the reading decisions) go straight to the chat.
 - **Payments, now:** the NBU payment QR code (Resolution No. 97, format version 003) printed on invoices, prefilled with recipient, IBAN, ЄДРПОУ, amount and a purpose with the plot number; the payer may only change the amount **[in code, feature 016]**. The image is generated with ZXing (`core`); the layout is in `docs/domain/nbu-qr.md`.
 - **Payments, later:**
@@ -297,7 +294,7 @@
   - Loki for logs
   - Prometheus for metrics
   - Tempo for traces
-- **Client errors:** Sentry for web and mobile **[planned]**. PII scrubbing must be on, to match the logging rule.
+- **Client errors:** Sentry for the web app **[planned]**. PII scrubbing must be on, to match the logging rule.
 - **Log format:** structured JSON logs with trace IDs and the tenant ID, never personal data **[assumption]**.
 
 ---
@@ -306,7 +303,7 @@
 
 Resolved:
 
-1. **Expo Router:** arrives in phase 5; `mobile/CLAUDE.md` says the same.
+1. **Expo Router:** no longer applicable, the Expo app was removed (ADR 0021).
 2. **Outbox and JobRunr:** Modulith Event Publication Registry is the outbox, JobRunr runs scheduled jobs. ADR 0007.
 3. **Operator and cooperative data:** aggregates only, time-boxed audited support access. ADR 0008.
 4. **Rounding wording:** `money-rules.md` section 1 and `CLAUDE.md` agree: rounding happens in `Money`, applied when a charge is created.

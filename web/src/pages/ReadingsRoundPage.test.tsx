@@ -1,6 +1,12 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Meter, ReadingBatch, ReadingBatchResult, ReadingRowResult } from '@nadel/api-client';
+import {
+  ApiError,
+  type Meter,
+  type ReadingBatch,
+  type ReadingBatchResult,
+  type ReadingRowResult,
+} from '@nadel/api-client';
 import { Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { plotMeter, queryResult, withQueries } from '../test/meterFixtures';
@@ -18,13 +24,34 @@ let meters: Meter[];
 let sent: ReadingBatch[];
 let respond: (batch: ReadingBatch) => ReadingRowResult;
 let roundParams: unknown[];
+let photoSent: unknown[];
+let photoOptions: { mutation: { onError: (error: unknown) => void } };
 
+vi.mock('../lib/normalizeImage', () => ({
+  normalizeImage: (file: File) => Promise.resolve(file),
+}));
 vi.mock('../me', () => ({ useCan: () => true, useOptionalMe: () => null }));
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
   useGetReadingRound: (params: unknown) => {
     roundParams.push(params);
     return queryResult(meters);
+  },
+  useEnterReadingWithPhoto: (options: {
+    mutation: { onSuccess: (data: unknown) => Promise<void> | void; onError: (error: unknown) => void };
+  }) => {
+    photoOptions = options;
+    return {
+      isPending: false,
+      mutate: (variables: unknown) => {
+        photoSent.push(variables);
+        void options.mutation.onSuccess({
+          reading: saved().reading,
+          supersededReadingIds: [],
+          warnings: [],
+        });
+      },
+    };
   },
   useEnterReadings: (options: {
     mutation: { onSuccess: (result: ReadingBatchResult) => Promise<void> | void };
@@ -52,6 +79,7 @@ function saved(extra: Partial<ReadingRowResult> = {}): ReadingRowResult {
       status: 'APPROVED',
       source: 'ENTERED',
       changeable: true,
+      hasPhoto: false,
       interval: { from: '2026-09-03', to: '2026-10-21', days: 48, consumption: '110.000' },
     },
     ...extra,
@@ -75,6 +103,10 @@ describe('ReadingsRoundPage', () => {
     window.localStorage.setItem('nadel.locale', 'uk');
     meters = [plotMeter, second];
     sent = [];
+    photoSent = [];
+    let counter = 0;
+    URL.createObjectURL = vi.fn(() => `blob:test/${++counter}`);
+    URL.revokeObjectURL = vi.fn();
     roundParams = [];
     respond = () => saved();
   });
@@ -238,5 +270,48 @@ describe('ReadingsRoundPage', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getAllByText('Lipova', { selector: '[data-user-content]' })).toHaveLength(2);
+  });
+
+  it('sends a row with a photo through the photo operation and the others through the bulk one', async () => {
+    const user = userEvent.setup();
+    renderRound();
+    const [first, other] = screen.getAllByLabelText('Показ, кВт·год');
+    const [firstPhoto] = screen.getAllByTestId('photo-input');
+    expect(screen.getAllByRole('button', { name: /Додати фото/ })[0]).toHaveClass('min-h-11');
+    const file = new File([new Uint8Array(10)], 'm.jpg', { type: 'image/jpeg' });
+    await user.upload(firstPhoto!, file);
+    expect(await screen.findByRole('img', { name: 'Фото лічильника' })).toBeInTheDocument();
+    await user.type(first!, '8250{Enter}');
+    expect(photoSent).toEqual([
+      { data: { reading: { meterId: 'm1', takenOn: undefined, value: '8250' }, photo: file } },
+    ]);
+    expect(sent).toEqual([]);
+    await user.type(other!, '100{Enter}');
+    expect(sent).toEqual([{ rows: [{ meterId: 'm3', takenOn: undefined, value: '100' }] }]);
+    expect(photoSent).toHaveLength(1);
+  });
+
+  it('removes the photo before saving, so the row goes through the bulk operation', async () => {
+    const user = userEvent.setup();
+    renderRound();
+    await user.upload(
+      screen.getAllByTestId('photo-input')[0]!,
+      new File([new Uint8Array(10)], 'm.jpg', { type: 'image/jpeg' }),
+    );
+    await screen.findByRole('img', { name: 'Фото лічильника' });
+    await user.click(screen.getByRole('button', { name: 'Прибрати' }));
+    await user.type(screen.getAllByLabelText('Показ, кВт·год')[0]!, '8250{Enter}');
+    expect(photoSent).toEqual([]);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('shows a photo error of the server in the row', async () => {
+    renderRound();
+    act(() =>
+      photoOptions.mutation.onError(
+        new ApiError(400, { code: 'VALIDATION', errors: [{ field: 'photo', code: 'FILE_TOO_LARGE' }] }),
+      ),
+    );
+    expect(await screen.findByText('Файл завеликий. Максимум 5 МБ.')).toBeInTheDocument();
   });
 });

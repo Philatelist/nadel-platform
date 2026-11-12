@@ -18,7 +18,10 @@ export function PaymentNewPage() {
         title={t.payments.form.title}
         actions={
           canView && (
-            <Link to="/payments" className="text-accent underline">
+            <Link
+              to="/payments"
+              className="inline-flex min-h-11 items-center sm:min-h-0 text-accent underline"
+            >
               {t.payments.back}
             </Link>
           )

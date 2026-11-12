@@ -12,6 +12,7 @@ The test stand on one server (Caddy, HTTPS, the first-chairman command) is descr
 | `keycloak`      | 8180                   | Keycloak, realm `nadel`                                             |
 | `mailpit`       | 1025, 8025             | Test mail server: SMTP on 1025, web UI and API on 8025 (in memory)  |
 | `fake-telegram` | 8091                   | Fake Telegram Bot API (`fake-telegram/server.mjs`), no real network |
+| `fake-push`     | 8092 (`NADEL_FAKE_PUSH_PORT`) | Fake Web Push service (`fake-push/server.mjs`), no real network |
 
 ## Mailpit (e-mail)
 
@@ -43,6 +44,29 @@ curl -s -X POST localhost:8091/control/reset
 To check against the real Telegram instead (owner's check), create a bot with @BotFather, leave the variable
 unset or set `NADEL_TELEGRAM_API_URL=https://api.telegram.org`, register the real token in the cooperative
 settings, and stop the fake service with `docker compose -f infra/docker-compose.yml stop fake-telegram`.
+
+## Fake Web Push
+
+Synthetic push subscriptions point at `http://localhost:8092/push/<id>` (any id). The service stores what arrives
+(headers `authorization`, `content-encoding`, `content-length`, `ttl`, `urgency`, `topic`, and the raw encrypted body
+as base64) and never decrypts it; tests decrypt with their own keys. Bodies over 8 KiB get `413`. Bodies and
+authorization headers are never logged. A real browser's subscription points at a real push service, which tests never reach.
+
+```bash
+# What arrived for subscription <id> (omit ?id= for everything)
+curl -s 'localhost:8092/control/received?id=<id>'
+
+# Simulate an expired subscription (pushes answer 410), and undo it
+curl -s -X POST localhost:8092/control/gone/<id>
+curl -s -X DELETE localhost:8092/control/gone/<id>
+
+# Simulate a push service failure (429 or 5xx) until cleared
+curl -s -X POST localhost:8092/control/fail/<id>/503
+curl -s -X DELETE localhost:8092/control/fail/<id>
+
+# Forget everything
+curl -s -X POST localhost:8092/control/reset
+```
 
 ## PostGIS image (Apple Silicon)
 

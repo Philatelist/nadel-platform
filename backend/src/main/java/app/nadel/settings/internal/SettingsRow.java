@@ -59,6 +59,9 @@ class SettingsRow {
     @Column(name = "auto_allocate_prepayment", nullable = false)
     private boolean autoAllocatePrepayment;
 
+    @Column(name = "reading_photo_required", nullable = false)
+    private boolean readingPhotoRequired;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -69,6 +72,6 @@ class SettingsRow {
     SettingsValues values() {
         return new SettingsValues(memberPlotStatusVisibility, lossesMode, lossesPercent, commonConsumerDefaultSplit,
                 redAmount, redDays, new Requisites(officialName, legalAddress, bankName, iban),
-                autoAllocatePrepayment);
+                autoAllocatePrepayment, readingPhotoRequired);
     }
 }

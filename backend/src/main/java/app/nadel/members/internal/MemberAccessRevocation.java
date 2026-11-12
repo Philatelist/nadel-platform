@@ -1,5 +1,6 @@
 package app.nadel.members.internal;
 
+import app.nadel.members.MemberAccessRevoked;
 import app.nadel.members.internal.MemberAccessState.State;
 import java.time.Instant;
 import java.util.UUID;

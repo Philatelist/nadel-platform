@@ -1,9 +1,13 @@
 package app.nadel.treasury.internal;
 
+import app.nadel.files.FileKind;
+import app.nadel.files.FileSniffer;
+import app.nadel.files.ImageMetadata;
+import app.nadel.files.MalformedImageException;
+import app.nadel.files.UploadLimits;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
 import app.nadel.problem.ProblemCodes;
-import app.nadel.treasury.internal.FileSniffer.Kind;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.security.MessageDigest;
@@ -25,15 +29,15 @@ import org.springframework.web.multipart.MultipartFile;
  *       the upload declares, before it is read: 413 {@code FILE_TOO_LARGE}; not a JPEG, PNG or PDF by its first bytes
  *       ({@link FileSniffer}), or a JPEG or PNG whose structure cannot be read: 400 {@code FILE_TYPE_NOT_ALLOWED}.</li>
  * </ol>
- * A JPEG or PNG is stored without its metadata ({@link JpegMetadataStripper}, {@link PngMetadataStripper}); a PDF as
- * received. The stored name is the base name the client gave, without control and invisible characters, at most 255
- * characters ({@code receipt.jpg}/{@code .png}/{@code .pdf} when nothing is left). Neither a name nor anything read
- * from a file is logged or put into an answer.
+ * A JPEG or PNG is stored without its metadata ({@link ImageMetadata}); a PDF as received. The stored name is the
+ * base name the client gave, without control and invisible characters, at most 255 characters ({@code receipt.jpg}/
+ * {@code .png}/{@code .pdf} when nothing is left). Neither a name nor anything read from a file is logged or put into
+ * an answer.
  */
 final class AttachmentUploads {
 
-    /** 5 MiB: the largest stored file (and the {@code size_bytes} CHECK of V32). */
-    static final long MAX_FILE_BYTES = 5L * 1024 * 1024;
+    /** 5 MiB ({@link UploadLimits}): the largest stored file (and the {@code size_bytes} CHECK of V32). */
+    static final long MAX_FILE_BYTES = UploadLimits.MAX_FILE_BYTES;
     /** The most files of one expense (the {@code position} CHECK of V32). */
     static final int MAX_FILES = 5;
 
@@ -45,7 +49,7 @@ final class AttachmentUploads {
     }
 
     /** A file that may be stored: its type, the stored name, the stored bytes and their SHA-256. */
-    record Prepared(Kind kind, String fileName, byte[] content, byte[] sha256) {
+    record Prepared(FileKind kind, String fileName, byte[] content, byte[] sha256) {
     }
 
     /** Refuses more than {@value #MAX_FILES} files with 400 {@code TOO_MANY} on {@code files}. */
@@ -84,14 +88,10 @@ final class AttachmentUploads {
     /** The checked file {@code files[index]}: its type by content, the bytes to store and their digest. */
     static Prepared prepare(int index, @Nullable String originalName, byte[] content) {
         requireSize(index, content.length);
-        Kind kind = FileSniffer.sniff(content).orElseThrow(() -> notAllowed(index));
+        FileKind kind = FileSniffer.sniff(content).orElseThrow(() -> notAllowed(index));
         byte[] stored;
         try {
-            stored = switch (kind) {
-                case JPEG -> JpegMetadataStripper.strip(content);
-                case PNG -> PngMetadataStripper.strip(content);
-                case PDF -> content;
-            };
+            stored = ImageMetadata.strip(kind, content);
         } catch (MalformedImageException e) {
             throw notAllowed(index);
         }
@@ -103,7 +103,7 @@ final class AttachmentUploads {
      * The last path segment without control and invisible characters, trimmed, at most 255 characters (shortened
      * before its extension); {@code receipt} with the extension of the type when nothing is left.
      */
-    static String fileName(@Nullable String original, Kind kind) {
+    static String fileName(@Nullable String original, FileKind kind) {
         String name = original == null ? "" : original;
         name = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
         name = INVISIBLE.matcher(name).replaceAll("").strip();

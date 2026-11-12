@@ -2,20 +2,26 @@ import {
   getListMeterReadingsQueryKey,
   getListMetersQueryKey,
   useEnterReadings,
+  useEnterReadingWithPhoto,
   type Meter,
   type ReadingRowResult,
+  type ReadingSaved,
   type RecalculationCause,
 } from '@nadel/api-client';
 import { format, formatDay, formatMeterValue, parseMeterValue } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
+import { useDirtyGuard } from '../../pwa/dirtyForms';
 import { Link } from 'react-router';
 import { useLocale, useT } from '../../i18n';
 import { resourceUnit } from '../../meters';
 import { useCan } from '../../me';
 import { kyivToday } from '../../kyivToday';
-import { problemMessage } from '../../problem';
+import { normalizeImage } from '../../lib/normalizeImage';
+import { problemFieldErrors, problemMessage } from '../../problem';
 import { readingErrorMessage } from '../../readings';
+import { MAX_FILE_BYTES } from '../files/FilePicker';
+import { useObjectUrl } from '../files/FilePreview';
 import { ResourceIcon } from '../meters/ResourceIcon';
 import { invalidateAfterReading } from '../charges/chargeInvalidation';
 import { UserContent } from '../UserContent';
@@ -52,10 +58,46 @@ export function RoundRow({
   const canRecalculate = useCan('RECALCULATION_RUN');
   const [cause, setCause] = useState<RecalculationCause>();
   const [booked, setBooked] = useState(false);
+  const [photo, setPhoto] = useState<File>();
+  const [photoError, setPhotoError] = useState<string>();
+  const [processing, setProcessing] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const photoUrl = useObjectUrl(photo);
+  useDirtyGuard(input !== '' || photo !== undefined);
 
   const parsed = parseMeterValue(input, locale);
   const valueError = submitted && parsed === undefined ? t.meters.valueInvalid : undefined;
   const takenOn = rowDate ?? roundDate;
+
+  async function afterSaved() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
+      queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
+      invalidateAfterReading(queryClient),
+    ]);
+    onSaved(valueField.current);
+  }
+
+  const enterWithPhoto = useEnterReadingWithPhoto({
+    mutation: {
+      onSuccess: async (data: ReadingSaved) => {
+        setResult({
+          index: 0,
+          meterId: meter.id,
+          outcome: 'SAVED',
+          reading: data.reading,
+          supersededReadingIds: data.supersededReadingIds,
+          warnings: data.warnings,
+        });
+        setPhoto(undefined);
+        await afterSaved();
+      },
+      onError: (error: unknown) => {
+        const fields = problemFieldErrors(t, error);
+        setFailure(fields.photo ?? fields.value ?? fields.takenOn ?? problemMessage(t, error));
+      },
+    },
+  });
 
   const enter = useEnterReadings({
     mutation: {
@@ -75,12 +117,7 @@ export function RoundRow({
         }
         setResult(row);
         if (row.outcome !== 'SAVED') return;
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: getListMeterReadingsQueryKey(meter.id) }),
-          queryClient.invalidateQueries({ queryKey: getListMetersQueryKey() }),
-          invalidateAfterReading(queryClient),
-        ]);
-        onSaved(valueField.current);
+        await afterSaved();
       },
       onError: (error: unknown) => setFailure(problemMessage(t, error)),
     },
@@ -99,9 +136,33 @@ export function RoundRow({
     if (parsed === undefined) return;
     setResult(undefined);
     setFailure(undefined);
-    enter.mutate({ data: { rows: [{ meterId: meter.id, takenOn, value: parsed }] } });
+    // a row with a photo goes through the photo operation, every other row through the bulk one
+    if (photo)
+      enterWithPhoto.mutate({ data: { reading: { meterId: meter.id, takenOn, value: parsed }, photo } });
+    else enter.mutate({ data: { rows: [{ meterId: meter.id, takenOn, value: parsed }] } });
   }
 
+  async function choosePhoto(list: FileList | null) {
+    const chosen = list?.[0];
+    if (!chosen) return;
+    setPhotoError(undefined);
+    setProcessing(true);
+    try {
+      const file = await normalizeImage(chosen);
+      if (file === undefined || !['image/jpeg', 'image/png'].includes(file.type)) {
+        setPhotoError(r.photo.typeNotAllowed);
+      } else if (file.size > MAX_FILE_BYTES) {
+        setPhotoError(r.photo.tooLarge);
+      } else {
+        edit(() => setPhoto(file));
+      }
+    } finally {
+      setProcessing(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  }
+
+  const pending = enter.isPending || enterWithPhoto.isPending;
   const saved = result?.outcome === 'SAVED' ? result : undefined;
   const interval = saved?.reading?.interval;
 
@@ -112,7 +173,10 @@ export function RoundRow({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold break-words">
             <ResourceIcon resource={meter.resource} />
             {meter.plot && (
-              <Link to={`/meters/${meter.id}`} className="text-accent underline">
+              <Link
+                to={`/meters/${meter.id}`}
+                className="inline-flex min-h-11 items-center sm:min-h-0 text-accent underline"
+              >
                 <UserContent>{meter.serial}</UserContent>
               </Link>
             )}
@@ -144,11 +208,60 @@ export function RoundRow({
             onChange={(value) => edit(() => setRowDate(value))}
           />
           <div className="sm:pt-6">
-            <Button type="submit" className="w-full sm:w-auto" disabled={enter.isPending || input === ''}>
-              {enter.isPending ? r.saving : r.save}
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={pending || processing || input === ''}
+            >
+              {pending ? r.saving : r.save}
             </Button>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={photoInput}
+            type="file"
+            hidden
+            data-testid="photo-input"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => void choosePhoto(e.target.files)}
+          />
+          {photo && photoUrl !== undefined && (
+            <img
+              src={photoUrl}
+              alt={r.photo.thumbnailAlt}
+              className="size-12 rounded-control border border-line object-cover"
+            />
+          )}
+          <Button
+            variant="secondary"
+            className="min-h-11"
+            disabled={processing}
+            onClick={() => photoInput.current?.click()}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="mr-2 size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+            {processing ? r.photo.processing : photo ? r.photo.replace : r.photo.addRow}
+          </Button>
+          {photo && !processing && (
+            <Button variant="secondary" className="min-h-11" onClick={() => edit(() => setPhoto(undefined))}>
+              {r.photo.remove}
+            </Button>
+          )}
+        </div>
+        {photoError && <Notice tone="danger">{photoError}</Notice>}
         {failure && <Notice tone="danger">{failure}</Notice>}
         {booked && <Notice tone="success">{r.recalc.entered}</Notice>}
         {result?.outcome === 'REJECTED' && (

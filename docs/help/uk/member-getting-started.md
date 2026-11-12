@@ -26,6 +26,7 @@ shots: []
 - Передати показ лічильника: у блоці {{ui:readings.mine.title}} натисніть {{ui:readings.mine.submit}}. Показ перевірить правління. Покроково: [Як передати показ лічильника](help:member-readings).
 - Узяти рахунок: у блоці {{ui:invoices.myTitle}} натисніть {{ui:invoices.download}}. Як читати рахунок: [Як прочитати мій рахунок](help:member-bill). Акт звірки й інші документи: [Документи для члена кооперативу](help:member-documents).
 - Підключити Telegram, щоб рахунки приходили в месенджер: кнопка {{ui:telegramLink.connect}} у кабінеті. Покроково: [Як підключити Telegram](help:member-telegram).
+- Встановити Наділ на телефон і отримувати сповіщення на пристрої: [Встановити на телефон](help:member-install) і [Сповіщення на телефоні](help:member-push).
 
 Ви бачите лише свої дані. Чужих ділянок, сум і власників система не показує.
 
@@ -40,4 +41,6 @@ shots: []
 - [Як прочитати мій рахунок](help:member-bill)
 - [Документи для члена кооперативу](help:member-documents)
 - [Як підключити Telegram](help:member-telegram)
+- [Встановити на телефон](help:member-install)
+- [Сповіщення на телефоні](help:member-push)
 - [Задайте пароль](help:set-password)

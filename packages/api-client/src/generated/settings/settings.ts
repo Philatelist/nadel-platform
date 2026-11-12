@@ -71,7 +71,7 @@ export const getGetSettingsUrl = () => {
  * operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
  * (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
  * `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90,
- * `autoAllocatePrepayment` true) and no requisites. The
+ * `autoAllocatePrepayment` true, `readingPhotoRequired` false) and no requisites. The
  * requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
  * the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
  * absent.
@@ -187,7 +187,8 @@ export const getUpdateSettingsUrl = () => {
  * error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
  * operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
  * from then on (the status is derived when it is read). Turning `autoAllocatePrepayment` on places no existing
- * prepayment at once: a plot's prepayment is placed at its next booking of charges.
+ * prepayment at once: a plot's prepayment is placed at its next booking of charges. `readingPhotoRequired`
+ * applies to every member's reading submitted from then on; readings already submitted stay as they are.
  * @summary Change cooperative settings
  */
 export const updateSettings = async (cooperativeSettingsUpdate: CooperativeSettingsUpdate, options?: Parameters<typeof nadelFetch>[1]): Promise<CooperativeSettings> => {

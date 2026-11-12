@@ -30,6 +30,23 @@ With the stack already running (`make up`), `pnpm --filter web test:e2e` runs th
 Sign in through Keycloak as `treasurer@demo.local` / `nadel` (see the user list in CLAUDE.md). Navigation and routes
 follow the permissions in `/me` (`useCan`, `RequirePermission`); hiding is a convenience, the API enforces access.
 
+## Installable app (PWA)
+
+`vite build` adds a service worker (`src/sw.ts`, injected precache of the build output and the help pages) and the manifest
+(`manifest.webmanifest`, name «Наділ», standalone). `vite dev` has neither, so the dev e2e stays as it is. The worker
+precaches static files only and has no runtime caching: personal data, PDFs and photos never reach the device storage
+(`src/sw.contract.test.ts` enforces it). `src/pwa/` holds registration and the update bar (a new version waits for the
+«Update» button and never while a form is dirty: `useDirtyGuard`), the offline banner, the install offer and the
+sign-out clean-up (`useSignOut`).
+
+```bash
+make e2e-pwa    # production build on `vite preview` (:5173) + backend, runs playwright.pwa.config.ts (e2e/pwa)
+pnpm --filter web exec node scripts/make-icons.mjs   # regenerate public/icon-*.png and apple-touch-icon.png (once; committed)
+```
+
+`tsconfig.sw.json` (WebWorker lib) type-checks the worker as part of `typecheck`. The precache holds about 31 MiB, 27 MiB of
+it the help screenshots (`dist/help/img`).
+
 ## Layout
 
 | Path                                   | What it is                                                                                                                                                           |

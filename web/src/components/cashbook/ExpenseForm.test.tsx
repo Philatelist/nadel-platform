@@ -8,7 +8,7 @@ import { renderWithApp } from '../../test/render';
 import { ExpenseForm } from './ExpenseForm';
 
 const createExpense = vi.fn();
-const heicToJpeg = vi.fn();
+const normalizeImage = vi.fn();
 
 vi.mock('@nadel/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nadel/api-client')>()),
@@ -19,9 +19,9 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
       { id: 'c2', kind: 'EXPENSE', name: 'Ремонт даху', sortOrder: 2, archived: false },
     ]),
 }));
-vi.mock('../../lib/heicToJpeg', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/heicToJpeg')>()),
-  heicToJpeg: (...args: unknown[]) => heicToJpeg(...args),
+vi.mock('../../lib/normalizeImage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/normalizeImage')>()),
+  normalizeImage: (...args: unknown[]) => normalizeImage(...args),
 }));
 
 function renderForm(onSaved = vi.fn()) {
@@ -37,7 +37,8 @@ describe('ExpenseForm', () => {
   beforeEach(() => {
     window.localStorage.setItem('nadel.locale', 'uk');
     createExpense.mockReset();
-    heicToJpeg.mockReset();
+    normalizeImage.mockReset();
+    normalizeImage.mockImplementation((file: File) => Promise.resolve(file));
     let counter = 0;
     URL.createObjectURL = vi.fn(() => `blob:test/${++counter}`);
     URL.revokeObjectURL = vi.fn();
@@ -91,7 +92,7 @@ describe('ExpenseForm', () => {
 
   it('converts a HEIC photo to JPEG and keeps it', async () => {
     const jpeg = new File(['j'], 'IMG.jpg', { type: 'image/jpeg' });
-    heicToJpeg.mockResolvedValue(jpeg);
+    normalizeImage.mockResolvedValue(jpeg);
     const user = userEvent.setup();
     renderForm();
     await user.upload(screen.getByTestId('file-input'), new File(['h'], 'IMG.heic', { type: 'image/heic' }));
@@ -99,7 +100,7 @@ describe('ExpenseForm', () => {
   });
 
   it('says so when a HEIC photo cannot be converted', async () => {
-    heicToJpeg.mockResolvedValue(undefined);
+    normalizeImage.mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderForm();
     await user.upload(screen.getByTestId('file-input'), new File(['h'], 'IMG.heic', { type: 'image/heic' }));

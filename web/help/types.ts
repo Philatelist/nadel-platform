@@ -16,7 +16,7 @@ export const HELP_SECTIONS = [
 
 export type HelpSection = (typeof HELP_SECTIONS)[number];
 export type HelpKind = 'screen' | 'topic';
-export type HelpViewport = 'desktop' | 'phone';
+export type HelpViewport = 'desktop' | 'phone' | 'phone-ios';
 
 /**
  * One screenshot to capture. `open`, `steps` and `element` use the step vocabulary of

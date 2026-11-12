@@ -15,7 +15,10 @@ function MyPlotCard({ plot }: { plot: OwnedPlot }) {
   return (
     <Panel>
       <h3 className="text-[17px] font-semibold">
-        <Link to={`/plots/${plot.plotId}`} className="text-accent underline">
+        <Link
+          to={`/plots/${plot.plotId}`}
+          className="inline-flex min-h-11 items-center sm:min-h-0 text-accent underline"
+        >
           {formatUser(t.plot.cardTitlePlot, { number: plot.number })}
         </Link>
       </h3>

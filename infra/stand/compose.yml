@@ -88,6 +88,10 @@ services:
       NADEL_TELEGRAM_API_URL: https://api.telegram.org
       # The dev profile allows mail servers on private addresses (Mailpit); not on a public server
       NADEL_DELIVERY_SMTPPRIVATEHOSTS: 'false'
+      # Web Push (VAPID) keys are generated into .env by stand-init.sh; not ':?' for the same reason as the Keycloak secret
+      NADEL_WEBPUSH_PUBLIC_KEY: ${NADEL_WEBPUSH_PUBLIC_KEY:-}
+      NADEL_WEBPUSH_PRIVATE_KEY: ${NADEL_WEBPUSH_PRIVATE_KEY:-}
+      NADEL_WEBPUSH_SUBJECT: ${NADEL_WEBPUSH_SUBJECT:-mailto:admin@${NADEL_DOMAIN:?set in .env}}
     volumes:
       - ./app/nadel-backend.jar:/app/nadel-backend.jar:ro
     depends_on:

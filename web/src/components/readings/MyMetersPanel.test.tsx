@@ -17,6 +17,7 @@ const reading = (overrides: Partial<MeterReading>): MeterReading => ({
   status: 'APPROVED',
   source: 'ENTERED',
   changeable: false,
+  hasPhoto: false,
   ...overrides,
 });
 
@@ -48,7 +49,7 @@ vi.mock('@nadel/api-client', async (importOriginal) => ({
         }),
       ],
     }),
-  useSubmitPlotReading: () => ({ mutate: submit, isPending: false }),
+  useSubmitPlotReadingWithPhoto: () => ({ mutate: submit, isPending: false }),
 }));
 
 describe('MyMetersPanel', () => {
@@ -83,7 +84,7 @@ describe('MyMetersPanel', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Submit a reading' }));
     expect(submit).toHaveBeenCalledWith({
       id: 'p7',
-      data: { meterId: 'm1', takenOn: undefined, value: '8300.5' },
+      data: { reading: { meterId: 'm1', takenOn: undefined, value: '8300.5' }, photo: undefined },
     });
   });
 });

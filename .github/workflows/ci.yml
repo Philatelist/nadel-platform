@@ -92,6 +92,7 @@ jobs:
       - run: pnpm -r typecheck
       - run: pnpm -r test
       - run: pnpm -r lint
+      - run: make stand-test
       - run: pnpm --filter web build
 
   security:
@@ -196,6 +197,14 @@ jobs:
           else
             pnpm --filter web test:e2e --grep @smoke --pass-with-no-tests
           fi
+      - name: Stop the dev web server
+        run: kill $(lsof -t -iTCP:5173 -sTCP:LISTEN) || true
+      - name: PWA end-to-end specs (production build on vite preview)
+        run: |
+          pnpm --filter web exec vite build
+          nohup pnpm --filter web exec vite preview > web-preview.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:5173/ && break; sleep 2; done
+          pnpm --filter web exec playwright test -c playwright.pwa.config.ts
       - name: Report, traces and logs
         if: failure()
         uses: actions/upload-artifact@v7
@@ -206,6 +215,7 @@ jobs:
             web/test-results
             backend.log
             web.log
+            web-preview.log
           if-no-files-found: ignore
       - name: Keycloak logs
         if: failure()

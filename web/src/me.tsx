@@ -1,20 +1,20 @@
 import { ApiError, useGetMe, type Me, type Permission } from '@nadel/api-client';
 import { createContext, useContext, type ReactNode } from 'react';
-import { useAuth } from 'react-oidc-context';
 import { FullPageMessage } from './components/FullPageMessage';
 import { QueryBoundary } from './components/QueryBoundary';
 import { Button } from './components/ui';
 import { useT } from './i18n';
 import { problemCode } from './problem';
+import { useSignOut } from './pwa/useSignOut';
 
 const MeContext = createContext<Me | null>(null);
 
 export function MeProvider({ children }: { children: ReactNode }) {
   const t = useT();
-  const auth = useAuth();
+  const signOutAndLeave = useSignOut();
   const query = useGetMe();
   const signOut = (
-    <Button variant="secondary" onClick={() => void auth.signoutRedirect()}>
+    <Button variant="secondary" onClick={() => void signOutAndLeave()}>
       {t.auth.signOut}
     </Button>
   );

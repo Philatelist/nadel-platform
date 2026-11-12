@@ -135,6 +135,24 @@ nadel:
     sweep-interval: 60s
     telegram-per-second: 20
     telegram-chat-gap: 1s
+  webpush:
+    # Web Push (feature 021, ADR 0021): the VAPID key pair of this server, from the environment only. Push is on only
+    # when all three are set and the pair is valid; otherwise the start-up logs one WARN and push is off (the
+    # application runs on). Public key: an uncompressed P-256 point in base64url without padding (87 characters);
+    # private key: its 32-byte scalar in base64url (43 characters, a secret); subject: mailto: or https: contact.
+    # infra/stand/stand-init.sh generates the pair once; rotating it drops every subscription.
+    public-key: ${NADEL_WEBPUSH_PUBLIC_KEY:}
+    private-key: ${NADEL_WEBPUSH_PRIVATE_KEY:}
+    subject: ${NADEL_WEBPUSH_SUBJECT:}
+    # The push services an endpoint may point at (https only; "*." for subdomains), see PushEndpointPolicy
+    allowed-hosts: fcm.googleapis.com,*.push.services.mozilla.com,*.notify.windows.com,web.push.apple.com
+    # Further origins (scheme://host:port) an endpoint may point at, also http and private: empty in production
+    extra-allowed-origins: ""
+    connect-timeout: 5s
+    request-timeout: 10s
+    # After a 429, a 5xx or no answer: the next attempts (the last delay repeats) while the time to live lasts
+    retry-delays: 1m,5m,30m,2h,6h
+    ttl: 3d
 
 jobrunr:
   # Background jobs (feature 017, ADR 0007): JobRunr on the application's DataSource (nadel_app). Its tables come
@@ -184,6 +202,14 @@ nadel:
   telegram:
     # The fake Telegram Bot API of infra/docker-compose.yml (fake-telegram), so the demo bot never reaches Telegram
     api-url: ${NADEL_TELEGRAM_API_URL:http://localhost:8091}
+  webpush:
+    # DEV-ONLY VAPID test key pair (feature 021): generated for local development and the e2e run, never used on a
+    # stand or in production (they take NADEL_WEBPUSH_* from the environment). Only synthetic subscriptions that point
+    # at the fake push service of infra/docker-compose.yml (fake-push, http://localhost:8092) receive anything.
+    public-key: ${NADEL_WEBPUSH_PUBLIC_KEY:BI9UI5qMM2W03Y-LS90zQGJFuMgZYm3BIzgClMnolpf1p6buYBworqxZjStG7qRCiXW6HWLrSI2AoowDSoasTTc}
+    private-key: ${NADEL_WEBPUSH_PRIVATE_KEY:K8E2xvi_9__lLM2CVH5t7SPeQnhcdCI9_XWETgADnkg}
+    subject: ${NADEL_WEBPUSH_SUBJECT:mailto:dev@nadel.local}
+    extra-allowed-origins: http://localhost:8092
   keycloak:
     admin:
       # The dev secret of infra/keycloak/nadel-realm.json; only when NADEL_KEYCLOAK_ADMIN_CLIENT_SECRET is not set

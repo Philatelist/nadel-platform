@@ -4,6 +4,7 @@ import {
   type MeterResource as MeterResourceValue,
 } from '@nadel/api-client';
 import { useCallback, useRef, useState } from 'react';
+import { useDirtyGuard } from '../pwa/dirtyForms';
 import { useSearchParams } from 'react-router';
 import { QueryBoundary } from '../components/QueryBoundary';
 import { ReadingDateField } from '../components/readings/ReadingDateField';
@@ -42,6 +43,7 @@ export function ReadingsRoundPage() {
   const noReadingSince = sinceParam !== null && DAY.test(sinceParam) ? sinceParam : undefined;
   // undefined = the round date was not touched: it is today and the server dates the readings itself
   const [roundDate, setRoundDate] = useState<string>();
+  useDirtyGuard(roundDate !== undefined);
 
   const [input, setInput] = useState(street);
 

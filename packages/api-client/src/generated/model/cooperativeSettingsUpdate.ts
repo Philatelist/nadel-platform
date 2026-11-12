@@ -31,6 +31,8 @@ export interface CooperativeSettingsUpdate {
   redDays?: number;
   /** Allocate prepayment automatically; see `CooperativeSettings.autoAllocatePrepayment` */
   autoAllocatePrepayment?: boolean;
+  /** Require a photo with a member's reading; see `CooperativeSettings.readingPhotoRequired` */
+  readingPhotoRequired?: boolean;
   /**
      * The full official name; an empty string clears it
      * @maxLength 300

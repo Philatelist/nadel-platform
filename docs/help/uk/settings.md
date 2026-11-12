@@ -22,6 +22,10 @@ shots:
     user: chairman
     path: /settings
     element: { heading: Розсилка }
+  - name: settings-readings
+    user: chairman
+    path: /settings
+    element: { heading: Покази лічильників }
 ---
 
 ## Для чого цей екран
@@ -67,6 +71,12 @@ shots:
 - «{{ui:settings.threshold.redDays}}». Ціле число днів.
 
 Кнопка {{ui:settings.threshold.save}}. Помилки: «{{ui:settings.threshold.amountInvalid}}» і «{{ui:settings.threshold.daysInvalid}}». Нова умова одразу діє на кольори ділянок у списку й на карті.
+
+### Панель «{{ui:settings.readings.title}}»
+
+Один перемикач: «{{ui:settings.readings.photoRequired}}». Підказка під ним: «{{ui:settings.readings.photoRequiredHint}}» Коли правило ввімкнено, власник не може передати показ зі свого кабінету без фото лічильника і бачить повідомлення «{{ui:problem.READING_PHOTO_REQUIRED}}». Поки правило ввімкнено, бот Telegram не може прийняти показ члена, бо фото в боті не передається: він просить передати показ із фото в застосунку. Електрик і правління додають фото за бажанням. Кнопка {{ui:settings.readings.save}} зберігає вибір. Як це бачить власник: [Як передати показ лічильника](help:member-readings).
+
+![Панель «Покази лічильників»](shot:settings-readings)
 
 ### Панель «{{ui:settings.losses.title}}»
 

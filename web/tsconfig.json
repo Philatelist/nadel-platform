@@ -3,7 +3,8 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src", "vite.config.ts", "help/virtual.d.ts"]
+  "include": ["src", "vite.config.ts", "help/virtual.d.ts"],
+  "exclude": ["src/sw.ts"]
 }

@@ -50,6 +50,9 @@ import type {
   MyNotificationsUpdate,
   NotFoundResponse,
   PrintDoneResult,
+  PushConfig,
+  PushDevice,
+  PushSubscriptionInput,
   SendAnnouncementParams,
   SendMonthInvoicesParams,
   TelegramLinkOffer,
@@ -814,6 +817,385 @@ export const useDeleteMyTelegramLink = <TError = UnauthorizedResponse | Forbidde
         TContext
       > => {
       return useMutation(getDeleteMyTelegramLinkMutationOptions(options), queryClient);
+    }
+    export const getGetMyPushConfigUrl = () => {
+
+
+
+
+  return `/api/v1/me/push`
+}
+
+/**
+ * «Сповіщення на цьому пристрої» (feature 021 §2.2): `enabled` is true only when the server has a valid VAPID key
+ * pair; then `publicKey` is the VAPID public key (the browser's `applicationServerKey`, base64url without
+ * padding), which the app compares with the key of an existing browser subscription. When `enabled` is false the
+ * app shows no push switch. No permission is needed. The platform operator has no cooperative data: 403.
+ * @summary Whether push notifications work on this platform, and the key to subscribe with
+ */
+export const getMyPushConfig = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PushConfig> => {
+
+  return nadelFetch<PushConfig>(getGetMyPushConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyPushConfigQueryKey = () => {
+    return [
+    `/api/v1/me/push`
+    ] as const;
+    }
+
+
+export const getGetMyPushConfigQueryOptions = <TData = Awaited<ReturnType<typeof getMyPushConfig>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyPushConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyPushConfig>>> = ({ signal }) => getMyPushConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMyPushConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getMyPushConfig>>>
+export type GetMyPushConfigQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useGetMyPushConfig<TData = Awaited<ReturnType<typeof getMyPushConfig>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyPushConfig>>,
+          TError,
+          Awaited<ReturnType<typeof getMyPushConfig>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMyPushConfig<TData = Awaited<ReturnType<typeof getMyPushConfig>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyPushConfig>>,
+          TError,
+          Awaited<ReturnType<typeof getMyPushConfig>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMyPushConfig<TData = Awaited<ReturnType<typeof getMyPushConfig>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Whether push notifications work on this platform, and the key to subscribe with
+ */
+
+export function useGetMyPushConfig<TData = Awaited<ReturnType<typeof getMyPushConfig>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyPushConfig>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetMyPushConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListMyPushDevicesUrl = () => {
+
+
+
+
+  return `/api/v1/me/push/devices`
+}
+
+/**
+ * The devices of the signed-in member that receive push notifications, newest first. A device never carries its
+ * push address or keys. No permission is needed; only the member's own devices. The platform operator: 403.
+ * @summary The signed-in member's devices with push on
+ */
+export const listMyPushDevices = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<PushDevice[]> => {
+
+  return nadelFetch<PushDevice[]>(getListMyPushDevicesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyPushDevicesQueryKey = () => {
+    return [
+    `/api/v1/me/push/devices`
+    ] as const;
+    }
+
+
+export const getListMyPushDevicesQueryOptions = <TData = Awaited<ReturnType<typeof listMyPushDevices>>, TError = UnauthorizedResponse | ForbiddenResponse>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyPushDevicesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyPushDevices>>> = ({ signal }) => listMyPushDevices({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMyPushDevicesQueryResult = NonNullable<Awaited<ReturnType<typeof listMyPushDevices>>>
+export type ListMyPushDevicesQueryError = UnauthorizedResponse | ForbiddenResponse
+
+
+export function useListMyPushDevices<TData = Awaited<ReturnType<typeof listMyPushDevices>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyPushDevices>>,
+          TError,
+          Awaited<ReturnType<typeof listMyPushDevices>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyPushDevices<TData = Awaited<ReturnType<typeof listMyPushDevices>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyPushDevices>>,
+          TError,
+          Awaited<ReturnType<typeof listMyPushDevices>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyPushDevices<TData = Awaited<ReturnType<typeof listMyPushDevices>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The signed-in member's devices with push on
+ */
+
+export function useListMyPushDevices<TData = Awaited<ReturnType<typeof listMyPushDevices>>, TError = UnauthorizedResponse | ForbiddenResponse>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyPushDevices>>, TError, TData>>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMyPushDevicesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getRegisterMyPushDeviceUrl = () => {
+
+
+
+
+  return `/api/v1/me/push/devices`
+}
+
+/**
+ * Saves the browser's push subscription (`PushSubscription.toJSON()`: the endpoint and the keys `p256dh` and
+ * `auth`) for the signed-in member, with the device's language. The same endpoint is stored once per
+ * cooperative: sending it again updates the device (and moves it to the signed-in member when another member had
+ * it). A member keeps at most 10 devices; the oldest is dropped. The endpoint and the keys are stored encrypted
+ * and never returned. Not written to the audit log.
+ *
+ * 400 `VALIDATION_FAILED` when the endpoint is not an `https` address of a known push service (with
+ * `errors[{field: endpoint, code: INVALID}]`), or the keys are not a P-256 public key of 65 bytes on the curve and
+ * an auth secret of 16 bytes (`errors[{field: keys.p256dh | keys.auth, code: INVALID}]`). 409 `PUSH_DISABLED`
+ * when the server has no push keys (see `getMyPushConfig`). The platform operator: 403.
+ * @summary Turn push on for this device (save the browser's push subscription)
+ */
+export const registerMyPushDevice = async (pushSubscriptionInput: PushSubscriptionInput, options?: Parameters<typeof nadelFetch>[1]): Promise<PushDevice> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return nadelFetch<PushDevice>(getRegisterMyPushDeviceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(pushSubscriptionInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterMyPushDeviceMutationKey = () => ['registerMyPushDevice'] as const;
+
+export const getRegisterMyPushDeviceMutationOptions = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerMyPushDevice>>, TError,RegisterMyPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerMyPushDevice>>, TError,RegisterMyPushDeviceMutationVariables, TContext> => {
+
+const mutationKey = getRegisterMyPushDeviceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerMyPushDevice>>, RegisterMyPushDeviceMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerMyPushDevice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterMyPushDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof registerMyPushDevice>>>
+    export type RegisterMyPushDeviceMutationBody = PushSubscriptionInput
+    export type RegisterMyPushDeviceMutationError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse
+    export type RegisterMyPushDeviceMutationVariables = {data: PushSubscriptionInput}
+
+    /**
+ * @summary Turn push on for this device (save the browser's push subscription)
+ */
+export const useRegisterMyPushDevice = <TError = BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerMyPushDevice>>, TError,RegisterMyPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof registerMyPushDevice>>,
+        TError,
+        RegisterMyPushDeviceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRegisterMyPushDeviceMutationOptions(options), queryClient);
+    }
+    export const getDeleteMyPushDeviceUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/me/push/devices/${id}`
+}
+
+/**
+ * Deletes the device; it receives no further push notification. Works also while push is off on the server.
+ * Another member's device, another cooperative's or an unknown id: 404 `NOT_FOUND`. Not written to the audit
+ * log. The platform operator: 403.
+ * @summary Turn push off for one of the signed-in member's devices
+ */
+export const deleteMyPushDevice = async (id: string, options?: Parameters<typeof nadelFetch>[1]): Promise<void> => {
+
+  return nadelFetch<void>(getDeleteMyPushDeviceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMyPushDeviceMutationKey = () => ['deleteMyPushDevice'] as const;
+
+export const getDeleteMyPushDeviceMutationOptions = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyPushDevice>>, TError,DeleteMyPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMyPushDevice>>, TError,DeleteMyPushDeviceMutationVariables, TContext> => {
+
+const mutationKey = getDeleteMyPushDeviceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMyPushDevice>>, DeleteMyPushDeviceMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMyPushDevice(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMyPushDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMyPushDevice>>>
+
+    export type DeleteMyPushDeviceMutationError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+    export type DeleteMyPushDeviceMutationVariables = {id: string}
+
+    /**
+ * @summary Turn push off for one of the signed-in member's devices
+ */
+export const useDeleteMyPushDevice = <TError = UnauthorizedResponse | ForbiddenResponse | NotFoundResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyPushDevice>>, TError,DeleteMyPushDeviceMutationVariables, TContext>, request?: SecondParameter<typeof nadelFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMyPushDevice>>,
+        TError,
+        DeleteMyPushDeviceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteMyPushDeviceMutationOptions(options), queryClient);
     }
     export const getSendMonthInvoicesUrl = (month: string,
     params: SendMonthInvoicesParams,) => {

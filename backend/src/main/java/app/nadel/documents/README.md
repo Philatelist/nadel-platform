@@ -9,8 +9,8 @@ specs: `context/spec/016-invoices-and-documents/`.
 The module adds no money rule (the invoice's figures are the booking-month rule of the ledger, money rules 13). It
 owns the tables `invoice`, `certificate` and `document_counter` (V28, all under RLS `tenant_isolation`; `invoice`
 append-only, see below). It reads only through the public APIs of the modules that own the data (ledger, plots,
-members, audit, tariffs, settings, tenancy, identity, privacy) and never their tables (ADR 0001). Nothing depends on
-it.
+members, audit, tariffs, settings, tenancy, identity, privacy) and never their tables (ADR 0001). The notifications
+module uses its public API (`DocumentsFacade`, `DocumentFormats`) and listens to its event `InvoicesIssued`.
 
 ## Endpoints
 
@@ -23,7 +23,7 @@ it.
 | `GET /invoices?month&plotId&latestOnly&page&size` | `listInvoices` | `CHARGES_VIEW` |
 | `GET /invoices/readiness` | `getInvoiceReadiness` | `CHARGES_VIEW` |
 | `GET /invoices/{id}` · `/pdf` · `/qr.png` | `getInvoice`, `getInvoicePdf`, `getInvoiceQrPng` | `CHARGES_VIEW`, or a current owner of the plot and only the latest version (else 404) |
-| `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot); the operator 403 |
+| `GET /me/invoices` | `listMyInvoices` | anyone in a cooperative: the latest version per month of the plots they own now (empty without a plot), each with its stored `payment` details; the operator 403 |
 | `POST /billing-months/{month}/invoices?preview` (body `{includeNothingDue?}`) | `buildMonthInvoices` | `INVOICES_ISSUE` |
 | `GET /billing-months/{month}/invoices/print.pdf?scope=PAPER\|ALL` | `getMonthInvoicesPrintPdf` | `INVOICES_ISSUE` |
 
@@ -171,7 +171,13 @@ owns now (`identity.OwnedPlotsSource`), for each the latest version of each mont
 version equal to the plot and month's highest), newest month first, then the plots in the natural order of their
 numbers; every row `latest: true`. No permission: a caller with no plot, or linked to no member, gets an empty list (a
 sold plot is no longer listed); the platform operator 403. Each row's PDF is `GET /invoices/{id}/pdf`, which lets a
-member have only that latest version. A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
+member have only that latest version. Each row also carries `payment {link, iban, purpose}` (feature 021 §2.4, paying
+from the phone: «Сплатити в банку», «Скопіювати IBAN», «Скопіювати призначення»), read by the same query from the
+stored snapshot (`qr.link`, `qr.purpose`, `cooperative.iban`: plaintext keys, nothing to decrypt), so the values are
+those of the PDF and `GET /invoices/{id}`, and a later change of the cooperative's IBAN never changes an issued
+version's details; absent when the version has no QR code (nothing due) or no IBAN. Only `listMyInvoices` fills it:
+the board's `GET /invoices` and the `InvoiceRow` of `POST /plots/{id}/invoices` stay without it
+(`MyInvoicesPaymentTests`). A member's cash receipts come from the plot account (`GET /plots/{id}/account`:
 `payments[].id`, `source`, `receiptNumber`) and `GET /payments/{id}/receipt.pdf`.
 
 **The page** (`InvoiceLayout`, A4, one page per invoice): the requisites with, beside them, «Рахунок № {number}» and
@@ -265,7 +271,8 @@ with `number` and `reason`. No names. Downloads are not audited.
    chunk; a package-private test hook (`afterChunk`, a no-op in production) runs between chunks.
 5. One `INVOICES_ISSUED` audit entry (entity type `BILLING_MONTH`, label `YYYY-MM`, the same entity id for every build of
    the month; fields `month`, `built`, `newVersions`, `unchanged`, `skipped`), through the outbox in the build's
-   transaction. Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
+   transaction, and, when the build stored anything, one event `InvoicesIssued` with the plots of the stored versions
+   (below). Answer 200 `InvoiceBuild{preview: false, invoiceable, built, newVersions, unchanged, skipped}`.
 
 The **preview** (`preview=true`) runs steps 1, 3 and 4 with the same decision per plot (`InvoiceBuilder.decide`, the
 content hash included), takes no lock and writes nothing: `InvoiceBuild{preview: true, invoiceable, built,
@@ -352,6 +359,21 @@ implementation write its link codes.
 **SPI `PaperRecipients`** (implemented by the notifications module): `copiesFor(month, plotIds)` answers the paper
 copies of each plot (`PaperCopy`: member, label "Last First", optional link QR payload). Called in the print's
 transaction; optional (`ObjectProvider`): without it the print keeps the feature 016 filter.
+
+## Event `InvoicesIssued` (feature 021)
+
+`documents.InvoicesIssued(tenantId, month, buildId, plotIds)` is published inside the transaction that stores new
+invoice versions, so the Spring Modulith outbox keeps it with them (ADR 0007):
+
+- by a month build (`InvoiceBuilder.forMonth`), once, with exactly the plots whose invoice got version 1 or a new
+  version (**built** and **newVersions**); never the **unchanged** or **skipped** plots; a build that stores nothing (a
+  rebuild without a change) and a preview publish nothing; `buildId` is a new random id per build;
+- by an invoice issued on request (`POST /plots/{id}/invoices`, and through it the facade's `invoiceForToday` and the
+  bot's `invoiceForDay`) when it stores a new version, with its one plot; `buildId` is the stored version's id. An
+  unchanged on-request invoice publishes nothing.
+
+Ids and the month only (never an amount, a number or a name). The notifications module listens to it for the push
+«Новий рахунок за {місяць}» to the plots' current owners (feature 021 §2.2), once per build and device.
 
 ## Amounts in words
 
@@ -464,6 +486,10 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   build started while the first runs is 409 `INVOICE_BUILD_RUNNING` (a preview meanwhile is 200) and nothing is built
   twice, the next build finds everything unchanged; one `INVOICES_ISSUED`
   entry per build with its counts and no names; the month list in the natural order of the plot numbers.
+- `InvoicesIssuedEventTests` (Testcontainers, feature 021): a month build publishes one `InvoicesIssued` with exactly
+  the plots of the new versions (a plot with nothing due skipped), a rebuild without a change and a preview publish
+  nothing, a payment's rebuild publishes only that plot; an on-request invoice publishes its plot with the version's id
+  as `buildId`, an unchanged one nothing.
 - `InvoiceBuildConsistencyTests` (Testcontainers): a payment and a charge committed (with a `created_at` before the
   build) between the first and the second chunk of a 60-plot build, on plots of both chunks, are in none of its
   invoices; the next build gives exactly those four plots a new version.
@@ -516,6 +542,10 @@ hryvnia sign U+20B4. SHA-256: Regular `975dcda37d80f038dcd143c22e33ca2d97a0cc5a9
   older version and another plot's invoice are 404; the certificates are 403; the member's own cash receipt downloads,
   another plot's is 404; a caller without a plot (also the treasurer) and another cooperative's member get an empty
   list; the operator 403; no token 401.
+- `MyInvoicesPaymentTests` (Testcontainers, feature 021): a row of `GET /me/invoices` carries `payment` equal to
+  `GET /invoices/{id}`'s `qr.link`, `qr.purpose` and `cooperative.iban`; a later change of the IBAN setting leaves an
+  issued version's IBAN as stored; a version with nothing due has no `payment` (and no `qr`); another member's invoice
+  is not listed; the board's `GET /invoices` rows have no `payment`.
 - `DemoDocumentsTests` (Testcontainers, the demo ledger loaded): the runner is not registered in the tests; a run builds
   the closed month's invoices (version 1, no member; also the demo member's nothing-due plots 7 and 15, due 0) and
   plot 9's certificate as of the month's last day by the demo

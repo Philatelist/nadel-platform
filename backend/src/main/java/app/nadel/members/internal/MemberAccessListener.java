@@ -3,6 +3,7 @@ package app.nadel.members.internal;
 import app.nadel.identity.SignInAccountChange;
 import app.nadel.identity.SignInAccountMissingException;
 import app.nadel.identity.SignInAccounts;
+import app.nadel.members.MemberAccessRevoked;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.tenancy.TenantContext;
 import java.time.Clock;

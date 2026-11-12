@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HelpBundle } from '../../help/types';
@@ -81,6 +81,16 @@ describe('HelpPageView', () => {
     expect(screen.getByText('Важливо')).toBeInTheDocument();
     expect(screen.getByText('Обережно.')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Форма' })).toHaveAttribute('src', '/help/img/uk/form.png');
+  });
+
+  it('shows the alt text of a screenshot that cannot load (offline, not yet cached on the device)', () => {
+    render('/help/sample');
+    const image = screen.getByRole('img', { name: 'Форма' });
+    fireEvent.error(image);
+    const missing = screen.getByRole('img', { name: 'Форма' });
+    expect(missing.tagName).toBe('SPAN');
+    expect(missing).toHaveTextContent('Форма');
+    expect(document.querySelector('img[src="/help/img/uk/form.png"]')).toBeNull();
   });
 
   it('shows the not-found page for an unknown id', () => {

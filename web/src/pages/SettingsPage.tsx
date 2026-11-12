@@ -9,6 +9,7 @@ import {
 import { normalizeMoneyInput, normalizePercentInput } from '@nadel/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useDirtyGuard } from '../pwa/dirtyForms';
 import { Link } from 'react-router';
 import { RequisitesPanel } from '../components/RequisitesPanel';
 import { DeliverySettingsPanel } from '../components/settings/DeliverySettingsPanel';
@@ -60,6 +61,7 @@ function CooperativeSettings() {
           <SettingsForm saved={data.memberPlotStatusVisibility} />
           <StatusThresholdSection saved={data} />
           <LossesSettingsSection saved={data} />
+          <ReadingsSettingsSection saved={data} />
           <PaymentsSettingsSection saved={data} />
           <CommonConsumersSection saved={data} />
           <RequisitesPanel saved={data} />
@@ -76,6 +78,7 @@ function SettingsForm({ saved }: { saved: PlotStatusVisibility }) {
   const s = t.settings;
   const queryClient = useQueryClient();
   const [choice, setChoice] = useState<PlotStatusVisibility>(saved);
+  useDirtyGuard(choice !== saved);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
   const update = useUpdateSettings({
@@ -135,6 +138,7 @@ function StatusThresholdSection({ saved }: { saved: Settings }) {
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState(saved.redAmount);
   const [days, setDays] = useState(String(saved.redDays));
+  useDirtyGuard(amount !== saved.redAmount || days !== String(saved.redDays));
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
@@ -216,6 +220,7 @@ function LossesSettingsSection({ saved }: { saved: Settings }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<LossesMode>(saved.lossesMode);
   const [percent, setPercent] = useState(saved.lossesPercent);
+  useDirtyGuard(mode !== saved.lossesMode || percent !== saved.lossesPercent);
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
@@ -292,6 +297,7 @@ function PaymentsSettingsSection({ saved }: { saved: Settings }) {
   const s = t.settings;
   const queryClient = useQueryClient();
   const [auto, setAuto] = useState(saved.autoAllocatePrepayment);
+  useDirtyGuard(auto !== saved.autoAllocatePrepayment);
   const [result, setResult] = useState<'saved' | { error: string }>();
 
   const update = useUpdateSettings({
@@ -334,6 +340,62 @@ function PaymentsSettingsSection({ saved }: { saved: Settings }) {
         <div>
           <Button type="submit" disabled={auto === saved.autoAllocatePrepayment || update.isPending}>
             {s.payments.save}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/** Whether a member must attach a photo of the meter to every reading they submit (SETTINGS_MANAGE). */
+function ReadingsSettingsSection({ saved }: { saved: Settings }) {
+  const t = useT();
+  const s = t.settings;
+  const queryClient = useQueryClient();
+  const [required, setRequired] = useState(saved.readingPhotoRequired);
+  useDirtyGuard(required !== saved.readingPhotoRequired);
+  const [result, setResult] = useState<'saved' | { error: string }>();
+
+  const update = useUpdateSettings({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetSettingsQueryKey(), data);
+        setRequired(data.readingPhotoRequired);
+        setResult('saved');
+      },
+      onError: (error) => setResult({ error: problemMessage(t, error) }),
+    },
+  });
+
+  return (
+    <Panel title={s.readings.title}>
+      <form
+        className="flex max-w-xl flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setResult(undefined);
+          update.mutate({ data: { readingPhotoRequired: required } });
+        }}
+      >
+        <label className="flex min-h-11 items-center gap-3">
+          <input
+            type="checkbox"
+            role="switch"
+            className="size-5"
+            checked={required}
+            onChange={(e) => {
+              setRequired(e.target.checked);
+              setResult(undefined);
+            }}
+          />
+          <span>{s.readings.photoRequired}</span>
+        </label>
+        <p className="text-sm text-ink-muted">{s.readings.photoRequiredHint}</p>
+        {result === 'saved' && <Notice tone="success">{s.saved}</Notice>}
+        {typeof result === 'object' && <Notice tone="danger">{result.error}</Notice>}
+        <div>
+          <Button type="submit" disabled={required === saved.readingPhotoRequired || update.isPending}>
+            {s.readings.save}
           </Button>
         </div>
       </form>

@@ -1371,7 +1371,7 @@ paths:
         operator has no cooperative data: 403. A cooperative that never saved its settings has the defaults
         (`memberPlotStatusVisibility` `OWN_ONLY`, `lossesMode` `FIXED_PERCENT`, `lossesPercent` `0.00`,
         `commonConsumerDefaultSplit` `CONNECTED_PLOTS`, `redAmount` `1000.00`, `redDays` 90,
-        `autoAllocatePrepayment` true) and no requisites. The
+        `autoAllocatePrepayment` true, `readingPhotoRequired` false) and no requisites. The
         requisites (`officialName`, `legalAddress`, `bankName`, `iban`) and the read-only ЄДРПОУ code (`edrpou`, set by
         the platform operator) are public data of the legal entity, not personal data; a requisite that is not set is
         absent.
@@ -1403,7 +1403,8 @@ paths:
         error `iban` `IBAN_INVALID`, and nothing is saved. `edrpou` is read-only: it is changed only by the platform
         operator, and a value sent here is ignored. A change of the red threshold applies to every plot status shown
         from then on (the status is derived when it is read). Turning `autoAllocatePrepayment` on places no existing
-        prepayment at once: a plot's prepayment is placed at its next booking of charges.
+        prepayment at once: a plot's prepayment is placed at its next booking of charges. `readingPhotoRequired`
+        applies to every member's reading submitted from then on; readings already submitted stay as they are.
       requestBody:
         required: true
         content:
@@ -1652,6 +1653,112 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /me/push:
+    get:
+      tags: [notifications]
+      operationId: getMyPushConfig
+      summary: Whether push notifications work on this platform, and the key to subscribe with
+      description: |
+        «Сповіщення на цьому пристрої» (feature 021 §2.2): `enabled` is true only when the server has a valid VAPID key
+        pair; then `publicKey` is the VAPID public key (the browser's `applicationServerKey`, base64url without
+        padding), which the app compares with the key of an existing browser subscription. When `enabled` is false the
+        app shows no push switch. No permission is needed. The platform operator has no cooperative data: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/push/devices:
+    get:
+      tags: [notifications]
+      operationId: listMyPushDevices
+      summary: The signed-in member's devices with push on
+      description: |
+        The devices of the signed-in member that receive push notifications, newest first. A device never carries its
+        push address or keys. No permission is needed; only the member's own devices. The platform operator: 403.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PushDevice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [notifications]
+      operationId: registerMyPushDevice
+      summary: Turn push on for this device (save the browser's push subscription)
+      description: |
+        Saves the browser's push subscription (`PushSubscription.toJSON()`: the endpoint and the keys `p256dh` and
+        `auth`) for the signed-in member, with the device's language. The same endpoint is stored once per
+        cooperative: sending it again updates the device (and moves it to the signed-in member when another member had
+        it). A member keeps at most 10 devices; the oldest is dropped. The endpoint and the keys are stored encrypted
+        and never returned. Not written to the audit log.
+
+        400 `VALIDATION_FAILED` when the endpoint is not an `https` address of a known push service (with
+        `errors[{field: endpoint, code: INVALID}]`), or the keys are not a P-256 public key of 65 bytes on the curve and
+        an auth secret of 16 bytes (`errors[{field: keys.p256dh | keys.auth, code: INVALID}]`). 409 `PUSH_DISABLED`
+        when the server has no push keys (see `getMyPushConfig`). The platform operator: 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionInput'
+      responses:
+        '201':
+          description: The device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /me/push/devices/{id}:
+    delete:
+      tags: [notifications]
+      operationId: deleteMyPushDevice
+      summary: Turn push off for one of the signed-in member's devices
+      description: |
+        Deletes the device; it receives no further push notification. Works also while push is off on the server.
+        Another member's device, another cooperative's or an unknown id: 404 `NOT_FOUND`. Not written to the audit
+        log. The platform operator: 403.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /billing-months/{month}/invoices/send:
     post:
@@ -3389,8 +3496,13 @@ paths:
     post:
       tags: [readings]
       operationId: submitPlotReading
-      summary: Submit a reading of an own meter
+      deprecated: true
+      summary: Submit a reading of an own meter (without a photo)
       description: |
+        Deprecated: use `submitPlotReadingWithPhoto`, which takes the same reading and an optional photo. This
+        operation stays served for installed apps that have not updated yet and answers as before; a reading saved by
+        it has no photo (`hasPhoto` false, audit field `photo` `false`).
+
         A member submits the reading of an active meter of a plot they currently own. It waits for approval (status
         `PENDING`, source `MEMBER`) and is never used for consumption until someone with `READINGS_APPROVE` approves
         it. A pending reading of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its
@@ -3402,7 +3514,10 @@ paths:
         annotation: only a current owner of the plot may submit; any other plot, an unknown id and a plot of another
         cooperative are the same 404 `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND`
         (`errors[{field: meterId, code: NOT_FOUND}]`); the platform operator has no cooperative data: 403. 400 `VALIDATION_FAILED` with `value`
-        `METER_VALUE_INVALID` for a malformed value. Written to the audit log (`READING_SUBMITTED`).
+        `METER_VALUE_INVALID` for a malformed value. While the cooperative's setting `readingPhotoRequired` is on,
+        every submission here is refused with 400 `READING_PHOTO_REQUIRED` (`errors[{field: photo, code:
+        READING_PHOTO_REQUIRED}]`) and nothing is saved: this operation takes no photo. Written to the audit log
+        (`READING_SUBMITTED`).
       parameters:
         - name: id
           in: path
@@ -3433,6 +3548,86 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /plots/{id}/reading-submissions:
+    post:
+      tags: [readings]
+      operationId: submitPlotReadingWithPhoto
+      summary: Submit a reading of an own meter with an optional photo of the meter
+      description: |
+        The submission of `submitPlotReading` with an optional photo of the meter (feature 021 §2.3). The request is
+        `multipart/form-data` with the part `reading` (JSON, `ReadingSubmission`) and at most one part `photo` (a JPEG
+        or PNG, at most 5 MB). Access, rules and answers are those of `submitPlotReading`: only a current owner of the
+        plot may submit (any other plot, an unknown id and a plot of another cooperative are the same 404
+        `PLOT_NOT_FOUND`; a meter that is not a meter of the plot is 404 `NOT_FOUND` on `meterId`; the platform
+        operator gets 403); the reading waits for approval (`PENDING`, source `MEMBER`) and replaces a pending reading
+        of the same meter and date; the same checks and the same warning apply.
+
+        The reading and its photo are saved together: when the photo is refused, nothing is saved. The type of the
+        photo is decided by its content, never by its name or the declared type. Location and camera data are removed
+        before it is stored, without re-encoding, as for expense receipts (`createExpense`). A photo cannot be changed
+        or deleted; a wrong photo is replaced by submitting the reading again. The same value on the same date as the
+        pending reading changes nothing when no photo comes with it; with a photo it is a new submission that replaces
+        the pending one. A replaced, rejected or approved reading keeps its photo (`getReadingPhoto`).
+
+        Refusals of the photo (nothing is stored):
+        - 413 `FILE_TOO_LARGE` with `errors[{field: photo, code: FILE_TOO_LARGE}]`: a photo over 5 MB (a request over
+          the server's upload limit is 413 `FILE_TOO_LARGE` without `errors`);
+        - 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]`: a photo that is not a
+          JPEG or PNG by content (a PDF and an untranslated HEIC included: the app converts HEIC to JPEG before it
+          sends it), or a JPEG or PNG that cannot be read.
+
+        The photo rule: while the cooperative's setting `readingPhotoRequired` is on, a submission without a photo is
+        400 `READING_PHOTO_REQUIRED` with `errors[{field: photo, code: READING_PHOTO_REQUIRED}]`, checked after the
+        owner rule and before the reading, and nothing is saved (the same value already waiting on that day
+        included). The board's and the electrician's entries (`enterReadings`, `enterReadingWithPhoto`) never need a
+        photo.
+
+        Written to the audit log (`READING_SUBMITTED` with `takenOn`, `value` and `photo` `true` or `false`; never the
+        file).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [reading]
+              properties:
+                reading:
+                  $ref: '#/components/schemas/ReadingSubmission'
+                photo:
+                  type: string
+                  format: binary
+                  description: The photo of the meter (JPEG or PNG, at most 5 MB)
+            encoding:
+              reading:
+                contentType: application/json
+      responses:
+        '201':
+          description: The submitted reading, waiting for approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
 
   /plots/{id}/meters:
     get:
@@ -3600,7 +3795,8 @@ paths:
         the 180 days before it (none without such an interval). 400 `VALIDATION_FAILED` for the whole request when a
         row is malformed (`rows[i].value` `METER_VALUE_INVALID`, `rows` `REQUIRED` or `TOO_LONG`). Requires
         `READINGS_ENTER`; each saved row is written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
-        replaced a reading of the same date).
+        replaced a reading of the same date, with `photo` `false`). No row needs a photo, whatever the setting
+        `readingPhotoRequired`; one reading with a photo is entered through `enterReadingWithPhoto`.
       requestBody:
         required: true
         content:
@@ -3620,6 +3816,72 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /reading-entries:
+    post:
+      tags: [readings]
+      operationId: enterReadingWithPhoto
+      summary: Enter one reading with a photo of the meter
+      description: |
+        Enters one reading as a row of `enterReadings` does, with a photo of the meter (feature 021 §2.3). The request
+        is `multipart/form-data` with the part `reading` (JSON, `ReadingEntry`) and the part `photo` (a JPEG or PNG,
+        at most 5 MB), both required; a request without the photo part is 400 `MALFORMED_REQUEST`. The reading counts
+        at once (status `APPROVED`, source `ENTERED`); `takenOn` absent means today in Europe/Kyiv. A counted reading
+        of the same meter and date is replaced: it stays in the history as `SUPERSEDED` and its id is in
+        `supersededReadingIds`. A photo makes the entry a change even with the same value on the same date (a new
+        reading with the photo replaces the counted one). The warning `UNUSUAL_CONSUMPTION` follows the rule of
+        `enterReadings`. A reading entered without a photo goes through `enterReadings`; the board never needs one,
+        whatever the setting `readingPhotoRequired`.
+
+        The reading and its photo are saved together: when either is refused, nothing is saved. The photo is checked
+        and stored as in `submitPlotReadingWithPhoto` (type by content, location and camera data removed without
+        re-encoding, never changed or deleted): 413 `FILE_TOO_LARGE` with `errors[{field: photo, code:
+        FILE_TOO_LARGE}]` over 5 MB (a request over the server's upload limit is 413 `FILE_TOO_LARGE` without
+        `errors`); 400 `FILE_TYPE_NOT_ALLOWED` with `errors[{field: photo, code: FILE_TYPE_NOT_ALLOWED}]` for anything
+        that is not a readable JPEG or PNG.
+
+        Refusals of the reading, as for a single correction: 404 `NOT_FOUND` with `errors[{field: meterId, code:
+        NOT_FOUND}]` (no such meter in the cooperative); 409 `READING_DATE_IN_FUTURE` or `READING_DATE_OUTSIDE_METER`
+        (`errors[{field: takenOn}]`), `READING_OUT_OF_ORDER` (`errors[{field: value}]`) or `READING_IN_USE` (a charge
+        uses the readings around the date); 400 `VALIDATION_FAILED` with `value` `METER_VALUE_INVALID` for a malformed
+        value. Requires `READINGS_ENTER`; written to the audit log (`READING_ENTERED`, or `READING_REPLACED` when it
+        replaced a reading of the same date, with `photo` `true`; never the file).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [reading, photo]
+              properties:
+                reading:
+                  $ref: '#/components/schemas/ReadingEntry'
+                photo:
+                  type: string
+                  format: binary
+                  description: The photo of the meter (JPEG or PNG, at most 5 MB)
+            encoding:
+              reading:
+                contentType: application/json
+      responses:
+        '201':
+          description: The entered reading with its photo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
 
   /readings/{id}:
     put:
@@ -3771,6 +4033,44 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /readings/{id}/photo:
+    get:
+      tags: [readings]
+      operationId: getReadingPhoto
+      summary: The photo of a meter reading
+      description: |
+        The stored photo of the reading (feature 021 §2.3) with its stored type (`image/jpeg` or `image/png`),
+        `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. It carries no
+        location or camera data. A reading keeps its photo whatever its status (pending, approved, rejected or
+        superseded). Open to a current owner of the plot of the reading's meter and to callers with `READINGS_ENTER`
+        or `READINGS_APPROVE`; anyone else, an unknown reading, a reading without a photo and a reading of another
+        cooperative are the same 404 `NOT_FOUND`. The platform operator has no cooperative data: 403. Not audited.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /plots/{id}/account:
     get:
@@ -4442,8 +4742,10 @@ paths:
         invoice of each billing month (older versions are never listed for a member), newest month first, then the
         plots in the natural order of their numbers. Every row has `latest: true`. The PDF of a row is
         `GET /invoices/{id}/pdf`. No permission is needed: a caller who owns no plot (or is not linked to a member)
-        gets an empty list; a plot the caller sold is no longer listed. The platform operator has no cooperative
-        data: 403.
+        gets an empty list; a plot the caller sold is no longer listed. Each row carries `payment` (the NBU payment
+        link, the IBAN and the purpose of payment stored in that invoice version, the same as its PDF and
+        `GET /invoices/{id}`) when the version has a QR code and an IBAN (feature 021 §2.4); only this operation fills
+        it. The platform operator has no cooperative data: 403.
       responses:
         '200':
           description: OK
@@ -7863,7 +8165,10 @@ components:
         `errors[{field: month}]` for a bank month that ends before it); the four figures of a bank statement do not
         agree (code `STATEMENT_INCONSISTENT`, with `errors[{field: closing}]`); more
         than five files come with an expense (code `TOO_MANY`, with `errors[{field: files}]`) or a file is not a JPEG,
-        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`); a tariff is archived
+        PNG or PDF by its content (code `FILE_TYPE_NOT_ALLOWED`, with `errors[{field: files[i]}]`), or the photo of a
+        meter reading is not a JPEG or PNG by its content (code `FILE_TYPE_NOT_ALLOWED`, with
+        `errors[{field: photo}]`); a member's reading comes without a photo while the cooperative requires one (code
+        `READING_PHOTO_REQUIRED`, with `errors[{field: photo}]`); a tariff is archived
         from a date that is not after the start of its last version (code `VALIDATION_FAILED`, with
         `errors[{field: endsOn, code: TARIFF_END_BEFORE_LAST_VERSION}]`)
       content:
@@ -7896,7 +8201,8 @@ components:
     NotFound:
       description: >-
         The resource does not exist or is not visible to the caller (code `NOT_FOUND`; `PLOT_NOT_FOUND` from the
-        plot-scoped meter operations `listPlotMeters` and `submitPlotReading` and the ledger operations
+        plot-scoped meter operations `listPlotMeters`, `submitPlotReading` and `submitPlotReadingWithPhoto` and the
+        ledger operations
         `getPlotAccount` and `enterOpeningBalance` and the payment operations `enterPayment` and `allocatePrepayment`
         and the document operation `issuePlotInvoice` when the plot is unknown, of another cooperative or not the
         caller's)
@@ -7909,8 +8215,9 @@ components:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
       description: >-
-        The uploaded file is over the size limit of 10 MB, or an expense attachment over 5 MB (code
-        `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`)
+        The uploaded file is over the size limit of 10 MB, or an expense attachment or the photo of a meter reading
+        over 5 MB (code `FILE_TOO_LARGE`; for an attachment with `errors[{field: files[i]}]`, for a photo with
+        `errors[{field: photo}]`)
       content:
         application/problem+json:
           schema:
@@ -8012,7 +8319,8 @@ components:
         marked reconciled without its statement or with a closing difference (code `BANK_MONTH_NOT_BALANCED`), the
         statement of a reconciled bank month is entered again, a reconciled month is marked reconciled again or gets a
         bank difference (code `BANK_MONTH_RECONCILED`), or a bank difference is booked before the month's statement is
-        entered (code `BANK_STATEMENT_MISSING`)
+        entered (code `BANK_STATEMENT_MISSING`), or a device is registered for push notifications while the server has
+        no push keys (code `PUSH_DISABLED`)
       content:
         application/problem+json:
           schema:
@@ -8440,6 +8748,7 @@ components:
           redAmount,
           redDays,
           autoAllocatePrepayment,
+          readingPhotoRequired,
         ]
       properties:
         memberPlotStatusVisibility:
@@ -8463,6 +8772,12 @@ components:
             Allocate prepayment automatically (feature 015 §2.7): when on (the default), a plot's prepayment is
             placed on its open charges, oldest first, whenever charges are booked for the plot or money is taken back
             from its charges; when off, the prepayment waits until the treasurer allocates it by hand
+        readingPhotoRequired:
+          type: boolean
+          description: >-
+            A photo of the meter is required with every reading a member submits (feature 021 §2.3): when on, a
+            member's submission without a photo is refused with 400 `READING_PHOTO_REQUIRED` (from the account and
+            from the Telegram bot); the board's and the electrician's entries never need one. Off by default
         officialName:
           type: string
           maxLength: 300
@@ -8511,6 +8826,9 @@ components:
         autoAllocatePrepayment:
           type: boolean
           description: Allocate prepayment automatically; see `CooperativeSettings.autoAllocatePrepayment`
+        readingPhotoRequired:
+          type: boolean
+          description: Require a photo with a member's reading; see `CooperativeSettings.readingPhotoRequired`
         officialName:
           type: string
           maxLength: 300
@@ -10027,6 +10345,26 @@ components:
         latest:
           type: boolean
           description: Whether this is the latest version of its plot and month
+        payment:
+          $ref: '#/components/schemas/InvoicePayment'
+
+    InvoicePayment:
+      type: object
+      description: >-
+        How to pay an invoice version from a phone, as stored in the version when it was issued (the same as its PDF
+        and `GET /invoices/{id}`: `qr.link`, `qr.purpose` and `cooperative.iban`, not the current settings). Filled
+        only by `GET /me/invoices`; absent when the version has no QR code (nothing due) or no IBAN.
+      required: [link, iban, purpose]
+      properties:
+        link:
+          type: string
+          description: The NBU payment link, `https://qr.bank.gov.ua/` and the Base64URL payload (format 003)
+        iban:
+          type: string
+          description: The cooperative's IBAN printed on the invoice
+        purpose:
+          type: string
+          description: The purpose of payment the QR code carries
 
     InvoicePage:
       type: object
@@ -11052,7 +11390,7 @@ components:
     MeterReading:
       type: object
       description: A reading of a meter
-      required: [id, meterId, takenOn, value, status, source, changeable]
+      required: [id, meterId, takenOn, value, status, source, changeable, hasPhoto]
       properties:
         id:
           type: string
@@ -11084,6 +11422,12 @@ components:
           description: >-
             True when the caller may correct or delete the reading now: it is approved, the caller has
             `READINGS_ENTER` and no charge uses it
+        hasPhoto:
+          type: boolean
+          description: >-
+            True when a photo of the meter came with the reading; it stays whatever the status becomes. The photo is
+            downloaded with `getReadingPhoto`. The approvals list (`PendingReading.reading`), the history of a meter
+            and every saved reading (`ReadingSaved.reading`) carry it
 
     MeterReadingHistory:
       type: object
@@ -16128,6 +16472,81 @@ components:
         expiresAt:
           type: string
           format: date-time
+
+    PushConfig:
+      type: object
+      description: Whether push notifications work on this platform (`getMyPushConfig`)
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the server sends push notifications; false when it has no valid VAPID key pair
+        publicKey:
+          type: string
+          description: >-
+            The VAPID public key, an uncompressed P-256 point in base64url without padding (87 characters), when
+            `enabled`
+          pattern: '^[A-Za-z0-9_-]{87}$'
+
+    PushSubscriptionInput:
+      type: object
+      description: A browser's push subscription (`PushSubscription.toJSON()`) and the device's details
+      required: [endpoint, keys, language]
+      properties:
+        endpoint:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: >-
+            The push service address of the subscription: an `https` URL of a known push service (Google, Mozilla,
+            Microsoft, Apple)
+        keys:
+          $ref: '#/components/schemas/PushSubscriptionKeys'
+        label:
+          type: string
+          maxLength: 80
+          description: A name for the device the member recognises (for example the browser and the system)
+        language:
+          type: string
+          enum: [uk, en]
+          description: The language the device shows the notification texts in
+
+    PushSubscriptionKeys:
+      type: object
+      required: [p256dh, auth]
+      properties:
+        p256dh:
+          type: string
+          minLength: 86
+          maxLength: 88
+          pattern: '^[A-Za-z0-9_-]+={0,2}$'
+          description: The browser's P-256 public key, 65 bytes (uncompressed point), base64url
+        auth:
+          type: string
+          minLength: 22
+          maxLength: 24
+          pattern: '^[A-Za-z0-9_-]+={0,2}$'
+          description: The browser's auth secret, 16 bytes, base64url
+
+    PushDevice:
+      type: object
+      description: >-
+        A device of the signed-in member that receives push notifications; never its push address or keys
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          description: The name the device was saved with, when given
+        createdAt:
+          type: string
+          format: date-time
+        lastSentAt:
+          type: string
+          format: date-time
+          description: When a push notification last reached the push service for the device
 
     InvoiceSendRequest:
       type: object

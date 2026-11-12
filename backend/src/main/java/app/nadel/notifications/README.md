@@ -4,8 +4,9 @@ Delivery to members (feature 017, `context/spec/017-delivery-email-telegram/`): 
 mailbox (SMTP) and Telegram through its own bot. The channel settings and their checks, the member's own channel
 choice, Telegram links and the bot with its menu («Борг», «Рахунок», «Показання»), sending the month's invoices with
 the delivery register and worker, the paper copies with a link QR code, the payment and reversal messages, the messages
-about the board's decision on a reading, the board's announcements, and the demo set-up of the `dev` profile. Design
-decisions: ADR 0018 (and ADR 0007 for JobRunr).
+about the board's decision on a reading, the board's announcements, and the demo set-up of the `dev` profile; since
+feature 021 also Web Push on the members' own devices (`internal.push`, below). Design decisions: ADR 0018 (and ADR 0007
+for JobRunr, ADR 0021 for push).
 
 ## Public API
 
@@ -14,19 +15,21 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 `plots`, `identity`, `privacy`, `audit`, `tenancy`, `tariffs`, `money`, `settings`, `problem`. Used:
 
 - `members`: `MemberDirectory` (names, contacts and channels; `activeIds` for an announcement to every member),
-  `MemberChannels` (the member's own channel choice); the SPIs `TelegramLinkStatus` and `InvitationDelivery`
+  `MemberChannels` (the member's own channel choice), `RoleHolders.activeWithPermission` (the approvers told of a
+  submitted reading, feature 021), the event `MemberAccessRevoked` (the member's push devices are deleted); the SPIs `TelegramLinkStatus` and `InvitationDelivery`
   (feature 020) are implemented here by `TelegramLinkStatusProvider` and `InvitationLetters`.
 - `documents`: `DocumentsFacade` (`latestInvoices`, `invoiceSummary`, `invoicePdf`, `invoiceForDay` for the bot's
   «Рахунок», `receiptPdf` for the cash receipt), `DocumentFormats` for the texts; the SPI `PaperRecipients` is
-  implemented here by `PaperCopiesProvider`.
-- `meters`: `MemberReadings` (the bot's «Показання») and the event `ReadingDecided`.
+  implemented here by `PaperCopiesProvider`; the event `InvoicesIssued` (feature 021, the push «Новий рахунок»).
+- `meters`: `MemberReadings` (the bot's «Показання») and the events `ReadingDecided` and `ReadingSubmitted` (feature
+  021).
 - `ledger`: the events `PaymentRecorded` and `PaymentReversed`; `LedgerReadModel` (`paymentsByIds` and `debtsAsOf` for
   the payment messages and the bot's «Борг»; `firstBillingMonth` for the demo).
 - `tariffs`: `ChargeTypeCatalog` (the charge type names of «Борг»).
 - `plots`: `PlotOwners` (the current owners of a plot), `PlotCatalog` (the plot number of a payment message,
   `findActive(street)` for an announcement's streets).
 - `tenancy` (`TenantContext`, `TenantDirectory`: the cooperative's name), `privacy` (`PersonalDataCipher`, `FieldRef`,
-  `IndexKind.TELEGRAM_CHAT`), `audit` (`AuditEvent`, `FieldChange`, `Actor`), `identity` (`CurrentUser`,
+  `IndexKind.TELEGRAM_CHAT`, `IndexKind.PUSH_ENDPOINT`), `audit` (`AuditEvent`, `FieldChange`, `Actor`), `identity` (`CurrentUser`,
   `AccessProfile`, `OwnedPlotsSource` for the plot numbers of the bot's greeting and the plots its menu reaches) and
   `problem`.
 
@@ -34,14 +37,20 @@ listens to their events. Allowed dependencies (`package-info.java`): `members`, 
 
 - **Events it listens to** (ADR 0007 pattern: `@Async @TransactionalEventListener`, `TenantContext.runAs(tenantId)`,
   then a `TransactionTemplate`; idempotent): `ledger.PaymentRecorded`, `ledger.PaymentReversed` (`PaymentMessages`),
-  `meters.ReadingDecided` (`ReadingMessages`). It publishes no domain event of its own.
+  `meters.ReadingDecided` (`ReadingMessages`); for push (feature 021) `documents.InvoicesIssued`
+  (`push.InvoicePushes`), `ledger.PaymentRecorded` (`push.PaymentPushes`), `meters.ReadingDecided` and
+  `meters.ReadingSubmitted` (`push.ReadingPushes`), `members.MemberAccessRevoked` (`push.RevokedAccessDevices`) and
+  its own internal `AnnouncementSent` (`push.AnnouncementPushes`). It publishes no domain event for other modules;
+  `AnnouncementSent(tenantId, announcementId)` (ids only) stays inside the module (public in `internal` only so the
+  `push` package hears it).
 - **Audit actions it publishes** (`audit.AuditEvent`): `DELIVERY_SETTINGS_CHANGED`, `TELEGRAM_LINKED`,
   `TELEGRAM_UNLINKED`, `INVOICES_SENT`, `ANNOUNCEMENT_SENT`. Never a secret, a chat id or an announcement's text.
 - **SPIs it implements:** `members.TelegramLinkStatus` (`TelegramLinkStatusProvider`), `documents.PaperRecipients`
   (`PaperCopiesProvider`, which creates the print-time link codes), `members.InvitationDelivery` (`InvitationLetters`,
   feature 020, below).
-- **Jobs and schedules:** the JobRunr job `DispatchDeliveries(tenantId, channel)` (`DispatchDeliveriesHandler` →
-  `DeliveryDispatcher`); `@Scheduled` on every instance (`BotSchedule`): `BotSupervisor.tick` every 20 s and
+- **Jobs and schedules:** the JobRunr jobs `DispatchDeliveries(tenantId, channel)` (`DispatchDeliveriesHandler` →
+  `DeliveryDispatcher`) and `SendPush(tenantId, subscriptionId, code, ref, month, attempt, queuedAt)`
+  (`push.SendPushHandler` → `push.PushSender`, feature 021); `@Scheduled` on every instance (`BotSchedule`): `BotSupervisor.tick` every 20 s and
   `DeliveryDispatcher.sweep` every minute.
 - **Leases** (database time, conditional `UPDATE`, random instance id per JVM): `bot_poll_state` (one poller per bot,
   60 s) and `delivery_lane` (one sender per cooperative and channel, 60 s).
@@ -84,6 +93,10 @@ system with its one-time set-password link:
 | `PUT /me/notifications` | `updateMyNotifications` | signed-in member (itself) |
 | `POST /me/telegram-link` | `createMyTelegramLink` | signed-in member (itself) |
 | `DELETE /me/telegram-link` | `deleteMyTelegramLink` | signed-in member (itself) |
+| `GET /me/push` | `getMyPushConfig` | signed-in member (itself) |
+| `GET /me/push/devices` | `listMyPushDevices` | signed-in member (itself) |
+| `POST /me/push/devices` | `registerMyPushDevice` | signed-in member (itself) |
+| `DELETE /me/push/devices/{id}` | `deleteMyPushDevice` | signed-in member (itself) |
 | `POST /billing-months/{month}/invoices/send?preview=` | `sendMonthInvoices` | `INVOICES_ISSUE` |
 | `POST /invoices/{id}/send` | `sendInvoice` | `INVOICES_ISSUE` |
 | `GET /deliveries?month&kind&status&channel&page&size` | `listDeliveries` | `INVOICES_ISSUE` |
@@ -216,7 +229,10 @@ transaction.
     12 345 по лічильнику ЕЛ-9/2 передано на перевірку». A refusal is told in plain words per problem code with the
     account's details (the previous or next reading, the meter's working period) from `bot.readings.problem.*`, a
     generic sentence for any other code, and the member types again; a meter or plot that is no longer theirs, or a
-    removed meter, ends the dialogue. The update was taken (its offset saved) before it is answered, so a reading is
+    removed meter, ends the dialogue. While the cooperative requires a photo with a member's reading (setting
+    `readingPhotoRequired`, feature 021) the bot, which takes no photo, gets `READING_PHOTO_REQUIRED`: it answers
+    `bot.readings.problem.READING_PHOTO_REQUIRED` («Правління просить фото лічильника до кожного показу. Передайте,
+    будь ласка, показання з фото в застосунку…») and ends the dialogue; nothing is saved. The update was taken (its offset saved) before it is answered, so a reading is
     submitted at most once.
 - **Untrusted input.** At most 20 messages a minute per chat (`BotInputLimiter`: message 21 of a chat's minute gets
   «Забагато повідомлень, спробуйте за хвилину», the rest of the minute is ignored); a text over 64 characters gets
@@ -336,6 +352,8 @@ transaction.
   woken after the commit. The send publishes `ANNOUNCEMENT_SENT` (entity type `ANNOUNCEMENT`, the announcement's id,
   label `announcement`; fields `audience` `ALL`/`STREETS`, `streets` for `STREETS` joined by ", ", `channels`,
   `telegram`, `email`, `paper`) — **never the text**, so it is not in the audit log or the outbox; no log carries it.
+  It also publishes the internal `AnnouncementSent(tenantId, announcementId)` for the push to its recipients (feature
+  021, below).
 - **The message** (`AnnouncementMessages`, at send time): Telegram `sendMessage` with the text exactly as entered (no
   `parse_mode`, so nothing is read as formatting); e-mail with the subject «Оголошення правління {cooperative}»
   (`announcement.email.subject`), the text as the plain part and, HTML-escaped with its line breaks as `<br>`, as the
@@ -344,6 +362,114 @@ transaction.
 - **List and detail:** the list (newest first) has the date, the author ("Last First"), the streets, the channels and
   the counts now: `sent`, `failed`, `queued` (Telegram and e-mail rows by status) and `paper`; the detail adds the text
   and a page of its deliveries in the shape of `listDeliveries`. 404 `NOT_FOUND` for another cooperative's.
+
+## Push on the member's devices (feature 021 §2.2, `internal.push`, ADR 0021)
+
+Push is an extra signal, not a delivery channel: it says that something happened and which screen to open. Invoices
+still go by e-mail, Telegram or paper. It is not part of the delivery register (no `delivery` row, no lane) and not
+the in-memory pattern of `ReadingMessages` (a push queued while the push service is down is not lost).
+
+- **Keys** (`VapidKeys`, `WebPushProperties`): `nadel.webpush.public-key`, `private-key` and `subject` from
+  `NADEL_WEBPUSH_PUBLIC_KEY`, `NADEL_WEBPUSH_PRIVATE_KEY`, `NADEL_WEBPUSH_SUBJECT`. Push is on only when all three are
+  set, the public key is an uncompressed P-256 point on the curve (87 base64url characters), the private key a scalar
+  of the curve (43 characters), the subject a `mailto:` or `https:` URL and a signature of the private key verifies
+  with the public key. Otherwise one WARN `Web push is off: the VAPID keys (…) are MISSING | MALFORMED | MISMATCH`
+  (never a value) and push is off for everyone; **the application always starts**. `server_key_id` = the first 8 bytes
+  of SHA-256 of the public point, stored with each device; a device of another key pair (after a rotation) is deleted
+  when an event reaches it or a job finds it, without a send.
+- **Crypto, JDK only** (no library): `P256` (point encoding, the on-curve check, base64url), `VapidSigner` (RFC 8292:
+  ES256 JWT with `SHA256withECDSAinP1363Format`, `aud` the endpoint's origin, `exp` 12 h ahead, `sub` the subject;
+  one token per audience, renewed when less than an hour is left; header `Authorization: vapid t=…, k=…`),
+  `WebPushEncryptor` (RFC 8291 `aes128gcm`: a new ephemeral P-256 key and salt per message, ECDH, HKDF-SHA-256 through
+  `HmacSHA256`, AES-128-GCM, one record of `rs` 4096 with the `0x02` delimiter; checked against RFC 8291 §5 byte for
+  byte).
+- **Endpoints** (`PushEndpointPolicy`): an `https` URL without user information or fragment on one of
+  `nadel.webpush.allowed-hosts` (`fcm.googleapis.com`, `*.push.services.mozilla.com`, `*.notify.windows.com`,
+  `web.push.apple.com`; `*.` means a subdomain), checked when a device is registered (400 otherwise) and again before
+  every send with the lookup: every resolved address must be public (`SmtpHostPolicy.isPublic`: no loopback,
+  link-local, private, shared or reserved address). An origin of `nadel.webpush.extra-allowed-origins` may be `http`
+  and private: the dev profile's fake push service (`http://localhost:8092`), the tests' in-JVM fake. Empty in
+  production.
+- **Sending** (`WebPushClient`): the JDK `HttpClient`, `Redirect.NEVER`, connect timeout 5 s, request timeout 10 s;
+  `POST` with `TTL` (what is left of the 3 days), `Content-Encoding: aes128gcm`, `Urgency: normal` and the VAPID
+  header. Outcomes (`PushOutcome`): 2xx delivered (`last_sent_at`, the refusals cleared); 404 and 410 gone (the device
+  deleted); 429, 5xx and no answer (I/O, timeout, a host that does not resolve now) tried again; any other answer (or
+  an endpoint no longer allowed, or a device key off the curve) refused: `consecutive_failures + 1`, the device
+  deleted at 5. A failure of the server's own encryption or VAPID signing is tried again like no answer: it is not the
+  device's fault, so it never counts as a refusal, and it never escapes the job to JobRunr's own retries.
+- **Jobs** (`SendPush`, `SendPushHandler`, `PushSender`, `PushQueue`): one JobRunr job per device and message. Its id is
+  the name-based UUID of `push:{tenant}:{device}:{code}:{ref}:{attempt}`, so an event delivered twice queues nothing
+  new (JobRunr skips an id it has) and each retry is one job. The body binds the cooperative (`TenantContext.runAs`),
+  opens the device in a short read-only transaction, sends outside any transaction and records the outcome in a short
+  transaction. A retry is a new job with `attempt + 1`, scheduled after the next of `nadel.webpush.retry-delays` (1 min,
+  5 min, 30 min, 2 h, 6 h; the last repeats) or after the service's `Retry-After` (seconds or an HTTP date) when it is
+  longer, while the time to live lasts (`nadel.webpush.ttl`, 3 days from the first attempt, `queuedAt`); then the
+  message is dropped. The job's arguments are ids, the code, the build, the month and times: no endpoint, key or name.
+  While push is off a job sends nothing.
+- **Payload** (`PushPayload`, `PushCode`): `{"v":1,"code":"INVOICES_ISSUED","params":{"month":"2026-10"},
+  "url":"/account#my-invoices","lang":"uk"}`; the parameters are exactly those of the code, each of a known shape
+  (`month` `YYYY-MM`), anything else is refused, so a message never carries an amount, a plot, a name or an address.
+  `lang` is the device's language (`uk`/`en`); the service worker writes the text from its catalogs. The codes, their
+  parameters and the screen a tap opens:
+
+  | Code | Params | `url` | Recipients (source event) |
+  |---|---|---|---|
+  | `INVOICES_ISSUED` | `month` | `/account#my-invoices` | current owners of the plots with a new invoice version (`documents.InvoicesIssued`) |
+  | `PAYMENT_RECORDED` | — | `/account#my-charges` | the payer of each payment, while `notify_payments` is on (`ledger.PaymentRecorded`) |
+  | `READING_APPROVED`, `READING_REJECTED` | — | `/account#my-meters` | the member who submitted the reading (`meters.ReadingDecided`) |
+  | `ANNOUNCEMENT` | — | `/account` | members with a delivery row of the announcement, paper included (`AnnouncementSent`) |
+  | `READINGS_TO_APPROVE` | — | `/readings/approvals` | active holders of `READINGS_APPROVE` (the chairman included), not the submitter; at most one per rolling hour; TTL 1 h; `Topic: readings-approvals` (`meters.ReadingSubmitted`) |
+
+  A code may have its own time to live (`PushCode.ttl`, else `nadel.webpush.ttl`), which is both the `TTL` header and
+  the end of its retries, and a `Topic` header (RFC 8030: the push service keeps only the newest message of the topic
+  for an offline device).
+- **«Новий рахунок за {місяць}»** (`InvoicePushes`): `@Async @TransactionalEventListener` on `documents.InvoicesIssued`
+  (a month build's plots with a new version, or one invoice issued on request); binds the cooperative, reads the
+  plots' current owners (`PlotOwners.currentOwnerIds`) and their devices in one short transaction, and queues one
+  `SendPush` per device with code `INVOICES_ISSUED`, the build as `ref` and the month: one push per member and device
+  however many of the plots they own. An unchanged rebuild publishes no event, so nothing is sent.
+- **Fan-out** (`PushFanOut`, used by every push listener): nothing while push is off; otherwise it binds the event's
+  cooperative (`TenantContext.runAs`) and in one short transaction asks the listener for the pushes (member, code,
+  reference, month; the listener reads the recipients there through the public APIs), reads the recipients' devices,
+  deletes the devices of another key pair and claims the throttle of a throttled code for the recipients with a device;
+  the jobs are queued after the commit. A member gets one push per code and reference, and one at most of a throttled
+  code. The transaction is not read-only because of the key-pair clean-up and the throttle.
+- **«Платіж зараховано»** (`PaymentPushes`, on `ledger.PaymentRecorded`): only while the cooperative sends payment
+  notices (`DeliverySettingsService.notifyPayments`, the same switch as the payment messages); each payment's payer
+  (`LedgerReadModel.paymentsByIds` → `payerMemberId`), one push per payer and event however many payments name them
+  (the reference is the payer's first payment id); a payment without a payer pushes to nobody (the plot's owners are
+  not told by push).
+- **«Показ лічильника прийнято / відхилено»** (`ReadingPushes`, on `meters.ReadingDecided`): the submitter, the
+  reading as the reference.
+- **«Нове оголошення від правління»** (`AnnouncementPushes`, on `AnnouncementSent`, published by `Announcements` in
+  the send's transaction, never for a preview): every member with a delivery row of the announcement
+  (`DeliveryRows.announcementRecipients`, every channel, paper included), the announcement as the reference.
+- **«Нові покази на перевірку»** (`ReadingPushes`, on `meters.ReadingSubmitted`, a member's own submission only):
+  `RoleHolders.activeWithPermission(READINGS_APPROVE)` without the submitter, each through the throttle
+  (`PushThrottle`, table `push_throttle`, V39): one statement `INSERT … SELECT unnest(members) ON CONFLICT DO UPDATE
+  SET last_sent_at = now WHERE last_sent_at <= now - 1 h RETURNING member_id` claims the push for the members whose last
+  one is at least an hour old (or who have none); the row lock makes it atomic across instances, so three submissions
+  in an hour push once per approver, the next hour again. The reading of the first claim is the reference.
+- **Leaving the cooperative** (`RevokedAccessDevices`, on `members.MemberAccessRevoked`, published by the disable
+  endpoint and the archive): every device of the member is deleted (also while push is off); a job already queued for
+  one finds no device (`NO_DEVICE`) and sends nothing. Idempotent.
+- **Devices** (`PushSubscriptions`, table `push_subscription`, V39): the endpoint, `p256dh` and `auth` sealed with the
+  cooperative's data key at `FieldRef("push_subscription", "endpoint_enc" | "ua_public_enc" | "auth_enc", id)` (the
+  column `p256dh_enc` has the place name `ua_public_enc`: place names have no digits), the endpoint's blind index
+  `IndexKind.PUSH_ENDPOINT` in `endpoint_index` (unique per cooperative), the row id made in the application before
+  sealing. Registering an endpoint that exists updates that row (keys, label, language, key pair; refusals cleared)
+  and moves it to the registering member (then it counts as new: `created_at` now). A member keeps the 10 newest
+  devices (`created_at`); the oldest go.
+- **Endpoints** (`PushDevices`, in `NotificationsController`): `GET /me/push` → `{enabled, publicKey?}`;
+  `POST /me/push/devices` → 201 `{id, label, createdAt, lastSentAt}` (400 `VALIDATION_FAILED` on `endpoint`,
+  `keys.p256dh` (65 bytes, `0x04`, on the curve) or `keys.auth` (16 bytes), and the contract's limits; 409
+  `PUSH_DISABLED` while push is off); `GET /me/push/devices` (newest first); `DELETE /me/push/devices/{id}` (204; 404
+  `NOT_FOUND` for another member's, another cooperative's or an unknown id). Listing and deleting work while push is
+  off. The member is the one behind the token; the platform operator gets 403. Never the endpoint or the keys in a
+  response. Not audited (the member's own device setting).
+- **Logs** carry the cooperative, the member, the code and the outcome (`Push INVOICES_ISSUED to a device of member …
+  of cooperative …: DELIVERED`, `GONE_DELETED 410`, `RETRY_SCHEDULED 503`, `REJECTED 400`, …) and never an endpoint, a
+  key, a token or a message; a failed connection is only the outcome (its exception may name the host).
 
 ## Paper copies (`PaperCopiesProvider`, documents SPI `PaperRecipients`)
 
@@ -358,7 +484,7 @@ ones stay valid until they expire or are used.
 
 JobRunr 9.0.1 (`jobrunr-spring-boot-4-starter`, Jackson 3) on the application's DataSource as `nadel_app`, its tables
 from Flyway V30 (`jobrunr.database.skip-create=true`, default prefix, schema `public`, no RLS: job arguments are a
-cooperative id and a channel). Dashboard off, no usage data sent, the background job server on
+cooperative id and a channel; for `SendPush` ids, codes, the month and times). Dashboard off, no usage data sent, the background job server on
 (`jobrunr.background-job-server.enabled`; the tests turn it off and call the dispatcher, `DeliveryJobTests` turns it
 on and closes its context afterwards so the server does not run the later classes' jobs; the tests that boot the
 application at an older Flyway target, before V30, keep JobRunr's jobs in memory, `jobrunr.database.type=mem`). The job's body binds the cooperative itself (`TenantContext.runAs` in `DeliveryDispatcher`) before any
@@ -397,6 +523,12 @@ delivery rows and the lane lease (ADR 0018).
 | `nadel.delivery.busy-retry` | 5 s | When a run that found its lane held elsewhere tries again |
 | `nadel.delivery.sweep-interval` | 60 s | How often the lanes with due rows are woken (with `bot-enabled`) |
 | `nadel.delivery.telegram-per-second`, `telegram-chat-gap` | 20, 1 s | The pace through one bot and to one chat |
+| `nadel.webpush.public-key`, `private-key`, `subject` | empty; dev a labelled test pair, `mailto:dev@nadel.local` | `NADEL_WEBPUSH_PUBLIC_KEY`, `NADEL_WEBPUSH_PRIVATE_KEY`, `NADEL_WEBPUSH_SUBJECT`; push off without them |
+| `nadel.webpush.allowed-hosts` | `fcm.googleapis.com`, `*.push.services.mozilla.com`, `*.notify.windows.com`, `web.push.apple.com` | The push services an endpoint may point at (https) |
+| `nadel.webpush.extra-allowed-origins` | empty; dev `http://localhost:8092` | Origins also allowed over http and on a private address (fake push services) |
+| `nadel.webpush.connect-timeout`, `request-timeout` | 5 s, 10 s | One push request |
+| `nadel.webpush.retry-delays` | 1m,5m,30m,2h,6h | The pauses before the next attempts; the last repeats |
+| `nadel.webpush.ttl` | 3d | How long a push may still go out after its event (`TTL` header and end of retries) |
 | `jobrunr.*` | see `application.yml` | `database.skip-create`, no dashboard, 2 retries, no usage data |
 
 `NADEL_TELEGRAM_API_URL` is not in `.env.example` yet (the repository owner adds it); the code does not depend on it.
@@ -442,6 +574,17 @@ this runner writes them again on the next start.
   is free text"); a restriction can come later.
 - A bot update is answered at most once (taken before it is answered); a reading decision message could repeat only
   after a crash between the send and the outbox's completion.
+- Push: the endpoint's host is resolved for the check and again by the `HttpClient` when it connects (the JDK client
+  cannot be pinned to the checked address as the mail layer is), so a host of an allowed push service that changed its
+  answer in between would not be caught; the hosts are the browsers' own push services. A push job that crashes after
+  the push service took the message (before the outcome is written) is run again by JobRunr and can repeat the push.
+- Push: an invoice issued on request through the bot's «Рахунок» is a new version like any other, so its plot's
+  owners also get «Новий рахунок» on their devices. A month build queues one job per device one by one.
+- Push: the throttle of «Нові покази на перевірку» is claimed before the jobs are queued; a crash between the commit
+  and the queueing loses that hour's push for those approvers (the next submission after the hour pushes again).
+  `MemberAccessRevoked` deletes the devices whatever happens next: a member restored and invited again registers their
+  devices anew. A payment push goes even when the payment was reversed before the listener ran (as the payment message
+  does).
 
 ## Tests
 
@@ -477,6 +620,38 @@ poll), with a long-poll `getUpdates` over updates a test pushes per token, a rec
 (403, 429 with `retry_after`) and a call record; `app.nadel.notifications.Mailpit` is Mailpit
 (`axllent/mailpit:v1.27.8`, as in `infra/docker-compose.yml`) in a Testcontainers `GenericContainer` with SMTP sign-in
 and its chaos switch (every recipient refused with 550), read through `/api/v1/messages`.
+
+Push (feature 021, `internal.push`): unit tests `WebPushEncryptorTests` (RFC 8291 §5 byte for byte, its decryption,
+a round trip with random keys through the independent decryption of `TestPushDevice`, the header, the refusals),
+`VapidKeysTests` (on with a valid pair and its key id; missing, malformed (off the curve, compressed, not base64, the
+order as a scalar, a short key, a subject that is not a URL) and mismatched → off; one WARN without values),
+`VapidSignerTests` (the JWT verifies, `aud`, `exp` ≤ 24 h, one token per audience, renewal), `PushOutcomeTests`
+(status → outcome, `Retry-After` in seconds and as a date, the retry delays, a longer `Retry-After`, the time to live),
+`PushPayloadTests` (the exact JSON; no other parameter, no bad month or language; no digits but the version and the
+month), `PushEndpointPolicyTests` (the known services; look-alikes, http, user information, fragments refused; a
+private address refused before the send; extra origins), `WebPushClientTests` (a local service: the headers and a body
+the device decrypts, each answer's outcome, no redirect followed, no answer retried, a refused endpoint never
+contacted). Integration (`PushTestSupport`: a throw-away cooperative, devices registered through the API, the queued
+jobs read back from JobRunr's storage and run): `PushDevicesTests` (configuration, own devices, sealed and found by the
+blind index, no endpoint or key in any response, the same endpoint moves, ten newest kept, 404 for another member and
+another cooperative, 403 operator, bad input, not audited), `PushOffTests` (no keys: off, 409 `PUSH_DISABLED`, list
+and delete work, an invoice build queues nothing), `InvoicePushTests` (the owners of the plots with a new version get
+one push per device that decrypts to the code and the month, nobody else; an unchanged rebuild sends nothing; an
+invoice on request; 410 deletes; 503 then 500 rescheduled with `Retry-After` and the next delay, then delivered; a
+redelivered event sends once; five refusals delete, a delivery clears them; another key pair dropped; the logs carry
+no endpoint, key or token), `PushEventsTests` (a payment pushes its payer only, once per device, not a co-owner;
+nothing while `notify_payments` is off or without a payer; two payments of one payer in one event are one push; the
+submitter told of the approval and the rejection, not a co-owner; three submissions in an hour push once to each
+approver (the chairman without a stored `READINGS_APPROVE` row, a custom role) and never to the submitter, an archived
+approver, the treasurer or a plain member, with `Topic: readings-approvals` and a TTL of an hour, the same value again
+pushes nothing, an hour later a new value pushes again, the board's entry never; four concurrent submissions claim the
+throttle once; an announcement reaches its e-mail and paper recipients, not an archived member; archive and disabled
+access delete every device of the member and nothing further arrives; a job queued before the member left sends
+nothing; redelivered events queue nothing; the logs carry no endpoint, key or name), `PushJobTests` (JobRunr's server on: the job a build queues delivers the push), and
+`PushTenantIsolationTests` (V39). `app.nadel.notifications.FakePushService` (test sources) is an in-JVM push service
+on a random loopback port that every Spring test context allows as `nadel.webpush.extra-allowed-origins`
+(`IntegrationTest`, which also sets a random VAPID pair per JVM; `nadel.test.push-public-key=` turns push off); it keeps
+headers and raw bodies, answers 410 for a gone id and a given status a number of times.
 
 ## Things to remember
 

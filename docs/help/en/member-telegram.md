@@ -57,7 +57,7 @@ The bot shows only your own plots. The menu has buttons.
 |---|---|
 | "Debt" | For each of your plots: the debt by charge types, the total and the prepayment, as in the account |
 | "Invoice" | The invoice for today: a PDF and a "Pay" button. If you have several plots, choose a plot first |
-| "Reading" | Choose a plot, then a meter, and send the number. The reading goes to the board for approval, dated today |
+| "Reading" | Choose a plot, then a meter, and send the number. The reading goes to the board for approval, dated today. If the board requires a photo of the reading, the bot does not accept it and asks you to submit it with a photo in the app |
 | "Disconnect" | Stop receiving invoices in Telegram. The command `/stop` does the same |
 
 When the board approves or rejects a reading, the bot tells you. The commands `/start` and `/help` show the menu and a short help. To any other text the bot answers with the help. Do not send more than 20 messages a minute: the bot will ask you to wait.

@@ -51,7 +51,7 @@ class SettingsService implements CooperativeSettings {
             @Nullable String lossesPercent, @Nullable CommonConsumerSplit commonConsumerDefaultSplit,
             @Nullable String redAmount, @Nullable Integer redDays, @Nullable String officialName,
             @Nullable String legalAddress, @Nullable String bankName, @Nullable String iban,
-            @Nullable Boolean autoAllocatePrepayment) {
+            @Nullable Boolean autoAllocatePrepayment, @Nullable Boolean readingPhotoRequired) {
     }
 
     private final SettingsRepository settings;
@@ -110,6 +110,12 @@ class SettingsService implements CooperativeSettings {
         return current().autoAllocatePrepayment();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean readingPhotoRequired() {
+        return current().readingPhotoRequired();
+    }
+
     @Transactional(readOnly = true)
     SettingsValues values(AccessProfile viewer) {
         return valuesOf(viewer.tenantId());
@@ -153,13 +159,15 @@ class SettingsService implements CooperativeSettings {
                         textOf(change.legalAddress(), before.requisites().legalAddress()),
                         textOf(change.bankName(), before.requisites().bankName()),
                         change.iban() == null ? before.requisites().iban() : iban),
-                orElse(change.autoAllocatePrepayment(), before.autoAllocatePrepayment()));
+                orElse(change.autoAllocatePrepayment(), before.autoAllocatePrepayment()),
+                orElse(change.readingPhotoRequired(), before.readingPhotoRequired()));
         List<FieldChange> changes = after.changesSince(before);
         if (!changes.isEmpty()) {
             settings.upsert(tenantId, after.memberPlotStatusVisibility().name(), after.lossesMode().name(),
                     after.lossesPercent(), after.commonConsumerDefaultSplit().name(), after.redAmount(),
                     after.redDays(), after.requisites().officialName(), after.requisites().legalAddress(),
-                    after.requisites().bankName(), after.requisites().iban(), after.autoAllocatePrepayment());
+                    after.requisites().bankName(), after.requisites().iban(), after.autoAllocatePrepayment(),
+                    after.readingPhotoRequired());
             events.publishEvent(AuditEvent.now(
                     tenantId,
                     new Actor(actor.memberId(), actor.subject(), actor.displayName()),

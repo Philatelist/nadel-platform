@@ -159,6 +159,7 @@ export function auditValue(
     case 'hasBuilding':
     case 'active':
     case 'personalData':
+    case 'photo':
       return raw === 'true' ? a.yes : a.no;
     case 'account':
       return catalog(t.cashbook.account);

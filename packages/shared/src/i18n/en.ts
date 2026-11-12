@@ -39,6 +39,19 @@ export const en = {
   },
   language: { short: 'ENG', name: 'English' },
   theme: { system: 'System', light: 'Light', dark: 'Dark' },
+  pwa: {
+    offline: 'No internet connection. Data will appear when the connection is back.',
+    updateAvailable: 'A new version is available',
+    update: 'Update',
+    updateBlockedDirty: 'Finish or cancel your changes in the open form to update.',
+    updateBlockedSignIn: 'Finish signing in to update.',
+    installTitle: 'Install the app',
+    installBody: 'Open Nadel from its own icon, full screen, like any other app.',
+    install: 'Install the app',
+    iosTitle: 'Install on iPhone',
+    iosSteps: 'Share → Add to Home Screen',
+    dismiss: 'Do not show again',
+  },
   state: { loading: 'Loading…', empty: 'Nothing here yet.', error: 'Could not load data. Please try again.' },
   access: {
     denied: "You don't have access to this page",
@@ -62,6 +75,15 @@ export const en = {
     save: 'Save',
     saved: 'Saved.',
     viberUnsupported: 'Viber is not supported yet — invoices are printed on paper',
+    push: {
+      title: 'Notifications on this device',
+      hint: 'Short messages about invoices, payments and readings will arrive on this phone or computer.',
+      blocked:
+        'Notifications are blocked in the browser settings. Allow them for this site and turn them on again.',
+      iosNeedsInstall: 'On iPhone notifications work only in the installed app (iOS 16.4 or newer).',
+      unsupported: 'This browser does not support notifications.',
+      error: 'Could not change the notification setting. Please try again.',
+    },
   },
   memberAccess: {
     title: 'System access',
@@ -720,6 +742,13 @@ export const en = {
       save: 'Save the threshold',
       daysInvalid: 'Enter a whole number of days',
     },
+    readings: {
+      title: 'Meter readings',
+      photoRequired: 'Meter photo required for members',
+      photoRequiredHint:
+        'A member cannot submit a reading without a photo of the meter. The electrician and the board add a photo optionally.',
+      save: 'Save reading settings',
+    },
     payments: {
       title: 'Payments',
       autoAllocatePrepayment: 'Allocate prepayment automatically',
@@ -1107,6 +1136,7 @@ export const en = {
       finalReading: 'Final reading',
       takenOn: 'Reading date',
       value: 'Reading',
+      photo: 'Photo',
       archived: 'Archived',
       description: 'Description',
       active: 'Active',
@@ -1452,6 +1482,7 @@ export const en = {
         value: 'Reading',
         status: 'Status',
         source: 'Source',
+        photo: 'Photo',
         interval: 'Consumption over the interval',
         actions: 'Actions',
       },
@@ -1495,6 +1526,18 @@ export const en = {
       submitText: 'The reading will be counted after the board approves it.',
       submitted: 'The reading is submitted and waits for approval',
       meterOfPlot: 'Plot {number}',
+    },
+    photo: {
+      add: 'Add a photo of the meter',
+      addRow: 'Add a photo',
+      replace: 'Replace',
+      remove: 'Remove',
+      processing: 'Processing…',
+      thumbnailAlt: 'Photo of the meter',
+      open: 'Open the photo of the meter',
+      fileName: 'Meter photo {date}',
+      tooLarge: 'The photo is too large. Maximum 5 MB.',
+      typeNotAllowed: 'Only photos (JPEG, PNG) are allowed.',
     },
   },
   billing: {
@@ -2163,6 +2206,13 @@ export const en = {
     myEmpty: 'There are no invoices yet.',
     myOlder: 'Earlier months',
     earlierVersions: 'Earlier versions ({count})',
+    pay: {
+      payInBank: 'Pay in the bank app',
+      copyIban: 'Copy IBAN',
+      copyPurpose: 'Copy payment purpose',
+      copied: 'Copied',
+      copyFailed: 'Could not copy. Select the value below and copy it manually.',
+    },
     monthPanel: {
       title: 'Invoices of the month',
       includeNothingDue: 'Include invoices with nothing due',
@@ -3722,6 +3772,7 @@ export const en = {
     SMTP_HOST_NOT_ALLOWED:
       'This mail server cannot be used. Enter the server of a mail service (for example smtp.gmail.com) and the port 25, 465 or 587.',
     OPENING_BALANCE_ALREADY_SET: 'The opening balance of this account is already entered',
+    READING_PHOTO_REQUIRED: 'Add a photo of the meter: the board asks for a photo with every reading.',
     FILE_TOO_LARGE: 'The file is too large. Maximum 5 MB.',
     FILE_TYPE_NOT_ALLOWED: 'Only photos (JPEG, PNG) and PDF are allowed.',
     TOO_MANY: 'No more than 5 files.',
@@ -3738,6 +3789,7 @@ export const en = {
     BANK_MONTH_RECONCILED: 'The month is already reconciled and cannot be changed.',
     BANK_STATEMENT_MISSING: 'Enter the statement of this month first.',
     CATEGORY_NAME_TAKEN: 'This category already exists.',
+    PUSH_DISABLED: 'Device notifications are not available right now.',
     UNKNOWN: 'Something went wrong. Please try again.',
   },
   map: {

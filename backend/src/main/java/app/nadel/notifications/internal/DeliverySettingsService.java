@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
  * caller holds {@code SETTINGS_MANAGE} (checked on the controller).
  */
 @Service
-class DeliverySettingsService {
+public class DeliverySettingsService {
 
     static final String TABLE = "delivery_settings";
     static final String PASSWORD_COLUMN = "smtp_password_enc";
@@ -168,6 +168,15 @@ class DeliverySettingsService {
     @Transactional(readOnly = true)
     DeliverySettingsValues current() {
         return valuesOf(boundTenant());
+    }
+
+    /**
+     * Whether the bound cooperative sends payment notices («Повідомляти про платежі», {@code notify_payments}; on for a
+     * cooperative that never saved its settings): the payment push follows it too (feature 021, {@code internal.push}).
+     */
+    @Transactional(readOnly = true)
+    public boolean notifyPayments() {
+        return current().notifyPayments();
     }
 
     /** The mailbox of the bound cooperative, opened; empty when it is not set up. */

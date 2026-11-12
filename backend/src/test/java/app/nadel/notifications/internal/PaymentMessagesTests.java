@@ -235,8 +235,10 @@ class PaymentMessagesTests extends DeliveryTestSupport {
                     .andExpect(status().isCreated());
             awaitDeliveries(2);
 
-            List<String> events = ownerJdbc().queryForList("select serialized_event from " + table
-                    + " where event_type like '%PaymentRecorded' or event_type like '%PaymentReversed'", String.class);
+            // one publication per listener (the payment message and, for a payment, the push): each event counted once
+            List<String> events = ownerJdbc().query("select distinct event_type, serialized_event from " + table
+                    + " where event_type like '%PaymentRecorded' or event_type like '%PaymentReversed'",
+                    (rs, n) -> rs.getString(2));
             // the full amount: a random id may contain "512"
             assertThat(events).hasSize(2).allSatisfy(event -> assertThat(event)
                     .contains(tenant.toString(), payment.toString())

@@ -663,8 +663,10 @@ export const getListMyInvoicesUrl = () => {
  * invoice of each billing month (older versions are never listed for a member), newest month first, then the
  * plots in the natural order of their numbers. Every row has `latest: true`. The PDF of a row is
  * `GET /invoices/{id}/pdf`. No permission is needed: a caller who owns no plot (or is not linked to a member)
- * gets an empty list; a plot the caller sold is no longer listed. The platform operator has no cooperative
- * data: 403.
+ * gets an empty list; a plot the caller sold is no longer listed. Each row carries `payment` (the NBU payment
+ * link, the IBAN and the purpose of payment stored in that invoice version, the same as its PDF and
+ * `GET /invoices/{id}`) when the version has a QR code and an IBAN (feature 021 §2.4); only this operation fills
+ * it. The platform operator has no cooperative data: 403.
  * @summary The invoices of the plots the caller owns now
  */
 export const listMyInvoices = async ( options?: Parameters<typeof nadelFetch>[1]): Promise<InvoiceRow[]> => {

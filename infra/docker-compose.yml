@@ -85,6 +85,22 @@ services:
       timeout: 3s
       retries: 20
 
+  # Fake Web Push service for local development and e2e (see infra/README.md). No real network access.
+  fake-push:
+    image: node:22.12.0-alpine3.21
+    command: ['node', '/app/server.mjs']
+    environment:
+      PORT: 8092
+    ports:
+      - '${NADEL_FAKE_PUSH_PORT:-8092}:8092'
+    volumes:
+      - ./fake-push:/app:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O - http://127.0.0.1:8092/control/health >/dev/null']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # Object storage (invoices, meter photos) arrives in phase 4.
   # The S3-compatible storage choice gets its own ADR: MinIO stopped publishing
   # community images; candidates are Garage and SeaweedFS.

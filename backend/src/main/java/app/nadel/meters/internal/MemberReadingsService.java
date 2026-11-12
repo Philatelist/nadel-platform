@@ -74,7 +74,7 @@ class MemberReadingsService implements MemberReadings {
         submission.setTakenOn(LocalDate.now(clock));
         try {
             return Objects.requireNonNull(ownTransaction.execute(status -> {
-                ReadingSaved saved = commands.submit(plotId, submission, member);
+                ReadingSaved saved = commands.submit(plotId, submission, null, member);
                 String serial = meters.findById(meterId).map(MeterRecord::getSerial).orElseThrow();
                 return new Accepted(saved.getReading().getId(), MeterValue.parse(saved.getReading().getValue()),
                         serial);

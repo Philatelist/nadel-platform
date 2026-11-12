@@ -18,7 +18,7 @@ decisions are ADR 0019.
 | `MoneyAccounts` | The accounts with balances, the opening balance, the journal of a period |
 | `MovementWriter` | The **only writer** of `account_movement`: entries, reversals, member payment lines; reopens the reconciled bank month of the line and every later reconciled month after every insert |
 | `PaymentMovementListener` | Plain synchronous `@EventListener` of `ledger.PaymentMoneyMoved` (ADR 0019) |
-| `Expenses`, `ExpenseQueries`, `AttachmentUploads`, `FileSniffer`, `JpegMetadataStripper`, `PngMetadataStripper`, `ExpensePartConverter`, `ExpenseAttachmentRecord`/`Content` (+ repositories) | Expenses and their receipt files |
+| `Expenses`, `ExpenseQueries`, `AttachmentUploads` (calls the `files` module), `ExpensePartConverter`, `ExpenseAttachmentRecord`/`Content` (+ repositories) | Expenses and their receipt files |
 | `Handovers`, `HandoverQueries` | Handovers to the bank |
 | `OtherIncomes`, `OtherIncomeQueries` | Income not from members |
 | `Categories` | Expense and income categories |
@@ -119,7 +119,7 @@ Recording, in this order (the first refusal answers, nothing is stored): the fie
 `INVALID` (unknown, another cooperative's, or an income category: the database does not enforce the kind) or
 `ARCHIVED`, `reuseAttachments[i]` `INVALID`, the contract's `REQUIRED`/`TOO_LONG`); the files (`AttachmentUploads`:
 more than five, reused ones included, 400 `TOO_MANY` on `files`; per file `files[i]` over 5 MiB 413 `FILE_TOO_LARGE`,
-not a JPEG/PNG/PDF by its first bytes (`FileSniffer`) or an unreadable JPEG/PNG 400 `FILE_TYPE_NOT_ALLOWED`), before
+not a JPEG/PNG/PDF by its first bytes (`files.FileSniffer`) or an unreadable JPEG/PNG 400 `FILE_TYPE_NOT_ALLOWED`), before
 any lock; then `ledger.BookingMonths.bookFor(date)` (a closed month books in the earliest open month, the date is
 kept), the account `FOR UPDATE`, 409 `OPENING_BALANCE_MISSING`, 400 `BEFORE_OPENING_BALANCE` (`date`), and for the
 cash `CashGuard`. Then `MovementWriter.writeEntry` (`EXPENSE`, the negated amount, source `EXPENSE`), the expense row,
@@ -138,14 +138,12 @@ The `expense` part may come without a content type (the generated web client app
 
 ### Attachments (JDK only, no image library)
 
-- `JpegMetadataStripper`: segment by segment without re-encoding; keeps APP0, APP14, APP2 `ICC_PROFILE`, the tables,
-  frames and every scan (progressive files included); drops APP1 (Exif with GPS and camera IFDs, XMP), other APP2
-  (MPF, FlashPix), APP3–APP13, APP15 and COM; re-adds a minimal big-endian APP1 Exif holding only the Orientation (1–8)
-  when the original had one, after SOI and the leading APP0; cuts after the first EOI (MPF's extra images, trailing
-  data). No SOI, a segment past the end, no frame, scan or EOI: refused.
-- `PngMetadataStripper`: keeps IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, iCCP, sBIT, bKGD, pHYs, acTL, fcTL,
-  fdAT byte for byte; drops every other ancillary chunk (eXIf, tEXt, iTXt, zTXt, tIME, …); cuts after IEND. A wrong
-  CRC, a chunk past the end, no IHDR first, no IDAT/IEND or an unknown critical chunk: refused.
+The type check and the metadata stripping live in the `files` module since feature 021 (`FileSniffer`, `ImageMetadata`,
+`UploadLimits.MAX_FILE_BYTES`; see its README): a JPEG loses Exif (GPS, camera), XMP, MPF, IPTC and comments but keeps
+its Orientation, a PNG loses its ancillary text and Exif chunks, both without re-encoding. `AttachmentUploads` keeps
+the treasury's own answers: field `files[i]`, 413 `FILE_TOO_LARGE`, 400 `FILE_TYPE_NOT_ALLOWED` for a file of no
+allowed type or a `files.MalformedImageException`.
+
 - A PDF is stored as received. The stored name is the client's base name without control and invisible characters, at
   most 255 characters (`receipt.jpg`/`.png`/`.pdf` when nothing is left); `size_bytes` and `sha256` are those of the
   stored bytes. No name and nothing read from a file is logged or answered.
@@ -399,7 +397,8 @@ system (`status` old/new, `movement`, `kind`, `date`, `amount`).
 `ledger` (`PaymentMoneyMoved`, `PaymentSource`, `LedgerReadModel#paymentRefs`, `#paymentSplits`, `#firstBillingMonth`,
 `BookingMonths`), `settings` (`CooperativeSettings`: the IBAN), `audit` (`AuditEvent`, `ActorNames`, `FieldChange`),
 `privacy` (`PersonalDataCipher`, `FieldRef`), `identity` (`CurrentUser`, `AccessProfile`), `members` (`RoleHolders`:
-the demo runner's chairman), `tenancy` (`TenantContext`), `problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
+the demo runner's chairman), `tenancy` (`TenantContext`), `files` (`FileSniffer`, `ImageMetadata`, `UploadLimits`: the
+receipt checks), `problem`, `money`. It never reads another module's tables. `documents` depends on it (`CashCountActs`, the cash count
 act) and `reports` (`TreasuryReadModel`, the cash book reports); it never depends on either.
 
 ## Permissions
@@ -419,9 +418,8 @@ the journal with refs, paging and both balances, a reversal below zero flags the
 (VIEW and APPROVE allowed and denied, custom roles, member, operator, 401, another cooperative 404),
 `TreasuryAuditActionsTests`; the V32 tests `TreasuryTenantIsolationTests`, `TreasuryGuardsTests`,
 `TreasuryBackfillTests`. Slice 2: `CashGuardTests` (FS 2.17 #2, #4, #5, the suffix minimum and its earliest day),
-`CashBookExamplesTests` (one test per FS 2.17 row implemented so far: #1–#5), `FileSnifferTests`,
-`JpegMetadataStripperTests` (GPS/camera/XMP/MPF/IPTC/comment fixture built in memory by `TestImages`, progressive,
-ICC/Adobe kept, orientation kept, malformed), `PngMetadataStripperTests`, `AttachmentUploadsTests`, `ExpensesTests`
+`CashBookExamplesTests` (one test per FS 2.17 row implemented so far: #1–#5), `AttachmentUploadsTests` (the
+sniffer and stripper tests and the `TestImages` fixture moved to the `files` module in feature 021), `ExpensesTests`
 (photo without GPS on download, limits, validation, opening balance, cash rule, closed month, reverse and re-enter with
 reused files, list filters, no plaintext in `expense`, `audit_entry`, `event_publication`, hidden in the log without
 `MEMBERS_VIEW`), `ExpenseConcurrencyTests` (two 150.00 on 200.00 with a lock barrier: exactly one saved),

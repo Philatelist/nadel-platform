@@ -10,11 +10,13 @@ superseding, correction, deletion, the unusual-consumption warning, the history 
 consumption over a chain of meters, the member flow (submission, approval, rejection), the electricity tree (moves
 with an effective date, the tree over a date range with the consumption per node), meter presence for the tariffs
 (`MeterCatalog`) and the Meters sheet of the Excel import (`MeterImport`). Feature 011 (slice 5) adds the water
-connections of plots (see Water connections).
+connections of plots (see Water connections). Feature 021 (slices 4 and 5) adds the photo of a meter with a reading,
+the board's entry with a photo and the cooperative's photo rule for members' readings (see Photos of readings).
 
 Depends on `plots` (`PlotCatalog`, the import records `PlotImportRow` and `PlotImportPlan`, and it implements
-`plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events)
-and `problem`. `plots` never depends on `meters`; `tariffs` (`MeterCatalog`), `imports` (`MeterImport`) and `ledger`
+`plots.PlotChangeGuard`), `identity` (`CurrentUser`, `AccessProfile`, `OwnedPlotsSource`, `Permission`), `audit` (events),
+`files` (the checks and metadata stripping of an uploaded photo), `settings` (`CooperativeSettings.readingPhotoRequired`,
+the photo rule) and `problem`. `plots` and `settings` never depend on `meters`; `tariffs` (`MeterCatalog`), `imports` (`MeterImport`) and `ledger`
 (`MeterNetwork`) depend on it, never the other way round.
 
 ## Tables (V12)
@@ -49,7 +51,8 @@ within the working period; that a `REJECTED` or `APPROVED` row carries `decided_
 | `PlotMeterPointsChanged` | Event (feature 011): the points of a plot meter changed on a date (`cause` `READING_ENTERED`, `READING_APPROVED`, `READING_CORRECTED`, `READING_DELETED`, `METER_REMOVED`, `METER_REPLACED`), published by `internal.MeterPointEvents` in the transaction of the change, for `PLOT` meters only; a correction that moves a reading publishes one per date. Ids, codes and a date only. The ledger charges the intervals around the date |
 | `ReadingChanges` | Facade for the ledger's recalculation (feature 012 §2.5, `internal.ReadingChangeService` over `ReadingCommands`): `enter(meterId, takenOn, value, actor)`, `correct(readingId, takenOn, value, actor)`, `delete(readingId, actor)` in the caller's transaction (`Propagation.MANDATORY`; a preview rolls the change back). The same locks, rules and supersede writes as the reading endpoints, but no use check and no `PlotMeterPointsChanged` (the recalculation charges the intervals itself, so the listener cannot book them twice). Returns a `Change`: the meter (kind, resource, plot), the reading after the change, the readings before and after (date and value), the days the change reaches (`from`, `to`: the span the use check asks about) and the last point whose interval it alters (`through`), and the audit entry (`READING_ENTERED`/`REPLACED`/`CORRECTED` with the changed fields only/`DELETED`), **not published**: the ledger publishes it with the recalculation's entry |
 | `MemberReadings` | Port for the cooperative's Telegram bot (feature 017 §2.5, `internal.MemberReadingsService`), for the bound cooperative: `metersOf(plotId, member)` the active plot meters of a plot the member (`AccessProfile.ownerOnly`) owns now (`MeterAccess.ownsNow`), by resource and serial number, as `MemberMeter(meterId, resource, serial)`, none for any other plot; `submit(plotId, meterId, value, member)` the account's submission (`ReadingCommands.submit`) dated today in Europe/Kyiv, in a transaction of its own (`REQUIRES_NEW`), answered `Accepted(readingId, value, serial)` or `Rejected(problems)` with the account's codes and parameters (`Problem(code, params)`: a reading rule with its ISO dates and three-decimal values, a malformed value as `METER_VALUE_INVALID`, `NOT_FOUND`, `PLOT_NOT_FOUND`, `METER_REMOVED`); `decision(readingId)` the reading as it stands (`ReadingDecisionView(value, serial, status, reason)`), as the system. Tests: `MemberReadingsPortTests` |
-| `ReadingDecided`, `ReadingStatus` | Event (feature 017): the board approved or rejected a reading a member submitted (source `MEMBER`, with its submitter), published by `ReadingCommands.approve` and `reject` in the decision's transaction: `tenantId`, `readingId`, `plotId`, `submitterMemberId`, `status` (`APPROVED` or `REJECTED`). Ids and a code only, never the value, the serial or the reason (read back through `MemberReadings.decision`). The notifications module tells the member in Telegram. `ReadingStatus` mirrors the contract's statuses |
+| `ReadingDecided`, `ReadingStatus` | Event (feature 017): the board approved or rejected a reading a member submitted (source `MEMBER`, with its submitter), published by `ReadingCommands.approve` and `reject` in the decision's transaction: `tenantId`, `readingId`, `plotId`, `submitterMemberId`, `status` (`APPROVED` or `REJECTED`). Ids and a code only, never the value, the serial or the reason (read back through `MemberReadings.decision`). The notifications module tells the member in Telegram and by push (feature 021). `ReadingStatus` mirrors the contract's statuses |
+| `ReadingSubmitted` | Event (feature 021): a member submitted a reading for approval, published by `ReadingCommands.submit` in the submission's transaction (the account with or without a photo, and the bot through `MemberReadings`): `tenantId`, `readingId`, `plotId`, `submitterMemberId`. Never for the board's entry, and not when the same value again changes nothing. Ids only. The notifications module pushes «Нові покази на перевірку» to the holders of `READINGS_APPROVE` (at most once an hour each) |
 | `MeterCatalog` | Read API for other modules (`internal.JpaMeterCatalog`): `plotIdsWithActiveMeter(resource)` (plots with an active plot meter of the resource now) and `hasMeterBetween(plot, resource, from, to)` (a plot meter of the resource worked on a day of the range, both ends included). The tariffs module uses it for `NO_METER` and the plot counts of meter-based tariffs. `find(meterId)` (kind, resource, name, active; removed meters too) and `chainOf(meterId)` (the ids of its chain of replacements, oldest first): the ledger's settings of a common consumer, which belong to the consumer's whole chain (011 slice 7). `plotMeterIds(plots, resources)` (the plot meters of the plots, active and removed, in id order): the intervals a recalculation charges (012) |
 | `MeterNetwork` | Read API for the ledger (`internal.JpaMeterNetwork`, feature 011): `lockSharedPoints(meterId)` locks the meter `FOR SHARE` (a reading write holds it `FOR UPDATE`) and returns its points with stable keys (`INSTALL:{meter}`, the reading id, `REMOVAL:{meter}`; a reading on a boundary date takes its place), in the caller's transaction; `staleMeters(asOf, days)` lists the plot meters that worked on `asOf` (installed on or before it, not removed on or before it) whose last point on or before `asOf` (the latest approved reading, else the installation) is dated before `asOf - days`, as `StaleMeter(meterId, plotId, resource, lastReadingOn)`; the rule of the round's `noReadingSince` filter, as of a date. The closing check list of a billing month asks it with 60 days; `network(from, to)` (and `lockSharedNetwork`, every electricity meter `FOR SHARE` in id order first) gives the electricity tree for the losses runs: every chain that worked in the range with its meters' histories (all approved readings) and its places in the tree by days (`Placement(parentKey, from, to)`, through the day of the final removal, `null` parent for the days without one), built by `TreeQueries.network` like the tree screen. Tests: `MeterNetworkTests`, the ledger's `LossesRunsTests` |
 | `WaterConnections` | Read API for the ledger (`internal.JpaWaterConnections`, feature 011): `connectedDays(plotIds, from, to)` gives, per plot, the days it was connected to any water source in the range (clipped, oldest first; a plot without such a day is absent), `connectedToSource(sourceMeterId, from, to)` the same for one source (null = the cooperative's water supply), for the common consumer split of a well pump. In the caller's transaction |
@@ -159,6 +162,7 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 |---|---|---|
 | `GET /readings/round` | `getReadingRound` | `READINGS_ENTER`; `note` only with `METERS_VIEW` |
 | `POST /readings` | `enterReadings` | `READINGS_ENTER` |
+| `POST /reading-entries` (multipart: part `reading` JSON `ReadingEntry`, required part `photo`) | `enterReadingWithPhoto`: one reading with a photo, see Photos of readings | `READINGS_ENTER` |
 | `PUT /readings/{id}` | `correctReading` | `READINGS_ENTER` |
 | `DELETE /readings/{id}` | `deleteReading` | `READINGS_ENTER` |
 | `GET /meters/{id}/readings` | `listMeterReadings` | `METERS_VIEW` for any meter, otherwise a current owner of the meter's plot; anyone else 404, the platform operator 403 |
@@ -202,8 +206,9 @@ rules and the warning), `ReadingProblem`, `ReadingCommands`, `ReadingQueries`, `
 ### Audit of readings
 
 Entity type `METER_READING`, entity id = the meter (the log links to the meter card, as `OWNERSHIP` entries carry the
-plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new), `READING_REPLACED` (`takenOn` old and new
-the same date, `value` old and new), `READING_CORRECTED` (old and new `takenOn` and `value`, only those that changed), `READING_DELETED`
+plot), label = the meter's label. `READING_ENTERED` (`takenOn`, `value` new, `photo` `true` or `false` new),
+`READING_REPLACED` (`takenOn` old and new the same date, `value` old and new, `photo` old (whether the replaced reading
+had a photo) and new; never the file), `READING_CORRECTED` (old and new `takenOn` and `value`, only those that changed), `READING_DELETED`
 (`takenOn`, `value` old). Values are ISO dates and readings with three decimals. A change booked together with a
 recalculation (feature 012, `ReadingChanges`) is published by the ledger with the field `recalculationId` (new value:
 the recalculation's id) added, in one `AuditBatch` before the recalculation's `RECALCULATION_BOOKED`; a change whose
@@ -263,7 +268,9 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
 
 | Endpoint | Operation | Who |
 |---|---|---|
-| `POST /plots/{id}/readings` | `submitPlotReading` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
+| `POST /plots/{id}/reading-submissions` (multipart: part `reading` JSON, optional part `photo`) | `submitPlotReadingWithPhoto` | a current owner of the plot (`MeterAccess.ownsNow`), whatever their permissions; anyone else, an unknown plot and one of another cooperative the same 404 `PLOT_NOT_FOUND`, the platform operator 403 |
+| `POST /plots/{id}/readings` (JSON) | `submitPlotReading`, deprecated (feature 021), still served for installed apps that have not updated: the same submission without a photo | as above |
+| `GET /readings/{id}/photo` | `getReadingPhoto`: see Photos of readings | a current owner of the plot of the reading's meter, `READINGS_ENTER` or `READINGS_APPROVE`; anyone else 404, the platform operator 403 |
 | `GET /readings?status=PENDING` | `listReadings` | `READINGS_APPROVE`; the meter's `note` only with `METERS_VIEW` |
 | `POST /readings/{id}/approve` | `approveReading` | `READINGS_APPROVE` |
 | `POST /readings/{id}/reject` | `rejectReading` | `READINGS_APPROVE` |
@@ -272,7 +279,8 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   `errors[{field: meterId}]`, a removed one 409 `METER_REMOVED`), checked by `ReadingValidator` against the counted
   readings like an entry (a counted reading of the same date is not a neighbour). The row is `PENDING`, source `MEMBER`,
   `entered_by_member_id` the member. A pending reading of the same meter and date is superseded by it (the same value
-  again changes nothing and is not audited). A pending reading never supersedes a counted one and never reaches the
+  again without a photo changes nothing and is not audited; with a photo it is a new submission that supersedes the
+  pending one, so a wrong photo is replaced by submitting again). A pending reading never supersedes a counted one and never reaches the
   calculation: intervals, the register's `lastReading`, the round and range consumption read approved readings only.
   201 with `ReadingSaved` (no interval, the warnings it would carry).
 - **Approval** locks the meter, takes only a `PENDING` reading (else 409 `READING_STATUS_INVALID`), checks it again
@@ -287,9 +295,17 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
   reading, sets `REJECTED` with the reason and the decider. The member reads the reason in the meter's history
   (`rejectReason`). The reason is user content: it is stored and audited, never logged.
 - **Decision event** (feature 017): approval and rejection of a member's reading publish `ReadingDecided` (ids and the
-  status only) in their transaction; the notifications module tells the member through the bot.
+  status only) in their transaction; the notifications module tells the member through the bot and by push.
+- **Submission event** (feature 021): a saved member submission publishes `ReadingSubmitted` (ids only) in its
+  transaction; the notifications module tells the approvers by push. The same value again (no photo) publishes nothing.
 - **The bot** (feature 017 §2.5) submits through the public `MemberReadings` port, the same `submit` with today's
-  date, so the bot and the account accept and refuse the same readings.
+  date, so the bot and the account accept and refuse the same readings. The bot takes no photo, so while the photo rule
+  is on every bot submission is refused with `READING_PHOTO_REQUIRED` (the bot sends the member to the app).
+- **The photo rule** (feature 021 §2.3): while `CooperativeSettings.readingPhotoRequired()` is on, a submission without
+  a photo (the multipart operation without the part `photo`, the deprecated JSON operation and the bot) is 400
+  `READING_PHOTO_REQUIRED` with `errors[{field: photo, code: READING_PHOTO_REQUIRED}]`, checked right after the owner
+  rule, so nothing is saved and nothing is audited (the same value already waiting is refused too, not answered as a
+  repeat). The board's and the electrician's entries (`enterReadings`, `enterReadingWithPhoto`) never need a photo.
 - **The approvals list** reads every pending reading of the cooperative (index `meter_reading_pending_idx`), oldest date
   first, with its meter and, when the reading fits between the counted readings now, the interval it would close and its
   warnings. Only `status=PENDING` is supported (400 `INVALID` on `status` otherwise). Bulk loads: the meters, plots,
@@ -298,9 +314,51 @@ Internal: `ApprovalQueries`; the commands are in `ReadingCommands` (`submit`, `a
 ### Audit of the member flow
 
 Entity type `METER_READING` about the meter, as for the board's readings: `READING_SUBMITTED` (`takenOn` new, `value`
-new and, when it replaced a pending reading, old), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
+new and, when it replaced a pending reading, old; `photo` `true` or `false` new and, when it replaced a pending reading,
+whether that one had a photo, old; never the file), `READING_APPROVED` (`takenOn` and `value` new and, when it replaced a
 counted reading of that date, old), `READING_REJECTED` (`takenOn`, `value` and `reason` new). The actor of a submission
 is the member.
+
+### Photos of readings (feature 021, slice 4)
+
+Table `reading_photo` (V38): one photo per reading (`UNIQUE (tenant_id, reading_id)`, composite foreign key to
+`meter_reading` `ON DELETE CASCADE`), `content_type` `image/jpeg` or `image/png`, `size_bytes` 1 to 5 MiB and equal to
+the length, `sha256`, `content` (`STORAGE EXTERNAL`, stored like the receipts of ADR 0019), `created_by`, `created_at`.
+RLS `tenant_isolation`, index on `tenant_id`; `nadel_app` has `SELECT` and `INSERT` only, and a guard trigger refuses
+an `UPDATE` to everyone and a `DELETE` while the reading exists, so a photo is never changed or deleted: only the
+cascade of a deleted reading (a counted reading deleted by the board) removes it. Schema, RLS and guard are tested by
+`ReadingPhotoTests`; the endpoints by `ReadingPhotoUploadTests`, `ReadingPhotoAccessTests` and
+`ReadingEntryPhotoTests`, the photo rule by `ReadingPhotoRuleTests`. `cooperative_settings.reading_photo_required` (V38)
+belongs to `settings` and is read here only through `CooperativeSettings`.
+
+Internal: `ReadingPhotoRecord` (insert-only entity), `ReadingPhotoRepository` (ids of readings with a photo, the
+download; never a list of contents), `ReadingPhotoUploads` (the checks), `ReadingPhotos` (save, `hasPhoto`, download
+with its access rule) and `ReadingPartConverter` (the `reading` part of either multipart operation sent without a JSON
+content type, as the generated web client sends it).
+
+- **Upload** (`photo` of `submitPlotReadingWithPhoto` and `enterReadingWithPhoto`), checked after the owner rule (for
+  an entry: the permission) and before the meter is locked,
+  through `app.nadel.files`, with the codes of the expense receipts: over 5 MiB by the declared size, before it is
+  read, 413 `FILE_TOO_LARGE`; not a JPEG or PNG by its first bytes (a PDF too, and a HEIC the app did not convert), or a
+  JPEG or PNG that cannot be read, 400 `FILE_TYPE_NOT_ALLOWED`; both with `errors[{field: photo}]`. Metadata is
+  stripped without re-encoding (`ImageMetadata`: a JPEG keeps its Orientation); the server does not check pixels. The
+  reading and its photo are saved in one transaction: a refused photo saves no reading.
+- **`hasPhoto`** on every `MeterReading` the module answers (the history, the approvals list, every `ReadingSaved` and
+  batch row), from one id-only query per answer (`ReadingPhotos.withPhoto`). A superseded, rejected or approved reading
+  keeps its photo and its `hasPhoto`.
+- **Download** (`GET /readings/{id}/photo`): the access is decided before the bytes are read: `READINGS_ENTER` or
+  `READINGS_APPROVE`, or a current owner of the plot of the reading's meter; anyone else, an unknown reading, a reading
+  without a photo and one of another cooperative (RLS) are the same 404 `NOT_FOUND`, the platform operator 403. The
+  answer has the stored type, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff` and
+  `Cache-Control: no-store`. Not audited.
+- **The board's entry with a photo** (`POST /reading-entries`, `enterReadingWithPhoto`, `READINGS_ENTER`): one reading
+  as a row of `enterReadings` with a required photo, in one transaction (`ReadingCommands.enterWithPhoto`): a refused
+  photo or reading saves nothing. The refusals are those of a single request (404 `NOT_FOUND` on `meterId`, 409
+  `READING_DATE_IN_FUTURE`, `READING_DATE_OUTSIDE_METER`, `READING_OUT_OF_ORDER`, `READING_IN_USE`, 400
+  `METER_VALUE_INVALID`); without the part `photo` the request is 400 `MALFORMED_REQUEST`. A photo makes the same value
+  on the same date a change: a new counted reading with the photo supersedes the old one (`READING_REPLACED`, `photo`
+  `false` to `true`). 201 with `ReadingSaved` (`hasPhoto` true). The bulk `enterReadings` takes no photo and never
+  needs one; the Telegram bot submits without one.
 
 ## The tree (slice 5)
 

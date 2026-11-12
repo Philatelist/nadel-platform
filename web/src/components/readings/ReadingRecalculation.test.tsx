@@ -32,6 +32,7 @@ const reading: MeterReading = {
   status: 'APPROVED',
   source: 'ENTERED',
   changeable: true,
+  hasPhoto: false,
 };
 
 vi.mock('../charges/chargeInvalidation', () => ({

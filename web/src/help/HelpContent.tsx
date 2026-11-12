@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useCarriedHelpState } from './helpOrigin';
 import type { Locale } from '@nadel/shared';
@@ -52,6 +52,34 @@ function Callout({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A help screenshot. Screenshots are cached on the device only once they were shown, so offline one may be missing:
+ * then its alt text is shown in a frame instead of a broken image.
+ */
+function HelpShot({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <span
+        role="img"
+        aria-label={alt}
+        data-help-shot-missing=""
+        className="block rounded-control border border-dashed border-line px-3 py-4 text-sm text-ink-muted"
+      >
+        {alt}
+      </span>
+    );
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="max-w-full rounded-control border border-line"
+    />
+  );
+}
+
 type Visible = ((pageId: string) => boolean) | undefined;
 
 function renderNodes(nodes: readonly HelpNode[], locale: Locale, visible: Visible): ReactNode[] {
@@ -67,13 +95,12 @@ function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visibl
     case 'hr':
       return <hr key={key} className="border-line" />;
     case 'img':
+      // keyed by its image: a screenshot that failed on one page must not stay failed on the next
       return (
-        <img
-          key={key}
+        <HelpShot
+          key={`${key}:${node.shot}:${locale}`}
           src={`/help/img/${locale}/${node.shot}.png`}
           alt={node.alt}
-          loading="lazy"
-          className="max-w-full rounded-control border border-line"
         />
       );
     case 'ui':
@@ -122,7 +149,10 @@ function renderNode(node: HelpNode, locale: Locale, key: number, visible: Visibl
       );
     case 'li':
       return (
-        <li key={key} className="my-1 [&>img]:mt-2">
+        <li
+          key={key}
+          className="my-1 [&>a:only-child]:inline-flex [&>a:only-child]:min-h-11 [&>a:only-child]:items-center sm:[&>a:only-child]:min-h-0 [&>img]:mt-2"
+        >
           {renderNodes(node.children, locale, visible)}
         </li>
       );

@@ -3,10 +3,10 @@ package app.nadel.treasury.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import app.nadel.files.FileKind;
+import app.nadel.files.TestImages;
 import app.nadel.problem.ApiProblemException;
 import app.nadel.problem.FieldProblem;
-import app.nadel.treasury.TestImages;
-import app.nadel.treasury.internal.FileSniffer.Kind;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -19,14 +19,14 @@ class AttachmentUploadsTests {
     void aFileIsTypedByItsContentStrippedAndDigested() throws Exception {
         AttachmentUploads.Prepared photo = AttachmentUploads.prepare(0, "IMG_0001.JPG", TestImages.cameraJpeg(false));
 
-        assertThat(photo.kind()).isEqualTo(Kind.JPEG);
+        assertThat(photo.kind()).isEqualTo(FileKind.JPEG);
         assertThat(photo.fileName()).isEqualTo("IMG_0001.JPG");
         assertThat(TestImages.contains(photo.content(), TestImages.CAMERA)).isFalse();
         assertThat(photo.sha256()).isEqualTo(MessageDigest.getInstance("SHA-256").digest(photo.content()));
         AttachmentUploads.Prepared pdf = AttachmentUploads.prepare(1, "act.png", TestImages.pdf());
-        assertThat(pdf.kind()).as("by content, not by name").isEqualTo(Kind.PDF);
+        assertThat(pdf.kind()).as("by content, not by name").isEqualTo(FileKind.PDF);
         assertThat(pdf.content()).isEqualTo(TestImages.pdf());
-        assertThat(AttachmentUploads.prepare(2, null, TestImages.metadataPng()).kind()).isEqualTo(Kind.PNG);
+        assertThat(AttachmentUploads.prepare(2, null, TestImages.metadataPng()).kind()).isEqualTo(FileKind.PNG);
     }
 
     @Test
@@ -58,16 +58,16 @@ class AttachmentUploadsTests {
 
     @Test
     void theStoredNameIsTheCleanBaseName() {
-        assertThat(AttachmentUploads.fileName("C:\\Users\\me\\Чек 06.10.jpg", Kind.JPEG)).isEqualTo("Чек 06.10.jpg");
-        assertThat(AttachmentUploads.fileName("../../etc/passwd.pdf", Kind.PDF)).isEqualTo("passwd.pdf");
-        assertThat(AttachmentUploads.fileName(" bad\u202Ename\u0007.png ", Kind.PNG)).isEqualTo("badname.png");
-        assertThat(AttachmentUploads.fileName(null, Kind.JPEG)).isEqualTo("receipt.jpg");
-        assertThat(AttachmentUploads.fileName("  ", Kind.PNG)).isEqualTo("receipt.png");
-        assertThat(AttachmentUploads.fileName("dir/", Kind.PDF)).isEqualTo("receipt.pdf");
+        assertThat(AttachmentUploads.fileName("C:\\Users\\me\\Чек 06.10.jpg", FileKind.JPEG)).isEqualTo("Чек 06.10.jpg");
+        assertThat(AttachmentUploads.fileName("../../etc/passwd.pdf", FileKind.PDF)).isEqualTo("passwd.pdf");
+        assertThat(AttachmentUploads.fileName(" bad\u202Ename\u0007.png ", FileKind.PNG)).isEqualTo("badname.png");
+        assertThat(AttachmentUploads.fileName(null, FileKind.JPEG)).isEqualTo("receipt.jpg");
+        assertThat(AttachmentUploads.fileName("  ", FileKind.PNG)).isEqualTo("receipt.png");
+        assertThat(AttachmentUploads.fileName("dir/", FileKind.PDF)).isEqualTo("receipt.pdf");
         String longName = "ч".repeat(300) + ".jpeg";
-        String shortened = AttachmentUploads.fileName(longName, Kind.JPEG);
+        String shortened = AttachmentUploads.fileName(longName, FileKind.JPEG);
         assertThat(shortened.codePointCount(0, shortened.length())).isEqualTo(255);
         assertThat(shortened).endsWith("ч.jpeg");
-        assertThat(AttachmentUploads.fileName("x".repeat(400), Kind.PDF)).hasSize(255);
+        assertThat(AttachmentUploads.fileName("x".repeat(400), FileKind.PDF)).hasSize(255);
     }
 }

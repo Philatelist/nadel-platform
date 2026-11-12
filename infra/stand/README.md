@@ -59,6 +59,17 @@ choose that value by hand. It is safe to run again, but each run changes the sec
 `docker compose up -d backend` afterwards. A stand imported before this client existed needs a fresh realm import
 (see "Reset" below) before the script finds the client.
 
+`stand-init.sh` also generates the Web Push (VAPID) key pair into `.env` (`NADEL_WEBPUSH_PUBLIC_KEY`,
+`NADEL_WEBPUSH_PRIVATE_KEY`) the first time, only when either is empty, and never prints it. Later runs keep the pair:
+a new pair would make every stored push subscription useless (members would have to subscribe again). To rotate on
+purpose, empty both lines in `.env`, run `./stand-init.sh` and `docker compose up -d backend`. The script waits for
+Keycloak and retries the admin login (`KC_LOGIN_TIMEOUT`, default 120 seconds) because a healthy Keycloak may still be
+finishing its start. `make stand-test` checks the script with a stub `docker`.
+
+Installing the app on a phone and push notifications need HTTPS with a valid certificate; Caddy provides it on the
+stand's domain. Caddy serves `/sw.js`, `/manifest.webmanifest` and every app page (`/`, `/index.html`, client-side routes, `/help/...`) with `Cache-Control: no-cache`, so a
+new deploy reaches phones on their next visit.
+
 Open `https://nadel.example.com`, sign in as `chairman@demo.local` with `STAND_USER_PASSWORD`.
 
 Keep a copy of `.env` in your password manager (it holds the master key and the Keycloak admin password).
@@ -87,9 +98,14 @@ docker compose logs --tail=200 backend
 docker compose restart backend
 # Keycloak admin console: from your machine
 ssh -L 8180:127.0.0.1:8180 <user>@<ip>       # then http://localhost:8180/auth/admin
-# Start over with fresh demo data (deletes everything on the stand, keeps the certificate)
+# Start over with fresh demo data (deletes everything on the stand, keeps the certificate).
+# Never use `docker compose down -v`: it also deletes the Caddy volume and the certificate, and Let's Encrypt limits
+# how many certificates one domain may get per week.
 docker compose down && docker volume rm nadel-stand_pgdata && docker compose up -d postgres keycloak && ./stand-init.sh && docker compose up -d
 ```
+
+After a reset the demo cooperative is new: enter the mailbox settings (and the Telegram bot token) in the cooperative
+settings again. The `.env` (VAPID keys included) survives a reset, so existing phones keep working.
 
 ## 4a. A real cooperative: the first chairman
 

@@ -16,6 +16,7 @@ import app.nadel.identity.FakeSignInAccounts;
 import app.nadel.identity.SignInAccounts;
 import app.nadel.members.InvitationDelivery;
 import app.nadel.members.InvitationDeliveryResult;
+import app.nadel.members.MemberAccessRevoked;
 import app.nadel.notifications.ClosedPort;
 import app.nadel.notifications.Mailpit;
 import app.nadel.problem.ApiProblemException;

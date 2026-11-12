@@ -31,7 +31,10 @@ export function RoundCard({
           </>
         ) : (
           first && (
-            <Link to={`/meters/${first.id}`} className="text-accent underline">
+            <Link
+              to={`/meters/${first.id}`}
+              className="inline-flex min-h-11 items-center sm:min-h-0 text-accent underline"
+            >
               <UserContent>{meterLabel(first)}</UserContent>
             </Link>
           )

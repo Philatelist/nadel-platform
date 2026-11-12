@@ -4,6 +4,7 @@ import app.nadel.identity.CurrentUser;
 import app.nadel.notifications.internal.DeliveryChecks.BotCheck;
 import app.nadel.notifications.internal.mail.MailOutcome;
 import app.nadel.notifications.internal.mail.SmtpSecurity;
+import app.nadel.notifications.internal.push.PushDevices;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -42,8 +43,12 @@ import nadel.contract.model.DeliveryTestEmailResult;
 import nadel.contract.model.DeliveryTestTelegramResult;
 import nadel.contract.model.MyNotifications;
 import nadel.contract.model.MyNotificationsUpdate;
+import nadel.contract.model.PushConfig;
+import nadel.contract.model.PushDevice;
+import nadel.contract.model.PushSubscriptionInput;
 import nadel.contract.model.TelegramLinkOffer;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,6 +65,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>Sending invoices and the delivery screen: every one needs {@code INVOICES_ISSUE} ({@link DeliveryPlanner},
  *       {@link DeliveryRegister}).</li>
  *   <li>Announcements: every one needs {@code ANNOUNCEMENTS_SEND} ({@link Announcements}).</li>
+ *   <li>The member's own push devices ({@code /me/push}, feature 021): no permission, always the member behind the
+ *       token ({@link PushDevices}); the platform operator gets 403. A device never carries its endpoint or keys.</li>
  * </ul>
  */
 @RestController
@@ -73,10 +80,11 @@ class NotificationsController implements NotificationsApi {
     private final DeliveryPlanner planner;
     private final DeliveryRegister register;
     private final Announcements announcements;
+    private final PushDevices pushDevices;
 
     NotificationsController(CurrentUser currentUser, DeliverySettingsService service, DeliveryChecks checks,
             MemberNotifications mine, DeliveryPlanner planner, DeliveryRegister register,
-            Announcements announcements) {
+            Announcements announcements, PushDevices pushDevices) {
         this.currentUser = currentUser;
         this.service = service;
         this.checks = checks;
@@ -84,6 +92,42 @@ class NotificationsController implements NotificationsApi {
         this.planner = planner;
         this.register = register;
         this.announcements = announcements;
+        this.pushDevices = pushDevices;
+    }
+
+    @Override
+    public ResponseEntity<PushConfig> getMyPushConfig() {
+        PushDevices.Config config = pushDevices.config(currentUser.profile());
+        var dto = new PushConfig(config.enabled());
+        dto.setPublicKey(config.publicKey());
+        return ResponseEntity.ok(dto);
+    }
+
+    @Override
+    public ResponseEntity<List<PushDevice>> listMyPushDevices() {
+        return ResponseEntity.ok(pushDevices.list(currentUser.profile()).stream().map(NotificationsController::toDto)
+                .toList());
+    }
+
+    @Override
+    public ResponseEntity<PushDevice> registerMyPushDevice(PushSubscriptionInput input) {
+        PushDevices.Device device = pushDevices.register(currentUser.profile(), new PushDevices.Registration(
+                input.getEndpoint(), input.getKeys().getP256dh(), input.getKeys().getAuth(), input.getLabel(),
+                input.getLanguage().getValue()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(device));
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteMyPushDevice(UUID id) {
+        pushDevices.delete(currentUser.profile(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    private static PushDevice toDto(PushDevices.Device device) {
+        var dto = new PushDevice(device.id(), device.createdAt().atOffset(ZoneOffset.UTC));
+        dto.setLabel(device.label());
+        dto.setLastSentAt(device.lastSentAt() == null ? null : device.lastSentAt().atOffset(ZoneOffset.UTC));
+        return dto;
     }
 
     @Override
