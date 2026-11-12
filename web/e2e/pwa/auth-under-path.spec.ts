@@ -8,6 +8,18 @@
 import { expect, test } from '@playwright/test';
 import { loginAs } from '../support/login';
 
+// Runs only when the stack serves Keycloak under /auth/ (as `make e2e-pwa` sets it up: the build with the /auth authority
+// and `vite preview` with NADEL_E2E_KEYCLOAK_UNDER_AUTH=1). A preview without the /auth proxy cannot show the bug.
+test.beforeAll(async ({ request }) => {
+  const discovery = await request.get('/auth/realms/nadel/.well-known/openid-configuration');
+  const underAuth =
+    discovery.ok() && (discovery.headers()['content-type'] ?? '').includes('application/json');
+  test.skip(
+    !underAuth,
+    'Keycloak is not served under /auth/: build with VITE_OIDC_AUTHORITY=http://localhost:5173/auth/realms/nadel and start vite preview with NADEL_E2E_KEYCLOAK_UNDER_AUTH=1 (make e2e-pwa does both)',
+  );
+});
+
 test('the installed app signs in again and signs out with the worker in control', async ({
   page,
   context,
