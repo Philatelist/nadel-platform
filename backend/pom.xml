@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
+        <version>4.1.2</version>
         <relativePath/>
     </parent>
 
@@ -19,12 +19,12 @@
 
     <properties>
         <java.version>25</java.version>
-        <spring-modulith.version>2.1.1</spring-modulith.version>
-        <openapi-generator.version>7.26.0</openapi-generator.version>
+        <spring-modulith.version>2.1.2</spring-modulith.version>
+        <openapi-generator.version>7.27.0</openapi-generator.version>
         <fastexcel.version>0.20.2</fastexcel.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <zxing.version>3.5.4</zxing.version>
-        <jobrunr.version>9.0.1</jobrunr.version>
+        <jobrunr.version>9.0.3</jobrunr.version>
         <!-- Security overrides of versions managed by Spring Boot 4.1.1 (OSV advisories fixed in the patch releases below).
              Remove them once the Spring Boot parent manages these versions or newer. -->
         <tomcat.version>11.0.25</tomcat.version>
